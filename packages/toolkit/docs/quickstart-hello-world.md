@@ -25,20 +25,10 @@ Solo necesitas estas piezas instaladas:
 
 - **Node.js ≥ 20** — compruébalo con `node --version`.
 - **Un backend de ensamblador**:
-  - Por defecto, Spectral usa **sjasmplus en el PATH**. La ROM del 48K ya
-    viaja dentro del paquete (vía `zx-generation`), no la descargas aparte.
-  - **macOS**: no hay fórmula de Homebrew; se compila desde fuente. Baja el
-    `*-src.tar.xz` de las [releases](https://github.com/z00m128/sjasmplus/releases)
-    y luego:
-    ```bash
-    tar xf sjasmplus-*-src.tar.xz && cd sjasmplus-* && make && sudo make install
-    ```
-  - **Linux**: `apt install sjasmplus` (o compílalo como arriba).
-  - **Windows**: descarga `sjasmplus-*.win.zip` de las releases y pon el
-    `.exe` en el PATH.
-  - Para la ruta sin binario externo, usa el backend embebido:
-    `ZXS_ASSEMBLER=spectral zxs build hello.asm`. Es un MVP compatible con el
-    flujo actual de starters/recetas, no con todo el lenguaje de sjasmplus.
+  - Por defecto, `zx-vibes` usa el ensamblador embebido `@zx-vibes/asm`. La
+    ROM del 48K ya viaja dentro del paquete, no la descargas aparte.
+  - Para proyectos que necesiten funciones exclusivas de sjasmplus, instala
+    `sjasmplus` y ejecuta `ZXS_ASSEMBLER=sjasmplus zxs build hello.asm`.
 - **Claude Code** instalado y funcionando (`claude --version`).
 
 ---
@@ -70,17 +60,13 @@ Debe salir todo en verde:
 
 ```
 ✓ node: v22.x.x
-✓ sjasmplus: v1.23.1
+✓ sjasmplus: optional backend not installed
 ✓ @zx-vibes/asm: available
-✓ 48k.rom: /.../node_modules/zx-generation/rom/48k.rom
+✓ 48k.rom: /.../node_modules/@zx-vibes/emulator/rom/48k.rom
 ```
 
-Si `sjasmplus` aparece en rojo, el propio `doctor` te imprime cómo instalarlo.
-Si prefieres no instalarlo y tienes disponible el backend embebido, ejecuta:
-
-```bash
-ZXS_ASSEMBLER=spectral zxs doctor
-```
+Si seleccionas `ZXS_ASSEMBLER=sjasmplus` y `sjasmplus` aparece en rojo, el
+propio `doctor` te imprime cómo instalarlo.
 
 ---
 
@@ -161,7 +147,7 @@ Y ejecútalo:
 
 ```bash
 zxs build hello.asm
-# o: zxs build hello.asm --assembler spectral
+# o, solo si necesitas sjasmplus: zxs build hello.asm --assembler sjasmplus
 zxs run --bin build/hello.bin --org 0x8000 --frames 50 --no-detect-hangs \
     --screenshot screen.png --text
 ```

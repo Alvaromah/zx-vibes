@@ -29,7 +29,7 @@ export interface BuildOptions {
    */
   cwd?: string;
   /**
-   * Assembler backend. Default is sjasmplus unless ZXS_ASSEMBLER=spectral is set.
+   * Assembler backend. Default is the embedded @zx-vibes/asm backend.
    */
   assembler?: 'sjasmplus' | 'spectral';
 }
@@ -171,7 +171,8 @@ export async function build(entry: string, opts: BuildOptions = {}): Promise<Bui
 
 function selectedAssembler(opts: BuildOptions): 'sjasmplus' | 'spectral' {
   if (opts.assembler) return opts.assembler;
-  return process.env['ZXS_ASSEMBLER']?.toLowerCase() === 'spectral' ? 'spectral' : 'sjasmplus';
+  const envAssembler = process.env['ZXS_ASSEMBLER']?.toLowerCase();
+  return envAssembler === 'sjasmplus' || envAssembler === 'spectral' ? envAssembler : 'spectral';
 }
 
 async function buildWithSpectralAsm(entry: string, opts: BuildOptions): Promise<BuildResult> {

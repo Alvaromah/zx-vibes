@@ -1,4 +1,5 @@
 import { mkdtempSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,10 +10,25 @@ import { screenText } from '../../src/core/screen-text.js';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
 
+function hasSjasmplus(): boolean {
+  try {
+    execFileSync('sjasmplus', ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const itIfSjasmplus = hasSjasmplus() ? it : it.skip;
+
 describe('SNA snapshot path', () => {
-  it('builds with SAVESNA and the snapshot runs to HELLO ZX', async () => {
+  itIfSjasmplus('builds with SAVESNA through the optional sjasmplus backend', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'zxs-sna-'));
-    const result = await build(join(fixtures, 'hello-sna.asm'), { outDir: dir, cwd: dir });
+    const result = await build(join(fixtures, 'hello-sna.asm'), {
+      outDir: dir,
+      cwd: dir,
+      assembler: 'sjasmplus',
+    });
     expect(result.ok).toBe(true);
 
     const snaPath = join(dir, 'hello.sna');

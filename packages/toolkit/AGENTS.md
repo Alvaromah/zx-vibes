@@ -6,7 +6,8 @@ AI-agent toolchain for ZX Spectrum 48K game development (`zxs` CLI +
 
 ## Commands
 
-- `npm test` — builds dist + runs all vitest specs (needs `sjasmplus` on PATH)
+- `npm test` — builds dist + runs all vitest specs; `sjasmplus` compatibility
+  specs are optional and skip when the binary is not on PATH
 - `npm run typecheck` / `npm run build` (tsup → dist/)
 - `node dist/cli/index.js <cmd>` — the zxs CLI; `zxs test recipes` must stay green
 

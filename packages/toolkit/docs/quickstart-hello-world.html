@@ -41,8 +41,8 @@
 <span class="text-emerald-300">node</span> --version      <span class="text-zinc-500"># >= 20</span>
 <span class="text-emerald-300">claude</span> --version    <span class="text-zinc-500"># Claude Code</span>
 
-<span class="text-zinc-500"># backend por defecto opcional</span>
-<span class="text-emerald-300">sjasmplus</span> --version <span class="text-zinc-500"># si usas sjasmplus</span>
+<span class="text-zinc-500"># backend opcional si necesitas sjasmplus</span>
+<span class="text-emerald-300">sjasmplus</span> --version
 
 <span class="text-zinc-500"># y un único install</span>
 <span class="text-amber-300">npm</span> install -g @zx-vibes/toolkit</code></pre>
@@ -51,9 +51,9 @@
           <p>Publicar en npm es justo lo que desbloquea este flujo: el toolkit (<code class="text-cyan-300">zxs</code> +
           <code class="text-cyan-300">zxs-mcp</code>) y la ROM del 48K viajan dentro del paquete. No clonas nada.</p>
           <p class="mt-3 text-zinc-400">El backend por defecto usa
-          <span class="text-zinc-200">sjasmplus</span>; <code class="text-cyan-300">zxs doctor</code> te dice si falta
-          y cómo instalarlo. Para evitar ese binario, usa el backend embebido
-          <code class="text-cyan-300">spectral</code> en el flujo starter/recetas.</p>
+          <span class="text-zinc-200">@zx-vibes/asm</span>; <code class="text-cyan-300">zxs doctor</code> te confirma
+          que está disponible. Si un proyecto necesita sjasmplus, selecciónalo con
+          <code class="text-cyan-300">ZXS_ASSEMBLER=sjasmplus</code>.</p>
         </div>
       </div>
     </div>
@@ -73,16 +73,15 @@
         </div>
         <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
           <h3 class="text-white font-semibold mb-1">Backend de ensamblador</h3>
-          <p class="text-zinc-400">Por defecto: sjasmplus en el PATH. Sin binario externo: <code class="font-mono">ZXS_ASSEMBLER=spectral</code> para starters/recetas.</p>
+          <p class="text-zinc-400">Por defecto: <code class="font-mono">@zx-vibes/asm</code> embebido. Backend opcional: <code class="font-mono">ZXS_ASSEMBLER=sjasmplus</code>.</p>
         </div>
         <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
           <h3 class="text-white font-semibold mb-1">Claude Code</h3>
           <p class="text-zinc-400"><code class="font-mono">claude --version</code></p>
         </div>
       </div>
-<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto mt-5"><code><span class="text-zinc-500"># si usas sjasmplus en macOS: se compila desde fuente</span>
-tar xf sjasmplus-*-src.tar.xz && cd sjasmplus-*
-<span class="text-emerald-300">make</span> && <span class="text-emerald-300">sudo</span> make install</code></pre>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto mt-5"><code><span class="text-zinc-500"># solo para proyectos que necesiten sjasmplus</span>
+ZXS_ASSEMBLER=sjasmplus zxs build hello.asm</code></pre>
     </section>
 
     <!-- PASO 1+2 -->
@@ -99,10 +98,10 @@ tar xf sjasmplus-*-src.tar.xz && cd sjasmplus-*
 <pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-amber-300">zxs</span> doctor
 
 <span class="text-emerald-300">✓ node:</span> v22.x.x
-<span class="text-emerald-300">✓ sjasmplus:</span> v1.23.1
+<span class="text-emerald-300">✓ sjasmplus:</span> optional backend not installed
 <span class="text-emerald-300">✓ @zx-vibes/asm:</span> available
-<span class="text-emerald-300">✓ 48k.rom:</span> .../zx-generation/rom/48k.rom</code></pre>
-          <p class="text-zinc-400 mt-3">Si <code>sjasmplus</code> sale en rojo, instálalo o ejecuta <code>ZXS_ASSEMBLER=spectral zxs doctor</code> para la ruta embebida.</p>
+<span class="text-emerald-300">✓ 48k.rom:</span> .../@zx-vibes/emulator/rom/48k.rom</code></pre>
+          <p class="text-zinc-400 mt-3">Si seleccionas <code>ZXS_ASSEMBLER=sjasmplus</code> y <code>sjasmplus</code> sale en rojo, instálalo antes de usar ese backend.</p>
         </div>
       </div>
     </section>

@@ -34,8 +34,9 @@ Si tienes claro esto, el resto del documento se lee solo:
 - **Headless** — "sin cabeza": ejecutar el emulador *sin ventana ni pantalla*,
   solo en memoria. Así corre 132 veces más rápido que el hardware real, y una
   IA puede hacer miles de pruebas por minuto.
-- **sjasmplus** — el *ensamblador*: el programa que traduce el código fuente
-  Z80 (texto) a binario (los bytes que entiende el procesador).
+- **`@zx-vibes/asm`** — el ensamblador embebido: traduce el código fuente Z80
+  (texto) a binario sin instalar programas externos. `sjasmplus` queda como
+  backend opcional para compatibilidad avanzada.
 - **`zxs` (la CLI)** — nuestra caja de herramientas de línea de comandos:
   `zxs build` compila, `zxs run` ejecuta, `zxs screen` enseña la pantalla,
   `zxs break`/`step` depuran. Es lo que usa el agente de IA en su bucle.
@@ -61,7 +62,7 @@ Si tienes claro esto, el resto del documento se lee solo:
 El proyecto se construyó en fases, cada una con su commit y sus tests:
 
 1. **Fase 0 — el esqueleto que anda.** Un Spectrum headless dentro de Node:
-   arranca la ROM real, compila con sjasmplus, ejecuta, saca capturas PNG.
+   arranca la ROM real, compila con el ensamblador embebido, ejecuta, saca capturas PNG.
    Rendimiento: ~6.600 fotogramas por segundo (vs 50 del hardware real).
 2. **Fase 1 — el bucle de feedback.** Sesiones que sobreviven entre comandos,
    teclas programadas por fotograma ("pulsa O en el frame 60 durante 30"),

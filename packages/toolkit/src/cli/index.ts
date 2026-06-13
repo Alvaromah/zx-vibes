@@ -52,7 +52,7 @@ program
   .description('Assemble a Z80 source file (binary + SLD symbols)')
   .argument('[file]', 'entry .asm file (defaults to zx.config.json entry)')
   .option('--out-dir <dir>', 'output directory', 'build')
-  .option('--assembler <name>', 'assembler backend: sjasmplus or spectral')
+  .option('--assembler <name>', 'assembler backend: spectral or sjasmplus')
   .option(...jsonOpt)
   .action(async (file: string | undefined, opts) => {
     process.exitCode = await buildCommand(file, {

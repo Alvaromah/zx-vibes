@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { checkToolchain } from '../../build/sjasmplus.js';
 import { romPath } from '../../core/rom.js';
+import { normalizeAssembler } from '../config.js';
 import { EXIT, emit } from '../output.js';
 
 interface Check {
@@ -11,8 +12,7 @@ interface Check {
 
 export async function doctorCommand(opts: { json: boolean }): Promise<number> {
   const checks: Check[] = [];
-  const assemblerBackend =
-    process.env['ZXS_ASSEMBLER']?.toLowerCase() === 'spectral' ? 'spectral' : 'sjasmplus';
+  const assemblerBackend = normalizeAssembler(process.env['ZXS_ASSEMBLER']) ?? 'spectral';
 
   const nodeMajor = parseInt(process.versions.node.split('.')[0]!, 10);
   checks.push({
@@ -26,9 +26,9 @@ export async function doctorCommand(opts: { json: boolean }): Promise<number> {
     name: 'sjasmplus',
     ok: assemblerBackend === 'spectral' || toolchain.found,
     detail: toolchain.found
-      ? `v${toolchain.version ?? 'unknown'}`
+      ? `optional backend available: v${toolchain.version ?? 'unknown'}`
       : assemblerBackend === 'spectral'
-        ? 'not required while ZXS_ASSEMBLER=spectral'
+        ? 'optional backend not installed'
       : toolchain.installHint ?? 'not found',
   });
 

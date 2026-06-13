@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  SJASMPLUS_VERSION: 1.23.1
-
 jobs:
   test:
     strategy:
@@ -25,48 +22,6 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
-
-      - name: Cache sjasmplus
-        id: cache-sjasmplus
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.local/bin/sjasmplus
-            ~/.local/bin/sjasmplus.exe
-          key: sjasmplus-${{ env.SJASMPLUS_VERSION }}-${{ runner.os }}
-
-      - name: Build sjasmplus from source
-        if: runner.os != 'Windows' && steps.cache-sjasmplus.outputs.cache-hit != 'true'
-        run: |
-          curl -sL -o /tmp/sjasmplus-src.tar.xz \
-            "https://github.com/z00m128/sjasmplus/releases/download/v${SJASMPLUS_VERSION}/sjasmplus-${SJASMPLUS_VERSION}-src.tar.xz"
-          tar xf /tmp/sjasmplus-src.tar.xz -C /tmp
-          make -C "/tmp/sjasmplus-${SJASMPLUS_VERSION}" -j4
-          mkdir -p ~/.local/bin
-          cp "/tmp/sjasmplus-${SJASMPLUS_VERSION}/sjasmplus" ~/.local/bin/
-
-      - name: Install sjasmplus for Windows
-        if: runner.os == 'Windows' && steps.cache-sjasmplus.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $zip = "$env:RUNNER_TEMP\sjasmplus.zip"
-          $dest = "$env:RUNNER_TEMP\sjasmplus"
-          Invoke-WebRequest `
-            -Uri "https://github.com/z00m128/sjasmplus/releases/download/v${env:SJASMPLUS_VERSION}/sjasmplus-${env:SJASMPLUS_VERSION}.win.zip" `
-            -OutFile $zip
-          Expand-Archive -Path $zip -DestinationPath $dest
-          New-Item -ItemType Directory -Force "$HOME\.local\bin"
-          $exe = Get-ChildItem -Path $dest -Recurse -Filter sjasmplus.exe | Select-Object -First 1
-          Copy-Item -LiteralPath $exe.FullName -Destination "$HOME\.local\bin\sjasmplus.exe"
-
-      - name: Add sjasmplus to PATH on Unix
-        if: runner.os != 'Windows'
-        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Add sjasmplus to PATH on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: '"$HOME\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append'
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build

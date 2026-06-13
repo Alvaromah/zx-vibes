@@ -29,18 +29,16 @@ node dist/cli/index.js run --bin build/game.bin --org 0x8000 \
 Every command supports `--json` for machine-readable output. Exit codes:
 `0` ok · `1` build/user error · `2` hang detected · `3` environment problem.
 
-By default `zxs build` uses [sjasmplus](https://github.com/z00m128/sjasmplus)
-≥ 1.20 on your PATH (`zxs doctor` tells you how to install it). Use the
-embedded backend when you want the current starter/recipe workflow without an
-external assembler binary.
-
-Spectral also ships an embedded TypeScript assembler MVP for the current
-starter/recipe workflow:
+By default `zxs build` uses the embedded `@zx-vibes/asm` backend, so the
+current starter/recipe workflow does not require an external assembler binary.
+`sjasmplus` remains available as an optional compatibility backend for
+advanced sjasmplus-only projects:
 
 ```bash
-node dist/cli/index.js build game.asm --assembler spectral
-# or for zxs test / MCP-driven sessions:
-ZXS_ASSEMBLER=spectral node dist/cli/index.js test recipes
+node dist/cli/index.js build game.asm
+node dist/cli/index.js build game.asm --assembler sjasmplus
+# or for zxs test / MCP-driven sessions that need sjasmplus:
+ZXS_ASSEMBLER=sjasmplus node dist/cli/index.js test recipes
 ```
 
 The embedded backend emits the same raw `.bin` plus SLD symbols used by the
