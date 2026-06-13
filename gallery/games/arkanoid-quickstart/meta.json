@@ -1,0 +1,23 @@
+{
+  "id": "arkanoid-quickstart",
+  "title": "Arkanoid",
+  "tagline": "The quickstart tutorial game — built step by step, every stage verified before writing it down.",
+  "date": "2026-06-11",
+  "agent": {
+    "model": "Claude Fable 5",
+    "harness": "Spectral zxs CLI — authored live while writing docs/quickstart-arkanoid.md"
+  },
+  "prompt": "Crea un quickstart donde se explique paso a paso cómo crear una app. Por ejemplo, cómo crear un Arkanoid desde cero.",
+  "effort": {
+    "cycles": "4 etapas verificadas",
+    "toolCalls": 14,
+    "wallClock": "~20 min"
+  },
+  "controls": "O = izquierda · P = derecha · SPACE = reiniciar tras game over/victoria",
+  "sourcePath": "examples/arkanoid-quickstart",
+  "files": {
+    "snapshot": "game.z80",
+    "screenshot": "screen.png",
+    "transcript": "transcript.md"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "arkanoid",
+  "entry": "src/main.asm",
+  "org": "0x8000",
+  "toolkit": "@zx-vibes/toolkit"
+}

@@ -1,0 +1,9 @@
+{
+  "build": "demo.asm",
+  "frames": 60,
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "screenIncludes", "text": "SCORE 0100" }
+  ]
+}

@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <title>ZX Spectrum Basic</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="retro.css" />
+  </head>
+  <body class="page-layout">
+    <div class="top-menu">
+      <div class="menu-container">
+        <div class="brand">ZX Spectrum</div>
+      </div>
+    </div>
+
+    <div class="emulator-container">
+      <div class="rainbow-strip"></div>
+
+      <canvas id="screen" width="320" height="240"></canvas>
+
+      <div class="controls">
+        <button id="reset-btn" class="btn">Reset</button>
+        <button id="pause-btn" class="btn">Pause</button>
+        <button id="load-btn" class="btn">Load File</button>
+        <button id="audio-btn" class="btn">Audio Off</button>
+        <button id="fast-load-btn" class="btn">Fast</button>
+        <button id="fullscreen-btn" class="btn">Fullscreen</button>
+      </div>
+
+      <div id="tape-status"></div>
+      <input type="file" id="tape-file" accept=".z80,.tap,.tzx" />
+    </div>
+
+    <script type="module">
+      import { ZXSpectrum } from 'https://cdn.jsdelivr.net/npm/zx-generation@latest/dist/zxgeneration.esm.js';
+
+      // Initialize emulator with responsive scale
+      const isMobile = window.innerWidth <= 768;
+      const initialScale = isMobile ? 1 : 2;
+      const spectrum = new ZXSpectrum('#screen', { scale: initialScale });
+
+      // Function to resize canvas for mobile
+      function resizeCanvas() {
+        const canvas = document.getElementById('screen');
+        const displaySize = spectrum.display.getDisplaySize();
+        const aspectRatio = displaySize.width / displaySize.height;
+        const isLandscape =
+          window.orientation === 90 ||
+          window.orientation === -90 ||
+          (window.innerWidth > window.innerHeight && window.innerHeight < 600);
+
+        if (window.innerWidth <= 768 || isLandscape) {
+          if (isLandscape) {
+            // Landscape mode - prioritize height
+            const topMenuHeight = 36;
+            const padding = 16;
+            const availableHeight = window.innerHeight - topMenuHeight - padding;
+
+            let height = availableHeight;
+            let width = height * aspectRatio;
+
+            // Check if width is too large
+            const maxWidth = window.innerWidth - 150;
+            if (width > maxWidth) {
+              width = maxWidth;
+              height = width / aspectRatio;
+            }
+
+            canvas.style.width = Math.floor(width) + 'px';
+            canvas.style.height = Math.floor(height) + 'px';
+          } else {
+            // Portrait mode - prioritize width
+            const containerPadding = 16;
+            const availableWidth = window.innerWidth - containerPadding;
+
+            // Calculate height needed for UI elements
+            const topMenuHeight = 44;
+            const controlsHeight = 120;
+            const tapeStatusHeight = 44;
+            const gaps = 48;
+
+            const totalUIHeight = topMenuHeight + controlsHeight + tapeStatusHeight + gaps;
+            const availableHeight = window.innerHeight - totalUIHeight;
+
+            // Calculate optimal size
+            let width = availableWidth;
+            let height = width / aspectRatio;
+
+            // If height exceeds available space, scale down
+            if (height > availableHeight && availableHeight > 100) {
+              height = availableHeight;
+              width = height * aspectRatio;
+            }
+
+            // Ensure minimum size
+            const minWidth = 280;
+            if (width < minWidth) {
+              width = minWidth;
+              height = width / aspectRatio;
+            }
+
+            canvas.style.width = Math.floor(width) + 'px';
+            canvas.style.height = Math.floor(height) + 'px';
+          }
+        } else {
+          // Desktop size
+          canvas.style.width = displaySize.width * 2 + 'px';
+          canvas.style.height = displaySize.height * 2 + 'px';
+        }
+      }
+
+      // Initial resize
+      resizeCanvas();
+
+      // State management
+      const state = {
+        isPaused: false,
+        audioEnabled: false,
+        tapeLoaded: false,
+        turboInterval: null,
+        wasPlaying: false,
+        lastBlockIndex: 0,
+      };
+
+      // UI elements
+      const ui = {
+        resetBtn: document.getElementById('reset-btn'),
+        pauseBtn: document.getElementById('pause-btn'),
+        loadBtn: document.getElementById('load-btn'),
+        audioBtn: document.getElementById('audio-btn'),
+        fastLoadBtn: document.getElementById('fast-load-btn'),
+        fullscreenBtn: document.getElementById('fullscreen-btn'),
+        tapeFile: document.getElementById('tape-file'),
+        tapeStatus: document.getElementById('tape-status'),
+      };
+
+      // Helper functions
+      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      async function typeCommand(command) {
+        const KEY_DELAY = 100;
+        const KEY_HOLD = 50;
+
+        for (const char of command) {
+          let keys = [];
+
+          switch (char) {
+            case '"':
+              keys = ['SYMBOL_SHIFT', 'P'];
+              break;
+            case ' ':
+              keys = ['SPACE'];
+              break;
+            case '\n':
+              keys = ['ENTER'];
+              break;
+            default:
+              keys = [char.toUpperCase()];
+          }
+
+          keys.forEach((key) => spectrum.keyDown(key));
+          await delay(KEY_HOLD);
+          keys.reverse().forEach((key) => spectrum.keyUp(key));
+          await delay(KEY_DELAY);
+        }
+      }
+
+      function updateFullscreenMode() {
+        const canvas = document.getElementById('screen');
+        const displaySize = spectrum.display.getDisplaySize();
+        const isFullscreen =
+          document.fullscreenElement || document.webkitFullscreenElement || window.innerHeight === screen.height;
+
+        document.body.classList.toggle('fullscreen-mode', isFullscreen);
+
+        if (isFullscreen) {
+          const screenWidth = window.innerWidth;
+          const screenHeight = window.innerHeight;
+          const canvasAspect = displaySize.width / displaySize.height;
+          const screenAspect = screenWidth / screenHeight;
+
+          let newWidth, newHeight;
+          if (screenAspect > canvasAspect) {
+            newHeight = screenHeight * 0.95;
+            newWidth = newHeight * canvasAspect;
+          } else {
+            newWidth = screenWidth * 0.95;
+            newHeight = newWidth / canvasAspect;
+          }
+
+          canvas.style.width = Math.floor(newWidth) + 'px';
+          canvas.style.height = Math.floor(newHeight) + 'px';
+          ui.fullscreenBtn.textContent = 'Exit Fullscreen';
+        } else {
+          resizeCanvas();
+          ui.fullscreenBtn.textContent = 'Fullscreen';
+        }
+      }
+
+      // Button handlers
+      ui.resetBtn.addEventListener('click', () => {
+        spectrum.reset();
+        state.isPaused = false;
+        ui.pauseBtn.textContent = 'Pause';
+        ui.pauseBtn.classList.remove('active');
+        ui.tapeStatus.style.visibility = 'hidden';
+        ui.fastLoadBtn.style.display = 'none';
+      });
+
+      ui.pauseBtn.addEventListener('click', () => {
+        state.isPaused = !state.isPaused;
+        if (state.isPaused) {
+          spectrum.stop();
+          ui.pauseBtn.textContent = 'Resume';
+          ui.pauseBtn.classList.add('active');
+        } else {
+          spectrum.start();
+          ui.pauseBtn.textContent = 'Pause';
+          ui.pauseBtn.classList.remove('active');
+        }
+      });
+
+      ui.loadBtn.addEventListener('click', () => {
+        ui.tapeFile.click();
+      });
+
+      ui.audioBtn.addEventListener('click', async () => {
+        state.audioEnabled = !state.audioEnabled;
+
+        if (state.audioEnabled) {
+          spectrum.setMuted(false);
+
+          // Resume audio context if needed
+          const audioContext = spectrum.sound?.audioContext || spectrum.audioWorklet?.audioContext;
+          if (audioContext?.state === 'suspended') {
+            try {
+              await audioContext.resume();
+            } catch (err) {
+              console.warn('Failed to resume audio:', err);
+            }
+          }
+
+          ui.audioBtn.textContent = 'Audio On';
+          ui.audioBtn.classList.add('active');
+        } else {
+          spectrum.setMuted(true);
+          ui.audioBtn.textContent = 'Audio Off';
+          ui.audioBtn.classList.remove('active');
+        }
+      });
+
+      ui.fastLoadBtn.addEventListener('click', () => {
+        if (state.turboInterval) {
+          clearInterval(state.turboInterval);
+          state.turboInterval = null;
+          ui.fastLoadBtn.textContent = 'Fast';
+          ui.fastLoadBtn.classList.remove('active');
+        } else {
+          ui.fastLoadBtn.textContent = 'Normal';
+          ui.fastLoadBtn.classList.add('active');
+          state.turboInterval = setInterval(() => {
+            for (let i = 0; i < 10; i++) {
+              spectrum.runFrame();
+            }
+          }, 10);
+        }
+      });
+
+      ui.fullscreenBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          const requestFS =
+            document.body.requestFullscreen ||
+            document.body.webkitRequestFullscreen ||
+            document.body.msRequestFullscreen;
+          requestFS.call(document.body);
+        } else {
+          const exitFS = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+          exitFS.call(document);
+        }
+      });
+
+      // File handling
+      ui.tapeFile.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const fileExt = file.name.toLowerCase().split('.').pop();
+        const buffer = await file.arrayBuffer();
+
+        try {
+          if (fileExt === 'z80') {
+            spectrum.loadZ80Snapshot(buffer);
+            ui.tapeStatus.textContent = `Loaded snapshot: ${file.name}`;
+            ui.tapeStatus.style.visibility = 'visible';
+            ui.fastLoadBtn.style.display = 'none';
+          } else if (fileExt === 'tap' || fileExt === 'tzx') {
+            spectrum.loadTape(buffer, file.name);
+            state.tapeLoaded = true;
+
+            await delay(500);
+            await typeCommand('J""'); // LOAD ""
+            await typeCommand('\n'); // Enter
+            await delay(1000);
+
+            spectrum.playTape();
+
+            ui.tapeStatus.textContent = `Loading tape: ${file.name}`;
+            ui.tapeStatus.style.visibility = 'visible';
+            ui.fastLoadBtn.style.display = 'inline-block';
+          }
+        } catch (error) {
+          ui.tapeStatus.textContent = `Error: ${error.message}`;
+          ui.tapeStatus.style.visibility = 'visible';
+          console.error('File loading error:', error);
+        }
+
+        e.target.value = '';
+      });
+
+      // Tape status monitoring
+      setInterval(() => {
+        if (state.tapeLoaded && spectrum.tape?.data) {
+          const status = spectrum.getTapeStatus();
+
+          if (status.playing) {
+            const currentBlock = spectrum.tape.blockIndex;
+            const totalBlocks = spectrum.tape.blocks.length;
+            state.lastBlockIndex = currentBlock;
+            ui.tapeStatus.textContent = `${status.status} (Block ${currentBlock}/${totalBlocks})`;
+            state.wasPlaying = true;
+          } else if (state.wasPlaying) {
+            state.wasPlaying = false;
+
+            if (state.lastBlockIndex >= spectrum.tape.blocks.length) {
+              ui.tapeStatus.textContent = 'Tape loading complete! Press any key to start...';
+
+              setTimeout(async () => {
+                spectrum.keyDown('SPACE');
+                await delay(100);
+                spectrum.keyUp('SPACE');
+                ui.tapeStatus.textContent = 'Ready!';
+
+                setTimeout(() => {
+                  ui.tapeStatus.style.visibility = 'hidden';
+                }, 2000);
+              }, 2000);
+            } else {
+              ui.tapeStatus.textContent = 'Tape stopped';
+            }
+
+            // Disable turbo mode if active
+            if (state.turboInterval) {
+              clearInterval(state.turboInterval);
+              state.turboInterval = null;
+              ui.fastLoadBtn.textContent = 'Fast';
+              ui.fastLoadBtn.classList.remove('active');
+            }
+          }
+        }
+      }, 100);
+
+      // Fullscreen event listeners
+      document.addEventListener('fullscreenchange', updateFullscreenMode);
+      document.addEventListener('webkitfullscreenchange', updateFullscreenMode);
+
+      // Handle orientation change and window resize
+      window.addEventListener('orientationchange', () => {
+        setTimeout(resizeCanvas, 100);
+      });
+
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+        updateFullscreenMode();
+      });
+
+      // Prevent zoom on double tap for mobile
+      let lastTouchEnd = 0;
+      document.addEventListener(
+        'touchend',
+        (e) => {
+          const now = Date.now();
+          if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+          }
+          lastTouchEnd = now;
+        },
+        false,
+      );
+    </script>
+  </body>
+</html>

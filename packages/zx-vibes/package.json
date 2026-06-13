@@ -1,0 +1,53 @@
+{
+  "name": "zx-vibes",
+  "version": "0.1.0",
+  "description": "User-facing ZX Spectrum vibe-coding package with zxs, zxs-mcp, and zxasm bins.",
+  "license": "MIT",
+  "author": "Alvaro Mateos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
+    "directory": "packages/zx-vibes"
+  },
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
+  "bugs": {
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "zx-vibes": "bin/zx-vibes.js",
+    "zxs": "bin/zxs.js",
+    "zxs-mcp": "bin/zxs-mcp.js",
+    "zxasm": "bin/zxasm.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node bin/zx-vibes.js --version",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src bin"
+  },
+  "dependencies": {
+    "@zx-vibes/asm": "workspace:*",
+    "@zx-vibes/toolkit": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

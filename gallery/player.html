@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spectral Gallery — play</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site">
+    <h1><a href="index.html">Spectral Gallery</a></h1>
+    <p id="subtitle">Loading…</p>
+  </header>
+  <div class="stripe"></div>
+  <main>
+    <div class="player-wrap">
+      <canvas id="screen"></canvas>
+      <div class="controls" id="controls"></div>
+      <div class="actions" style="justify-content:center">
+        <a class="btn alt" id="download" href="#" download>↓ Download .z80</a>
+        <a class="btn" href="index.html">← Gallery</a>
+      </div>
+    </div>
+    <section class="meta" id="meta" hidden>
+      <h3>Provenance</h3>
+      <dl>
+        <dt>Agent</dt><dd id="m-model"></dd>
+        <dt>Harness</dt><dd id="m-harness"></dd>
+        <dt>Prompt</dt><dd id="m-prompt"></dd>
+        <dt>Effort</dt><dd id="m-effort"></dd>
+        <dt>Date</dt><dd id="m-date"></dd>
+        <dt>Source</dt><dd><code id="m-source"></code></dd>
+      </dl>
+      <pre class="transcript" id="transcript"></pre>
+    </section>
+    <footer>
+      Emulation by <a href="https://github.com/alvaromah/zx-generation">zx-generation</a>.
+      If there's no sound, click the screen once (browser autoplay policy).
+    </footer>
+  </main>
+  <script type="module">
+    import { ZXSpectrum } from './zxgeneration.esm.js';
+
+    const id = new URLSearchParams(location.search).get('game');
+    const subtitle = document.getElementById('subtitle');
+    try {
+      if (!id) throw new Error('no game selected — use ?game=<id>');
+      const meta = await (await fetch(`games/${id}/meta.json`)).json();
+      document.title = `Spectral Gallery — ${meta.title}`;
+      subtitle.textContent = `${meta.title} — ${meta.tagline}`;
+      document.getElementById('controls').innerHTML = `<b>${meta.controls}</b>`;
+      document.getElementById('download').href = `games/${id}/${meta.files.snapshot}`;
+
+      document.getElementById('m-model').textContent = meta.agent.model;
+      document.getElementById('m-harness').textContent = meta.agent.harness;
+      document.getElementById('m-prompt').textContent = meta.prompt;
+      document.getElementById('m-effort').textContent =
+        `${meta.effort.cycles} · ${meta.effort.toolCalls} tool calls · ${meta.effort.wallClock}`;
+      document.getElementById('m-date').textContent = meta.date;
+      document.getElementById('m-source').textContent = meta.sourcePath;
+      document.getElementById('meta').hidden = false;
+
+      fetch(`games/${id}/${meta.files.transcript}`)
+        .then(r => (r.ok ? r.text() : ''))
+        .then(t => { document.getElementById('transcript').textContent = t; });
+
+      const snapshot = new Uint8Array(
+        await (await fetch(`games/${id}/${meta.files.snapshot}`)).arrayBuffer()
+      );
+      new ZXSpectrum('#screen', {
+        rom: '48k.rom',
+        scale: 2,
+        sound: true,
+        onReady: (spectrum) => spectrum.loadZ80Snapshot(snapshot),
+      });
+    } catch (err) {
+      subtitle.innerHTML = `<span class="err">${err.message}</span>`;
+    }
+  </script>
+</body>
+</html>

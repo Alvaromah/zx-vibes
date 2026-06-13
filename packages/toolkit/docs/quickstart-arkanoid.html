@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quickstart — un Arkanoid desde cero con Spectral</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .zx-stripes { background: linear-gradient(135deg,
+      #d7000f 0 25%, #ffd300 25% 50%, #00b500 50% 75%, #00c8c8 75% 100%); }
+    .crt-glow { text-shadow: 0 0 12px rgba(0, 200, 200, 0.35); }
+    .scanlines { background-image: repeating-linear-gradient(
+      0deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 3px); }
+    pre { tab-size: 4; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200 font-sans antialiased scanlines">
+
+  <header class="relative border-b border-zinc-800">
+    <div class="zx-stripes h-2 w-full"></div>
+    <div class="max-w-5xl mx-auto px-6 py-14">
+      <div class="flex flex-wrap items-center gap-3 mb-6">
+        <span class="px-3 py-1 text-xs font-mono rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700">✓ código verificado en vivo — 2/2 tests en CI</span>
+        <span class="px-3 py-1 text-xs font-mono rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">examples/arkanoid-quickstart</span>
+      </div>
+      <h1 class="text-4xl sm:text-5xl font-black tracking-tight text-white mb-3">
+        QUICKSTART<span class="text-cyan-400 crt-glow">_</span> tu primer juego
+      </h1>
+      <p class="text-2xl text-zinc-400 font-light mb-6">Un Arkanoid desde cero, paso a paso</p>
+      <p class="max-w-3xl text-zinc-300 leading-relaxed">
+        Todo el código de esta guía <span class="text-white font-medium">se construyó y verificó antes de
+        escribirla</span>: cada etapa corrió en el emulador, sus tests pasan en CI y el resultado se juega
+        en <a href="https://alvaromah.github.io/spectral/player.html?game=arkanoid-quickstart" class="text-cyan-400 hover:underline">la galería</a>.
+        La versión completa con todos los listados: <code class="text-amber-300">docs/quickstart-arkanoid.md</code>.
+      </p>
+      <div class="mt-8 grid sm:grid-cols-2 gap-6 items-start">
+        <img src="../gallery/games/arkanoid-quickstart/screen.png" alt="Arkanoid corriendo en el emulador"
+             class="w-full border border-zinc-700 rounded-lg" style="image-rendering: pixelated">
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 text-sm text-zinc-300 leading-relaxed">
+          <h2 class="text-white font-semibold mb-2">¿Ensamblador o BASIC?</h2>
+          <p><span class="text-amber-300 font-medium">Ensamblador Z80.</span> El Spectrum traía BASIC, pero es
+          interpretado y lento: mueve decenas de operaciones por fotograma y un juego de acción necesita miles.
+          Los juegos comerciales de la época eran todos ensamblador, y Spectral está construido para eso:
+          compilador (<code>sjasmplus</code> por defecto, backend embebido <code>spectral</code> para starters/recetas),
+          depurador, recetas y watchdog hablan Z80.</p>
+          <p class="mt-3 text-zinc-400">¿Nunca has escrito ensamblador? Para eso es este tutorial — y la trampa
+          final del paso ⑨: pedírselo al agente.</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6">
+
+    <!-- PASO 0/1 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">⓪→① El proyecto y el bucle sagrado</h2>
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 text-sm">
+          <p class="text-zinc-300 mb-3">Requisitos y proyecto nuevo:</p>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-zinc-500"># una vez</span>
+<span class="text-emerald-300">git clone</span> https://github.com/Alvaromah/spectral
+<span class="text-emerald-300">npm install</span> && <span class="text-emerald-300">npm run build</span>
+<span class="text-emerald-300">zxs doctor</span>   <span class="text-zinc-500"># ¿Node, ROM y backend ok?</span>
+
+<span class="text-zinc-500"># tu juego</span>
+<span class="text-emerald-300">zxs new</span> arkanoid && cd arkanoid</code></pre>
+          <p class="text-zinc-400 mt-3"><code class="text-cyan-300">zxs new</code> crea un juego <em>que ya
+          funciona</em>: <code>src/main.asm</code>, <code>lib/</code> con rutinas probadas, <code>tests/</code>,
+          y el manual <code>CLAUDE.md</code> por si lo pilota un agente.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 text-sm">
+          <p class="text-zinc-300 mb-3">El gesto que repetirás cien veces:</p>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-amber-300">zxs build</span> src/main.asm                 <span class="text-zinc-500"># 1. compila</span>
+<span class="text-amber-300">zxs run</span> --bin build/main.bin \
+        --org 0x8000 --frames 300     <span class="text-zinc-500"># 2. ejecuta</span>
+<span class="text-amber-300">zxs screen</span> --text                     <span class="text-zinc-500"># 3. MIRA</span></code></pre>
+          <p class="text-zinc-400 mt-3">El JSON de <code>zxs run</code> dice si el programa está sano
+          (<code class="text-emerald-300">status: "ok"</code>, <code class="text-emerald-300">haltSynced: true</code>);
+          <code>zxs screen</code> enseña la pantalla. <span class="text-white">Nunca asumas que algo funciona sin mirar.</span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PASO 2 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">② El escenario: marcador + pala</h2>
+      <p class="text-sm text-zinc-400 mb-4 max-w-3xl">La pantalla se direcciona por <span class="text-zinc-200">celdas de 8×8 píxeles</span> (32×24). <code class="text-cyan-300">cell_addr</code> convierte (fila, columna) en dirección de memoria. Las variables del juego viven en direcciones fijas (<code class="text-cyan-300">PADX equ 0xBF00</code>) — así los tests pueden leerlas con <code class="text-cyan-300">zxs mem read</code>. Y <code class="text-cyan-300">ei + halt</code> es el latido: 50 pulsos por segundo.</p>
+      <div class="grid md:grid-cols-2 gap-5">
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-zinc-500">; fill_cell — el byte E en las 8 lineas de (B=fila, C=col)</span>
+fill_cell:
+    <span class="text-amber-300">push</span> bc
+    <span class="text-amber-300">call</span> cell_addr
+    <span class="text-amber-300">ld</span> b, 8
+.lines:
+    <span class="text-amber-300">ld</span> (hl), e
+    <span class="text-amber-300">inc</span> h          <span class="text-zinc-500">; siguiente linea de la celda</span>
+    <span class="text-amber-300">djnz</span> .lines
+    <span class="text-amber-300">pop</span> bc
+    <span class="text-amber-300">ret</span></code></pre>
+        <div class="bg-rose-950/40 border border-rose-800/60 rounded-xl p-5 text-sm text-zinc-300 leading-relaxed">
+          <h3 class="text-rose-300 font-semibold mb-2">⚠️ El bug clásico (nos mordió escribiendo esto)</h3>
+          <p>Imprimir el HUD con el código AT <em>dentro</em> de la cadena — <code class="font-mono">db 22, 0, 0, "SCORE…"</code> — no imprime <strong>nada</strong>: el impresor termina en el byte 0, y <code>AT 0,0</code> lleva dos ceros como operandos. <span class="text-white">El mismo bug que cometió el agente del Pong.</span></p>
+          <p class="mt-2">La cura: un helper <code class="text-cyan-300">print_at</code> que manda el AT por registros (<code class="font-mono text-xs">ld a,22 / rst 0x10 / ld a,fila / rst 0x10 / ld a,col / rst 0x10</code>) — inmune al terminador.</p>
+        </div>
+      </div>
+      <p class="text-xs font-mono text-zinc-500 mt-4">verifica → <span class="text-zinc-300">zxs screen --text</span> debe enseñar <span class="text-emerald-300">SCORE 000000 · LIVES 3</span> arriba y <span class="text-emerald-300">███</span> en la fila 22</p>
+    </section>
+
+    <!-- PASO 3 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">③ Mover la pala</h2>
+      <div class="grid md:grid-cols-2 gap-5 items-start">
+        <div class="text-sm text-zinc-300 leading-relaxed space-y-3">
+          <p><code class="text-cyan-300">read_qaop</code> (de la lib) devuelve el teclado en bits: O = izquierda, P = derecha. La regla de oro del movimiento sin estelas:</p>
+          <p class="font-mono text-xs bg-black/60 border border-zinc-800 rounded-lg px-4 py-3"><span class="text-rose-300">borra</span> en la posición vieja → <span class="text-amber-300">actualiza</span> la variable → <span class="text-emerald-300">pinta</span> en la nueva</p>
+          <p>¿Probar teclado sin teclado? <span class="text-white">Teclas programadas</span>: <code class="text-cyan-300">--keys</code> pulsa por ti en fotogramas exactos. Como el emulador es determinista, el resultado es idéntico siempre — jugar se convierte en testear.</p>
+        </div>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-emerald-300">zxs run</span> --bin build/main.bin --org 0x8000 \
+        --frames 120 --fresh \
+        <span class="text-amber-300">--keys "10:P*40,70:O*20"</span>
+
+<span class="text-zinc-500"># P 40 frames (pala al tope, col 29),
+# O 20 frames (retrocede 20)
+# → acaba EXACTAMENTE en la columna 9:</span>
+<span class="text-zinc-400">'         ███                    '</span></code></pre>
+      </div>
+    </section>
+
+    <!-- PASO 4 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">④ La bola: rebotes, vidas y game over</h2>
+      <div class="grid md:grid-cols-3 gap-4 text-sm">
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
+          <h3 class="text-amber-300 font-mono mb-2">sprite XOR</h3>
+          <p class="text-zinc-400">Dibujar la bola dos veces en el mismo sitio la borra (receta 04). Movimiento limpio gratis: la misma rutina dibuja y borra.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
+          <h3 class="text-amber-300 font-mono mb-2">celdas + dirección ±1</h3>
+          <p class="text-zinc-400">La bola vive en coordenadas de celda con (dx, dy) = ±1 y se mueve cada 4 fotogramas. Rebotar = negar dx o dy. Retro masticable y suficiente.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
+          <h3 class="text-amber-300 font-mono mb-2">el orden de cada paso</h3>
+          <p class="text-zinc-400">borrar → calcular rebotes (pared, techo, pala, suelo) → actualizar → pintar. La fila 22 es la pala; tocar la 23 = vida perdida.</p>
+        </div>
+      </div>
+      <p class="text-xs font-mono text-zinc-500 mt-4">verifica → 1000 frames sin teclas pierden las 3 vidas: <span class="text-emerald-300">"GAME OVER - SPACE"</span> · y <span class="text-zinc-300">--keys "5:SPACE*10"</span> reinicia la partida</p>
+      <p class="text-sm text-zinc-400 mt-3 max-w-3xl">Detalle de oficio: <code class="text-cyan-300">ld sp, 0xBF00</code> como primera instrucción de <code>start</code> — cada reinicio llega vía <code>jp start</code> sin limpiar la pila; con pila propia no crece partida a partida.</p>
+    </section>
+
+    <!-- PASO 5 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">⑤ Ladrillos, puntuación y victoria</h2>
+      <div class="grid md:grid-cols-2 gap-5 items-start">
+        <div class="text-sm text-zinc-300 leading-relaxed space-y-3">
+          <p><span class="text-white">La pantalla es el modelo de datos</span>: no hay array de ladrillos — un ladrillo existe si su celda tiene píxeles. La colisión lee un byte de la celda destino; si no es cero, hay ladrillo: borrarlo, sumar 10 (BCD, receta 10), invertir dy.</p>
+          <p>El muro: 5 filas × 28 columnas, un color por fila vía <span class="text-white">atributos</span> (el byte de color de cada celda: <code class="font-mono text-xs">papel*8 + tinta</code>).</p>
+          <p class="text-zinc-400">El determinismo brilla: la bola sirve hacia arriba y golpea su primer ladrillo <em>siempre</em> en la fila 7, columna 19, hacia el fotograma 20 → <code class="text-emerald-300">SCORE 000010</code>.</p>
+        </div>
+        <div class="bg-cyan-950/40 border border-cyan-800/60 rounded-xl p-5 text-sm text-zinc-300 leading-relaxed">
+          <h3 class="text-cyan-300 font-semibold mb-2">🔬 El truco del depurador</h3>
+          <p>¿Cómo pruebas la pantalla de victoria sin una partida perfecta de 140 ladrillos? <span class="text-white">Escribiendo en la memoria viva:</span></p>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-3 mt-2 text-xs font-mono overflow-x-auto"><code><span class="text-emerald-300">zxs mem write</span> 0xBF07 01  <span class="text-zinc-500"># BRICKS = 1</span>
+<span class="text-emerald-300">zxs run</span> --frames 60
+<span class="text-emerald-300">zxs screen</span> --text        <span class="text-zinc-500"># → YOU WIN! - SPACE</span></code></pre>
+          <p class="mt-2 text-zinc-400">El emulador es tuyo: tócalo por dentro.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PASO 6 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">⑥ Tests automáticos</h2>
+      <div class="grid md:grid-cols-2 gap-5 items-start">
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-zinc-500">// tests/arkanoid.test.json</span>
+{
+  <span class="text-cyan-300">"build"</span>: "../src/main.asm",
+  <span class="text-cyan-300">"frames"</span>: 60,
+  <span class="text-cyan-300">"assert"</span>: [
+    { "type": "status",  "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "screenIncludes", "text": <span class="text-amber-300">"SCORE 000010"</span> },
+    { "type": "pixelAt", "x": 156, "y": 59, "set": <span class="text-rose-300">false</span> },
+    { "type": "pixelAt", "x": 148, "y": 59, "set": <span class="text-emerald-300">true</span> },
+    { "type": "pixelAt", "x": 120, "y": 180, "set": <span class="text-emerald-300">true</span> }
+  ]
+}</code></pre>
+        <div class="text-sm text-zinc-300 leading-relaxed space-y-3">
+          <p>Léelo en voz alta: a los 60 fotogramas el marcador dice 000010, el píxel del ladrillo destruido está <em>apagado</em>, su vecino <em>encendido</em>, y la pala donde debe. Solo es posible porque <span class="text-white">mismo arranque + mismas teclas ⇒ ejecución idéntica, siempre</span>.</p>
+          <p><code class="text-emerald-300">zxs test tests</code> → <code class="text-emerald-300">2/2 passed</code>. A partir de aquí, cada mecánica nueva = una aserción que la protege. Estos mismos tests corren en el CI del repo.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PASO 7/8 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">⑦ A la galería · ⑧ Tus deberes</h2>
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 text-sm text-zinc-300 leading-relaxed">
+          <h3 class="text-white font-semibold mb-2">Publicar en la galería</h3>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-3 text-xs font-mono overflow-x-auto mb-3"><code><span class="text-emerald-300">zxs run</span> ... --screenshot screen.png
+<span class="text-emerald-300">zxs state export</span> --z80 game.z80</code></pre>
+          <p>Crea <code class="text-cyan-300">gallery/games/&lt;tu-id&gt;/</code> con el snapshot, la captura, un <code>meta.json</code> (prompt, modelo, esfuerzo, controles) y un <code>transcript.md</code>. El contrato es la transparencia: <span class="text-white">sin procedencia no hay juego</span>.</p>
+          <p class="mt-2 text-zinc-500 text-xs">Curiosidad: si el borde sale amarillo en el navegador, es un bug del cargador .z80 de zx-generation 1.0.1, ya arreglado upstream — pendiente de release.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 text-sm text-zinc-300 leading-relaxed">
+          <h3 class="text-white font-semibold mb-2">La siguiente iteración (ejercicios)</h3>
+          <ol class="list-decimal list-inside space-y-1.5 text-zinc-400">
+            <li><span class="text-zinc-200">Física de pala</span> — el tercio izquierdo/derecho devuelve la bola con dx contrario</li>
+            <li><span class="text-zinc-200">Sonido</span> — receta 09: beep al romper, zap al morir</li>
+            <li><span class="text-zinc-200">Niveles</span> — al ganar, otro muro y más velocidad</li>
+            <li><span class="text-zinc-200">Bola por píxeles</span> — receta 03: pasos de 4 px, colisiones más finas</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- PASO 9 -->
+    <section class="py-12">
+      <div class="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-8 text-center">
+        <h2 class="text-2xl font-bold text-white mb-3">⑨ La otra forma: pídeselo al agente</h2>
+        <p class="max-w-2xl mx-auto text-zinc-300 leading-relaxed text-sm">
+          Todo lo que acabas de hacer a mano, un agente lo hace solo — esa es la tesis de Spectral.
+          En el directorio del proyecto, abre Claude Code y di:
+        </p>
+        <p class="mt-4 font-mono text-base bg-black/60 border border-zinc-700 rounded-lg px-6 py-4 inline-block text-amber-300">
+          Build a playable Arkanoid. Follow CLAUDE.md.
+        </p>
+        <p class="mt-4 max-w-2xl mx-auto text-zinc-400 text-sm">
+          Compilará, ejecutará, mirará la pantalla, se equivocará, leerá los veredictos del watchdog y se
+          corregirá. El Pong de la galería salió exactamente así: ~8 ciclos, 40 herramientas, 11 minutos, cero ayuda.
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-zinc-800">
+    <div class="zx-stripes h-1 w-full"></div>
+    <div class="max-w-5xl mx-auto px-6 py-8 text-xs text-zinc-500 font-mono flex flex-wrap gap-4 justify-between">
+      <span>Quickstart Arkanoid · 11/06/2026 · código final en <code>examples/arkanoid-quickstart/</code></span>
+      <span>guía completa con todos los listados: <code>docs/quickstart-arkanoid.md</code></span>
+    </div>
+  </footer>
+
+</body>
+</html>

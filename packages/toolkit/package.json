@@ -1,0 +1,82 @@
+{
+  "name": "@zx-vibes/toolkit",
+  "version": "0.1.0",
+  "description": "zx-vibes toolkit: assemble, run headless, observe, debug, preview, and iterate on ZX Spectrum games.",
+  "license": "MIT",
+  "author": "Alvaro Mateos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
+    "directory": "packages/toolkit"
+  },
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
+  "bugs": {
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
+  },
+  "keywords": [
+    "zx-spectrum",
+    "z80",
+    "emulator",
+    "sjasmplus",
+    "assembly",
+    "ai-agents",
+    "mcp",
+    "retro",
+    "game-development"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "zxs": "dist/cli/index.js",
+    "zxs-mcp": "dist/mcp/server.js",
+    "zx-vibes": "dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "import": "./dist/cli/index.js"
+    },
+    "./mcp": {
+      "import": "./dist/mcp/server.js"
+    }
+  },
+  "files": [
+    "dist",
+    "docs/reference",
+    "recipes",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsup && node ../../scripts/ensure-shebang.js dist/cli/index.js dist/mcp/server.js",
+    "prepack": "pnpm run build",
+    "test": "tsup --silent && node ../../scripts/ensure-shebang.js --silent dist/cli/index.js dist/mcp/server.js && vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "dependencies": {
+    "@zx-vibes/asm": "workspace:*",
+    "@zx-vibes/emulator": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "commander": "^14.0.0",
+    "pngjs": "^7.0.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/pngjs": "^6.0.5",
+    "prettier": "^3.5.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.8"
+  }
+}

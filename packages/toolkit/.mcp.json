@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "zx_vibes": {
+      "command": "pnpm",
+      "args": ["exec", "zxs-mcp"]
+    }
+  }
+}

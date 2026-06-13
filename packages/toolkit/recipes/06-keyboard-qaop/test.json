@@ -1,0 +1,10 @@
+{
+  "build": "demo.asm",
+  "frames": 80,
+  "keys": "10:P*20",
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "borderColor", "equals": 2 }
+  ]
+}

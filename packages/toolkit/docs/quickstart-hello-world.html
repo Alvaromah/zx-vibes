@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quickstart — Hello World con Claude Code en una máquina nueva</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .zx-stripes { background: linear-gradient(135deg,
+      #d7000f 0 25%, #ffd300 25% 50%, #00b500 50% 75%, #00c8c8 75% 100%); }
+    .crt-glow { text-shadow: 0 0 12px rgba(0, 200, 200, 0.35); }
+    .scanlines { background-image: repeating-linear-gradient(
+      0deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 3px); }
+    pre { tab-size: 4; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200 font-sans antialiased scanlines">
+
+  <header class="relative border-b border-zinc-800">
+    <div class="zx-stripes h-2 w-full"></div>
+    <div class="max-w-5xl mx-auto px-6 py-14">
+      <div class="flex flex-wrap items-center gap-3 mb-6">
+        <span class="px-3 py-1 text-xs font-mono rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700">✓ pasos verificados en vivo</span>
+        <span class="px-3 py-1 text-xs font-mono rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">@zx-vibes/toolkit</span>
+        <span class="px-3 py-1 text-xs font-mono rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">sin clonar el repo</span>
+      </div>
+      <h1 class="text-4xl sm:text-5xl font-black tracking-tight text-white mb-3">
+        HELLO<span class="text-cyan-400 crt-glow">_</span> WORLD
+      </h1>
+      <p class="text-2xl text-zinc-400 font-light mb-6">Tu primer programa en una máquina nueva, con Claude Code</p>
+      <p class="max-w-3xl text-zinc-300 leading-relaxed">
+        Partiendo solo del paquete público
+        <a href="https://www.npmjs.com/package/@zx-vibes/toolkit" class="text-cyan-400 hover:underline">@zx-vibes/toolkit</a>,
+        instalas Spectral desde npm, lo conectas a Claude Code por MCP y le pides que imprima
+        <code class="text-amber-300">HELLO WORLD</code> en un Spectrum 48K emulado — <span class="text-white font-medium">viendo la
+        pantalla</span> del resultado. Todos los pasos están verificados; el ensamblador del final se construyó y
+        ejecutó con el toolkit antes de escribir esto.
+      </p>
+      <div class="mt-8 grid sm:grid-cols-2 gap-6 items-start">
+<pre class="bg-black/60 border border-zinc-700 rounded-lg p-5 text-sm font-mono overflow-x-auto leading-relaxed"><code><span class="text-zinc-500"># requisitos mínimos</span>
+<span class="text-emerald-300">node</span> --version      <span class="text-zinc-500"># >= 20</span>
+<span class="text-emerald-300">claude</span> --version    <span class="text-zinc-500"># Claude Code</span>
+
+<span class="text-zinc-500"># backend por defecto opcional</span>
+<span class="text-emerald-300">sjasmplus</span> --version <span class="text-zinc-500"># si usas sjasmplus</span>
+
+<span class="text-zinc-500"># y un único install</span>
+<span class="text-amber-300">npm</span> install -g @zx-vibes/toolkit</code></pre>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 text-sm text-zinc-300 leading-relaxed">
+          <h2 class="text-white font-semibold mb-2">¿Por qué sin el repo?</h2>
+          <p>Publicar en npm es justo lo que desbloquea este flujo: el toolkit (<code class="text-cyan-300">zxs</code> +
+          <code class="text-cyan-300">zxs-mcp</code>) y la ROM del 48K viajan dentro del paquete. No clonas nada.</p>
+          <p class="mt-3 text-zinc-400">El backend por defecto usa
+          <span class="text-zinc-200">sjasmplus</span>; <code class="text-cyan-300">zxs doctor</code> te dice si falta
+          y cómo instalarlo. Para evitar ese binario, usa el backend embebido
+          <code class="text-cyan-300">spectral</code> en el flujo starter/recetas.</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6">
+
+    <!-- PASO 0 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">⓪ Requisitos</h2>
+      <p class="text-sm text-zinc-400 mb-4 max-w-3xl">Node, Claude Code y un backend de ensamblador. La ROM <span class="text-zinc-200">no</span>
+      se descarga aparte — va dentro del paquete (vía <code class="text-cyan-300">zx-generation</code>).</p>
+      <div class="grid md:grid-cols-3 gap-5 text-sm">
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
+          <h3 class="text-white font-semibold mb-1">Node.js ≥ 20</h3>
+          <p class="text-zinc-400"><code class="font-mono">node --version</code></p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
+          <h3 class="text-white font-semibold mb-1">Backend de ensamblador</h3>
+          <p class="text-zinc-400">Por defecto: sjasmplus en el PATH. Sin binario externo: <code class="font-mono">ZXS_ASSEMBLER=spectral</code> para starters/recetas.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
+          <h3 class="text-white font-semibold mb-1">Claude Code</h3>
+          <p class="text-zinc-400"><code class="font-mono">claude --version</code></p>
+        </div>
+      </div>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto mt-5"><code><span class="text-zinc-500"># si usas sjasmplus en macOS: se compila desde fuente</span>
+tar xf sjasmplus-*-src.tar.xz && cd sjasmplus-*
+<span class="text-emerald-300">make</span> && <span class="text-emerald-300">sudo</span> make install</code></pre>
+    </section>
+
+    <!-- PASO 1+2 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">①→② Instala y verifica</h2>
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 text-sm">
+          <p class="text-zinc-300 mb-3">Un único install global. Te deja <code class="text-cyan-300">zxs</code> y <code class="text-cyan-300">zxs-mcp</code> en el PATH:</p>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-amber-300">npm</span> install -g @zx-vibes/toolkit</code></pre>
+          <p class="text-zinc-400 mt-3">¿Sin global? <code class="font-mono text-xs">npx -p @zx-vibes/toolkit zxs &lt;cmd&gt;</code> también vale.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 text-sm">
+          <p class="text-zinc-300 mb-3">El doctor confirma el toolchain:</p>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-amber-300">zxs</span> doctor
+
+<span class="text-emerald-300">✓ node:</span> v22.x.x
+<span class="text-emerald-300">✓ sjasmplus:</span> v1.23.1
+<span class="text-emerald-300">✓ @zx-vibes/asm:</span> available
+<span class="text-emerald-300">✓ 48k.rom:</span> .../zx-generation/rom/48k.rom</code></pre>
+          <p class="text-zinc-400 mt-3">Si <code>sjasmplus</code> sale en rojo, instálalo o ejecuta <code>ZXS_ASSEMBLER=spectral zxs doctor</code> para la ruta embebida.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PASO 3 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">③ Conecta Spectral a Claude Code (MCP)</h2>
+      <div class="grid md:grid-cols-2 gap-5">
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-zinc-500"># una carpeta de trabajo y registras el MCP</span>
+<span class="text-emerald-300">mkdir</span> hello-zx && cd hello-zx
+<span class="text-emerald-300">claude mcp add</span> spectral -- zxs-mcp
+
+<span class="text-zinc-500"># -s user lo deja en TODOS tus proyectos</span>
+<span class="text-emerald-300">claude mcp list</span>   <span class="text-zinc-500"># comprobar</span></code></pre>
+        <div class="bg-cyan-950/30 border border-cyan-800/50 rounded-xl p-5 text-sm text-zinc-300 leading-relaxed">
+          <h3 class="text-cyan-300 font-semibold mb-2">👁️ Claude <em>ve</em> la pantalla</h3>
+          <p>La tool <code class="font-mono text-cyan-300">zx_screen</code> devuelve el display como imagen, más un OCR
+          del texto en rejilla 32×24. Por eso el agente puede comprobar visualmente lo que imprime, no solo leer un JSON.</p>
+          <p class="mt-2 text-zinc-400">Otras tools: <code class="font-mono">zx_build</code>, <code class="font-mono">zx_run</code>,
+          <code class="font-mono">zx_inspect</code>, <code class="font-mono">zx_debug</code>, <code class="font-mono">zx_keys</code>, <code class="font-mono">zx_state</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PASO 4 -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">④ Pídeselo al agente</h2>
+      <p class="text-sm text-zinc-400 mb-4 max-w-3xl">Lanza <code class="text-cyan-300">claude</code> en la carpeta y dale el encargo. Encadenará <code class="font-mono">zx_build</code> → <code class="font-mono">zx_run</code> → <code class="font-mono">zx_screen</code> solo.</p>
+      <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 text-sm">
+        <p class="text-zinc-400 mb-2 font-mono text-xs">prompt &gt;</p>
+        <p class="text-zinc-200 leading-relaxed">Crea un programa para ZX Spectrum 48K que imprima <code class="text-amber-300">HELLO WORLD</code>
+        en pantalla usando la rutina de impresión de la ROM. Ensámblalo con la tool de Spectral, ejecútalo y enséñame la pantalla.</p>
+      </div>
+      <p class="text-xs font-mono text-zinc-500 mt-4">resultado → la rejilla de <span class="text-zinc-300">zx_screen</span> muestra <span class="text-emerald-300">HELLO WORLD</span> arriba y <span class="text-emerald-300">© 1982 Sinclair Research Ltd</span> al pie (la línea de arranque)</p>
+    </section>
+
+    <!-- ALTERNATIVA CLI -->
+    <section class="py-12 border-b border-zinc-900">
+      <h2 class="text-2xl font-bold text-white mb-4">Alternativa sin agente — la CLI a mano</h2>
+      <p class="text-sm text-zinc-400 mb-4 max-w-3xl">Si prefieres ver el bucle sin el agente, crea <code class="text-cyan-300">hello.asm</code> (verificado en el emulador) y constrúyelo tú.</p>
+      <div class="grid md:grid-cols-2 gap-5">
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-zinc-500">; hello.asm — sin codigos AT</span>
+    <span class="text-amber-300">ORG</span> 0x8000
+start:
+    <span class="text-amber-300">ld</span> a, 2         <span class="text-zinc-500">; canal 2 = pantalla</span>
+    <span class="text-amber-300">call</span> 0x1601    <span class="text-zinc-500">; ROM CHAN-OPEN</span>
+    <span class="text-amber-300">ld</span> hl, msg
+print_loop:
+    <span class="text-amber-300">ld</span> a, (hl)
+    <span class="text-amber-300">or</span> a            <span class="text-zinc-500">; 0 termina la cadena</span>
+    <span class="text-amber-300">jr</span> z, done
+    <span class="text-amber-300">rst</span> 0x10       <span class="text-zinc-500">; imprime A</span>
+    <span class="text-amber-300">inc</span> hl
+    <span class="text-amber-300">jr</span> print_loop
+done:
+    <span class="text-amber-300">jr</span> done         <span class="text-zinc-500">; bucle: no vuelvas a la ROM</span>
+msg:
+    <span class="text-amber-300">defb</span> "HELLO WORLD", 0</code></pre>
+        <div>
+<pre class="bg-black/60 border border-zinc-800 rounded-lg p-4 text-xs font-mono overflow-x-auto"><code><span class="text-amber-300">zxs build</span> hello.asm
+<span class="text-amber-300">zxs run</span> --bin build/hello.bin \
+    --org 0x8000 --frames 50 \
+    --no-detect-hangs \
+    --screenshot screen.png --text</code></pre>
+          <div class="bg-rose-950/40 border border-rose-800/60 rounded-xl p-5 text-sm text-zinc-300 leading-relaxed mt-5">
+            <h3 class="text-rose-300 font-semibold mb-2">⚠️ Dos trampas</h3>
+            <p>El <strong>bucle infinito</strong> final es obligatorio: con un <code class="font-mono">ret</code> el control vuelve a la ROM, BASIC repinta y <span class="text-white">borra tu texto</span>.</p>
+            <p class="mt-2">Por eso <code class="font-mono text-cyan-300">--no-detect-hangs</code>: el bucle es intencional, pero el watchdog lo marcaría como <code class="font-mono">tight-loop</code> (salida 2). La captura se hace igual al terminar.</p>
+          </div>
+        </div>
+      </div>
+      <p class="text-xs text-zinc-500 mt-4 max-w-3xl">La trampa clásica que esta guía evita a propósito: imprimir con <code class="text-zinc-300 font-mono">AT y,x</code> dentro de una cadena terminada en cero — si <code class="font-mono">y</code> o <code class="font-mono">x</code> son 0, el <code class="font-mono">0</code> se confunde con el terminador y la cadena se trunca. Documentado en <code class="text-amber-300">docs/reference/common-bugs.md</code>.</p>
+    </section>
+
+    <!-- SIGUIENTES PASOS -->
+    <section class="py-12">
+      <h2 class="text-2xl font-bold text-white mb-4">Siguientes pasos</h2>
+      <div class="grid sm:grid-cols-2 gap-5 text-sm">
+        <a href="quickstart-arkanoid.html" class="block bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 hover:border-cyan-700 transition">
+          <h3 class="text-white font-semibold mb-1">Tu primer juego →</h3>
+          <p class="text-zinc-400">Un Arkanoid jugable desde cero, paso a paso.</p>
+        </a>
+        <a href="https://alvaromah.github.io/spectral/" class="block bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 hover:border-cyan-700 transition">
+          <h3 class="text-white font-semibold mb-1">La galería →</h3>
+          <p class="text-zinc-400">Juegos hechos por agentes, jugables en el navegador.</p>
+        </a>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
+          <h3 class="text-white font-semibold mb-1">El recetario</h3>
+          <p class="text-zinc-400"><code class="font-mono">zxs test recipes</code> — 12 recetas verificadas: sprites, teclado, bucle, IM2, sonido…</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5">
+          <h3 class="text-white font-semibold mb-1">La referencia</h3>
+          <p class="text-zinc-400"><code class="font-mono">docs/reference/</code> — memoria, rutinas ROM, pantalla, atributos, timing, input.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-zinc-800">
+    <div class="zx-stripes h-1 w-full"></div>
+    <div class="max-w-5xl mx-auto px-6 py-8 text-xs text-zinc-500 font-mono flex flex-wrap gap-4 justify-between">
+      <span>Quickstart Hello World · 11/06/2026 · @zx-vibes/toolkit</span>
+      <span>versión markdown: <code>docs/quickstart-hello-world.md</code></span>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "build": "demo.asm",
+  "frames": 60,
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "cellsNonBlank", "max": 0 },
+    { "type": "memEquals", "addr": "0x5800", "hex": "28" },
+    { "type": "memEquals", "addr": "0x5aff", "hex": "28" }
+  ]
+}

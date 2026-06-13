@@ -1,0 +1,48 @@
+{
+  "name": "create-zx-vibes",
+  "version": "0.1.0",
+  "description": "Create zx-vibes ZX Spectrum agent projects.",
+  "license": "MIT",
+  "author": "Alvaro Mateos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
+    "directory": "packages/create-zx-vibes"
+  },
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
+  "bugs": {
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "create-zx-vibes": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "starters",
+    "docs",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup && node ../../scripts/ensure-shebang.js dist/index.js && node scripts/sync-assets.js",
+    "check:assets": "node scripts/sync-assets.js --check",
+    "prepack": "pnpm run build",
+    "test": "tsup --silent && node ../../scripts/ensure-shebang.js --silent dist/index.js && node dist/index.js --help",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src scripts"
+  },
+  "dependencies": {
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.0"
+  }
+}

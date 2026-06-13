@@ -1,0 +1,13 @@
+{
+  "build": "demo.asm",
+  "frames": 150,
+  "keys": "10:P*80",
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "screenChanged", "equals": true },
+    { "type": "pixelAt", "x": 251, "y": 99, "set": true },
+    { "type": "pixelAt", "x": 123, "y": 99, "set": false },
+    { "type": "cellsNonBlank", "min": 1, "max": 1 }
+  ]
+}

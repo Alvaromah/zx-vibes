@@ -1,0 +1,10 @@
+{
+  "build": "demo.asm",
+  "frames": 100,
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "memEquals", "addr": "0x9000", "hex": "01" },
+    { "type": "borderColor", "equals": 1 }
+  ]
+}
