@@ -80,11 +80,11 @@
           </p>
         </div>
         <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <div class="text-emerald-300 font-mono text-sm mb-2">sjasmplus wrapper</div>
+          <div class="text-emerald-300 font-mono text-sm mb-2">@zx-vibes/asm backend</div>
           <p class="text-sm text-zinc-400 leading-relaxed">
-            Errores parseados a JSON con la <strong class="text-zinc-200">línea de fuente inlined</strong>
-            y hints <em>did-you-mean</em> para etiquetas mal escritas. Genera símbolos SLD
-            (debug a nivel de fuente) listos para la Fase 2.
+            Ensamblador embebido por defecto, errores JSON con
+            <strong class="text-zinc-200">línea de fuente inlined</strong> y símbolos SLD
+            (debug a nivel de fuente). <code>sjasmplus</code> queda como backend opcional.
           </p>
         </div>
         <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
@@ -105,9 +105,8 @@
         <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
           <div class="text-sky-300 font-mono text-sm mb-2">Calidad</div>
           <p class="text-sm text-zinc-400 leading-relaxed">
-            11 tests (determinismo, golden screenshot, ensamblar+ejecutar e2e),
-            TypeScript estricto, CI en ubuntu+macos con sjasmplus cacheado y un
-            <em>job canario</em> contra <code>zx-generation@latest</code>.
+            Tests de determinismo, golden screenshot y ensamblar+ejecutar e2e,
+            TypeScript estricto, CI en ubuntu+macos+windows y backend embebido por defecto.
           </p>
         </div>
       </div>
@@ -331,8 +330,8 @@ screen: 176 non-blank bitmap bytes, border 7, saved out.png</span>
    <span class="text-emerald-300">Machine headless · screen PNG/OCR · watchdog · tracer</span>
         <span class="text-zinc-500">┌──────────────┴───────────────┐</span>
 <span class="text-rose-300">┌───────▼────────┐</span>             <span class="text-sky-300">┌────────▼────────┐</span>
-<span class="text-rose-300">│   sjasmplus    │</span>             <span class="text-sky-300">│  zx-generation  │</span>
-<span class="text-rose-300">│ (subproceso)   │</span>             <span class="text-sky-300">│ @1.0.1 (npm)    │</span>
+<span class="text-rose-300">│ @zx-vibes/asm  │</span>             <span class="text-sky-300">│ @zx-vibes/emul. │</span>
+<span class="text-rose-300">│  embebido      │</span>             <span class="text-sky-300">│   in-process    │</span>
 <span class="text-rose-300">└────────────────┘</span>             <span class="text-sky-300">└─────────────────┘</span>
  <span class="text-zinc-500">.asm → .bin+SLD                Z80+ULA+memoria+cinta</span>
  <span class="text-zinc-500">                               in-process, sin DOM</span></code></pre>
@@ -345,7 +344,7 @@ screen: 176 non-blank bitmap bytes, border 7, saved out.png</span>
     <div class="max-w-5xl mx-auto px-6 py-10 flex flex-col md:flex-row justify-between gap-4 text-sm text-zinc-500">
       <div>
         <span class="text-zinc-300 font-bold">Spectral</span> · @zx-vibes/toolkit ·
-        MIT · TypeScript + Node ≥ 20 · sjasmplus 1.23.1
+        MIT · TypeScript + Node ≥ 20 · ensamblador embebido
       </div>
       <div class="font-mono">48K of RAM, a trillion parameters.</div>
     </div>

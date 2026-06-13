@@ -12,9 +12,9 @@
 **Ensamblador Z80.** El Spectrum traía BASIC de serie, pero es interpretado
 y lento: un BASIC mueve *decenas* de operaciones por fotograma; un juego de
 acción necesita *miles*. Todos los juegos comerciales de la época eran
-ensamblador, y Spectral está construido para eso: el compilador (`sjasmplus`
-por defecto, backend embebido `spectral` para el flujo starter/recetas), el
-depurador, las recetas y el watchdog hablan Z80.
+ensamblador, y Spectral está construido para eso: el backend embebido
+`@zx-vibes/asm` es el predeterminado para starters/recetas, `sjasmplus` queda
+como opción avanzada, y el depurador, las recetas y el watchdog hablan Z80.
 
 ¿Y si nunca has escrito ensamblador? Para eso existe este tutorial — y la
 trampa final: puedes pedirle al agente que lo escriba él (sección 9).
