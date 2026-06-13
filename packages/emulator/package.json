@@ -48,13 +48,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alvaromah/zx-vibes.git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
     "directory": "packages/emulator"
   },
   "bugs": {
-    "url": "https://github.com/alvaromah/zx-vibes/issues"
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
   },
-  "homepage": "https://github.com/alvaromah/zx-vibes#readme",
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
   "publishConfig": {
     "access": "public"
   },

@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "description": "zx-vibes Z80 assembler/disassembler for ZX Spectrum 48K workflows.",
   "license": "MIT",
+  "author": "Alvaro Mateos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
+    "directory": "packages/asm"
+  },
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
+  "bugs": {
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
