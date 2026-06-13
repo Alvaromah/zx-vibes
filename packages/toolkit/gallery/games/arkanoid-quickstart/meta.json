@@ -5,7 +5,7 @@
   "date": "2026-06-11",
   "agent": {
     "model": "Claude Fable 5",
-    "harness": "Spectral zxs CLI — authored live while writing docs/quickstart-arkanoid.md"
+    "harness": "zx-vibes zxs CLI — authored live while writing docs/quickstart-arkanoid.md"
   },
   "prompt": "Crea un quickstart donde se explique paso a paso cómo crear una app. Por ejemplo, cómo crear un Arkanoid desde cero.",
   "effort": {

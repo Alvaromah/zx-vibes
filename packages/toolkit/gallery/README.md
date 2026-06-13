@@ -1,8 +1,8 @@
-# Spectral Gallery
+# zx-vibes Gallery
 
 Static site: ZX Spectrum 48K games written by AI agents, playable in the
-browser via [zx-generation](https://github.com/alvaromah/zx-generation)
-(itself LLM-generated — emulator and games alike).
+browser via
+[@zx-vibes/emulator](https://github.com/Alvaromah/zx-vibes/tree/main/packages/emulator).
 
 No build step. Serve the directory over HTTP (`file://` won't work —
 the pages fetch JSON/snapshots):
@@ -11,8 +11,9 @@ the pages fetch JSON/snapshots):
 npx serve gallery          # or: python3 -m http.server -d gallery 8080
 ```
 
-GitHub Pages: point Pages at this directory (or copy it to the Pages
-branch) — everything is relative paths.
+GitHub Pages: this repository's Pages workflow publishes exactly the root
+`gallery/` directory. Enable Pages with GitHub Actions as the source in the
+repository settings before relying on the public URL.
 
 ## Adding a game
 
@@ -32,9 +33,8 @@ without it.
 
 ## Vendored files
 
-- `zxgeneration.esm.js` — zx-generation browser bundle (MIT, pinned copy
-  of the version in package-lock; re-copy from
-  `node_modules/zx-generation/dist/` when bumping the pin).
+- `zxgeneration.esm.js` — browser emulator bundle (MIT, pinned copy; keep
+  the filename stable unless `player.html` changes too).
 - `48k.rom` — ZX Spectrum 48K ROM; see `ROM-COPYRIGHT.md` for the
   distribution terms (distributed unmodified, without charge, as part of
   an emulator package).

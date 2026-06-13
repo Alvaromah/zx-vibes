@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Spectral Gallery — play</title>
+  <title>zx-vibes Gallery — play</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="site">
-    <h1><a href="index.html">Spectral Gallery</a></h1>
+    <h1><a href="index.html">zx-vibes Gallery</a></h1>
     <p id="subtitle">Loading…</p>
   </header>
   <div class="stripe"></div>
@@ -34,7 +34,7 @@
       <pre class="transcript" id="transcript"></pre>
     </section>
     <footer>
-      Emulation by <a href="https://github.com/alvaromah/zx-generation">zx-generation</a>.
+      Emulation by <a href="https://github.com/Alvaromah/zx-vibes/tree/main/packages/emulator">@zx-vibes/emulator</a>.
       If there's no sound, click the screen once (browser autoplay policy).
     </footer>
   </main>
@@ -46,7 +46,7 @@
     try {
       if (!id) throw new Error('no game selected — use ?game=<id>');
       const meta = await (await fetch(`games/${id}/meta.json`)).json();
-      document.title = `Spectral Gallery — ${meta.title}`;
+      document.title = `zx-vibes Gallery — ${meta.title}`;
       subtitle.textContent = `${meta.title} — ${meta.tagline}`;
       document.getElementById('controls').innerHTML = `<b>${meta.controls}</b>`;
       document.getElementById('download').href = `games/${id}/${meta.files.snapshot}`;
