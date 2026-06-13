@@ -373,6 +373,16 @@ describe('assemble', () => {
     expect(hex(result.bytes)).toBe('ED70ED70C601CE02DE03E9DDE9FDE908EB0808');
   });
 
+  it('supports LD with I and R special registers', () => {
+    const result = assemble(
+      ['    ORG 0x8000', '    LD I,A', '    LD R,A', '    LD A,I', '    LD A,R', ''].join('\n'),
+      { entryPath: 'ld-special-registers.asm' }
+    );
+
+    expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+    expect(hex(result.bytes)).toBe('ED47ED4FED57ED5F');
+  });
+
   it('supports sjasmplus LD rr,rr pseudo-copy forms', () => {
     const result = assemble(
       [

@@ -1,23 +1,28 @@
 import { mkdtempSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { build, checkToolchain, parseDiagnostics } from '../../src/build/sjasmplus.js';
 import { Machine } from '../../src/core/machine.js';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
 const outDir = () => mkdtempSync(join(tmpdir(), 'zxs-build-'));
 
-beforeAll(async () => {
-  const status = await checkToolchain();
-  if (!status.found) {
-    throw new Error('sjasmplus is required for build tests. ' + status.installHint);
+function hasSjasmplus(): boolean {
+  try {
+    execFileSync('sjasmplus', ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
   }
-});
+}
+
+const itIfSjasmplus = hasSjasmplus() ? it : it.skip;
 
 describe('checkToolchain', () => {
-  it('reports the installed version', async () => {
+  itIfSjasmplus('reports the installed version when sjasmplus is available', async () => {
     const status = await checkToolchain();
     expect(status.found).toBe(true);
     expect(status.version).toMatch(/^\d+\.\d+/);
@@ -31,7 +36,7 @@ describe('checkToolchain', () => {
 });
 
 describe('build', () => {
-  it('assembles hello.asm into a binary plus SLD', async () => {
+  it('assembles hello.asm with the default embedded backend into a binary plus SLD', async () => {
     const result = await build(join(fixtures, 'hello.asm'), { outDir: outDir() });
     expect(result.ok).toBe(true);
     expect(result.errors).toEqual([]);
@@ -88,7 +93,7 @@ describe('parseDiagnostics', () => {
 });
 
 describe('assemble + execute end-to-end', () => {
-  it('runs the assembled hello.asm and prints HELLO ZX to screen memory', async () => {
+  it('runs hello.asm assembled by the default embedded backend', async () => {
     const result = await build(join(fixtures, 'hello.asm'), { outDir: outDir() });
     expect(result.ok).toBe(true);
 

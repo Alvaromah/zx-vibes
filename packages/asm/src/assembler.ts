@@ -1667,6 +1667,10 @@ function encodeLd(args: string[], ctx: EvalContext): number[] | undefined {
   if (upper(dst) === 'A' && srcMem?.kind === 'DE') return [0x1a];
   if (dstMem?.kind === 'ABS' && upper(src) === 'A') return [0x32, ...word(dstMem.expr, ctx)];
   if (upper(dst) === 'A' && srcMem?.kind === 'ABS') return [0x3a, ...word(srcMem.expr, ctx)];
+  if (upper(dst) === 'I' && upper(src) === 'A') return [0xed, 0x47];
+  if (upper(dst) === 'R' && upper(src) === 'A') return [0xed, 0x4f];
+  if (upper(dst) === 'A' && upper(src) === 'I') return [0xed, 0x57];
+  if (upper(dst) === 'A' && upper(src) === 'R') return [0xed, 0x5f];
   if (d8) {
     const out = pref(d8.prefix, 0x06 + d8.code * 8);
     if (d8.disp !== undefined) out.push(evalDisp(d8.disp, ctx));
@@ -1684,11 +1688,6 @@ function encodeLd(args: string[], ctx: EvalContext): number[] | undefined {
   if (dstRp && !srcMem) return [...pref(dstRp.prefix, 0x01 + dstRp.code * 0x10), ...word(src, ctx)];
   if (dstMem?.kind === 'ABS' && srcRp) return ldMemRp(dstMem.expr, srcRp, false, ctx);
   if (dstRp && srcMem?.kind === 'ABS') return ldMemRp(srcMem.expr, dstRp, true, ctx);
-
-  if (upper(dst) === 'I' && upper(src) === 'A') return [0xed, 0x47];
-  if (upper(dst) === 'R' && upper(src) === 'A') return [0xed, 0x4f];
-  if (upper(dst) === 'A' && upper(src) === 'I') return [0xed, 0x57];
-  if (upper(dst) === 'A' && upper(src) === 'R') return [0xed, 0x5f];
 
   return fail(ctx, `Unsupported LD form: ${args.join(', ')}`);
 }

@@ -96,8 +96,8 @@
           <p class="text-sm text-zinc-400">"Sin cabeza": ejecutar el emulador sin ventana, solo en memoria. Corre <span class="text-white">132× más rápido</span> que el hardware real — una IA puede hacer miles de pruebas por minuto.</p>
         </div>
         <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
-          <h3 class="font-mono text-amber-300 mb-1">sjasmplus</h3>
-          <p class="text-sm text-zinc-400">El <em>ensamblador</em>: traduce el código fuente Z80 (texto) a binario (los bytes que entiende el procesador).</p>
+          <h3 class="font-mono text-amber-300 mb-1">@zx-vibes/asm</h3>
+          <p class="text-sm text-zinc-400">El ensamblador embebido: traduce el código fuente Z80 (texto) a binario sin instalar programas externos. sjasmplus queda como backend opcional.</p>
         </div>
         <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
           <h3 class="font-mono text-amber-300 mb-1">zxs (la CLI)</h3>
@@ -134,7 +134,7 @@
         <li>
           <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-xs font-mono text-cyan-300 border border-zinc-700">0</span>
           <h3 class="font-semibold text-white">El esqueleto que anda</h3>
-          <p class="text-sm text-zinc-400 mt-1">Un Spectrum headless dentro de Node: arranca la ROM real, compila con sjasmplus, ejecuta, saca capturas PNG. ~6.600 fps (el hardware real va a 50).</p>
+          <p class="text-sm text-zinc-400 mt-1">Un Spectrum headless dentro de Node: arranca la ROM real, compila con el ensamblador embebido, ejecuta, saca capturas PNG. ~6.600 fps (el hardware real va a 50).</p>
         </li>
         <li>
           <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-xs font-mono text-cyan-300 border border-zinc-700">1</span>

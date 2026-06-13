@@ -29,11 +29,11 @@ npm install && npm run build
 node dist/cli/index.js doctor        # ¿Node, ROM y backend de ensamblador ok?
 ```
 
-`zxs doctor` te dice qué falta. En macOS, sjasmplus se compila desde fuente
-(no hay fórmula de brew); el README explica cómo. Para trabajar sin binario
-externo en el flujo actual de starters/recetas, usa
-`ZXS_ASSEMBLER=spectral node dist/cli/index.js doctor`. En cuanto el doctor dé
-verde, opcionalmente enlaza el binario para escribir `zxs` a secas:
+`zxs doctor` te dice qué falta. Para el flujo actual de starters/recetas, el
+backend embebido ya es el predeterminado. Si necesitas compatibilidad avanzada
+con sjasmplus, el README explica cómo activarlo. En cuanto
+`node dist/cli/index.js doctor` dé verde, opcionalmente enlaza el binario para
+escribir `zxs` a secas:
 `npm link` (o usa `node dist/cli/index.js` donde aquí ponga `zxs`).
 
 ---

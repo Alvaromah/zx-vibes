@@ -9,24 +9,24 @@ Read this for assembler syntax and to decode its error messages.
     ORG 0x8000
 start:
     ; ... code ...
-    ; optional outputs (paths relative to where sjasmplus runs):
+    ; optional sjasmplus-only outputs:
     SAVESNA "build/game.sna", start
 ```
 
 `zxs build file.asm` adds `--raw` (plain binary) and `--sld` (debug symbols
 — this is what makes `zxs break add my_label` work) automatically.
 
-By default Spectral still uses `sjasmplus`. The embedded `@zx-vibes/asm`
-backend can build the current templates and recipes without an external
-assembler:
+By default `zx-vibes` uses the embedded `@zx-vibes/asm` backend, so the
+starter and recipe workflow does not require an external assembler:
 
 ```bash
-zxs build src/main.asm --assembler spectral
-ZXS_ASSEMBLER=spectral zxs test recipes
+zxs build src/main.asm
+zxs test recipes
 ```
 
-Use sjasmplus for advanced directives, macros, Lua, snapshot/tape emission, or
-anything outside the starter-game subset.
+Use `--assembler sjasmplus` or `ZXS_ASSEMBLER=sjasmplus` for advanced
+sjasmplus-only features such as Lua, snapshot/tape emission, or anything
+outside the embedded starter-game subset.
 
 ## Syntax you'll actually use
 

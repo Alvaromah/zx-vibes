@@ -39,7 +39,7 @@ export function resolveProjectPath(path: string, cwd = process.cwd()): string {
 }
 
 export function normalizeAssembler(value: string | undefined): AssemblerBackend | undefined {
-  if (value === undefined || value === '') return 'sjasmplus';
+  if (value === undefined || value === '') return 'spectral';
   const normalized = value.toLowerCase();
   return normalized === 'sjasmplus' || normalized === 'spectral' ? normalized : undefined;
 }
