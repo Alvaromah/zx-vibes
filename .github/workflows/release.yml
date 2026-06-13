@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+env:
+  SJASMPLUS_VERSION: 1.23.1
+
 permissions:
   contents: write
   pull-requests: write
@@ -23,6 +26,23 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
+      - name: Cache sjasmplus
+        id: cache-sjasmplus
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/sjasmplus
+          key: sjasmplus-${{ env.SJASMPLUS_VERSION }}-${{ runner.os }}
+      - name: Build sjasmplus from source
+        if: steps.cache-sjasmplus.outputs.cache-hit != 'true'
+        run: |
+          curl -sL -o /tmp/sjasmplus-src.tar.xz \
+            "https://github.com/z00m128/sjasmplus/releases/download/v${SJASMPLUS_VERSION}/sjasmplus-${SJASMPLUS_VERSION}-src.tar.xz"
+          tar xf /tmp/sjasmplus-src.tar.xz -C /tmp
+          make -C "/tmp/sjasmplus-${SJASMPLUS_VERSION}" -j4
+          mkdir -p ~/.local/bin
+          cp "/tmp/sjasmplus-${SJASMPLUS_VERSION}/sjasmplus" ~/.local/bin/
+      - name: Add sjasmplus to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - run: pnpm run typecheck
