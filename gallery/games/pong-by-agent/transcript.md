@@ -2,7 +2,7 @@
 
 Full session transcript pending publication; this is the verified summary
 recorded at the time of the run (2026-06-11). The complete source, tests
-and provenance live in `examples/pong-by-agent/` in the Spectral repo.
+and provenance live in `packages/toolkit/examples/pong-by-agent/` in the zx-vibes repo.
 
 ## The run
 

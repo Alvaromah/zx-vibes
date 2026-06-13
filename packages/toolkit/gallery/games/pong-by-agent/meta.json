@@ -5,7 +5,7 @@
   "date": "2026-06-11",
   "agent": {
     "model": "Claude (general-purpose subagent)",
-    "harness": "Spectral — zxs CLI, scaffold CLAUDE.md playbook, docs/ references"
+    "harness": "zx-vibes — zxs CLI, scaffold CLAUDE.md playbook, docs/ references"
   },
   "prompt": "Starting point: the stock `zxs new pong` QAOP skeleton (no game code). The agent was driven only by the scaffold playbook — no human help.",
   "effort": {

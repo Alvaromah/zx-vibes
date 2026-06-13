@@ -4,7 +4,7 @@ This game exists because the owner asked for a step-by-step tutorial
 ("how do I build an Arkanoid from scratch?"). Instead of writing the
 tutorial from theory, Claude built the game live with the zxs loop,
 verifying every stage, then wrote the tutorial from the verified code.
-Full walkthrough: `docs/quickstart-arkanoid.md` in the Spectral repo.
+Full walkthrough: `packages/toolkit/docs/quickstart-arkanoid.md` in the zx-vibes repo.
 
 ## The stages (each one ran green before the next)
 
