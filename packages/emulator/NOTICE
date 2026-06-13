@@ -1,0 +1,31 @@
+ZX-Generation - ZX Spectrum Emulator
+Copyright (c) 2025 Alvaro Mateos
+
+This product includes software developed by third party.
+
+===============================================================================
+THIRD-PARTY COMPONENTS:
+===============================================================================
+
+ZX Spectrum ROM (rom/48k.rom)
+Copyright: Sky UK Limited (acquired from Amstrad plc)
+License: Proprietary with distribution permission for emulators
+
+The ZX Spectrum ROM is included with permission from Amstrad plc, who have
+kindly allowed redistribution of their copyrighted material with emulators
+under specific conditions:
+- Distribution must be free of charge
+- For use with emulators only
+- Copyright notices must be maintained
+- Commercial use requires written permission
+
+The ROM contains code originally developed by:
+- Nine Tiles Networks Ltd (BASIC interpreter)
+- Sinclair Research Ltd (system routines)
+
+For full details, see rom/README.md
+
+===============================================================================
+
+All other components of this software are licensed under the MIT License.
+See LICENSE file for details.

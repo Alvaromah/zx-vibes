@@ -1,0 +1,9 @@
+{
+  "name": "__NAME__",
+  "entry": "src/main.asm",
+  "org": "0x8000",
+  "assembler": "spectral",
+  "outDir": "build",
+  "template": "game",
+  "toolkit": "zx-vibes"
+}

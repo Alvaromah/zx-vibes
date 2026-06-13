@@ -1,0 +1,13 @@
+{
+  "build": "../main.asm",
+  "frames": 400,
+  "keys": "10:Q*60",
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "screenIncludes", "text": "PONG" },
+    { "type": "cellsNonBlank", "min": 20, "max": 28 },
+    { "type": "pixelAt", "x": 12, "y": 12, "set": true },
+    { "type": "pixelAt", "x": 12, "y": 100, "set": false }
+  ]
+}

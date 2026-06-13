@@ -1,0 +1,12 @@
+{
+  "build": "../main.asm",
+  "frames": 400,
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "screenChanged", "equals": true },
+    { "type": "screenIncludes", "text": "PONG" },
+    { "type": "screenIncludes", "text": "P 0" },
+    { "type": "cellsNonBlank", "min": 20, "max": 28 }
+  ]
+}

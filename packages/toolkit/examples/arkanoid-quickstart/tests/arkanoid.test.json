@@ -1,0 +1,13 @@
+{
+  "build": "../src/main.asm",
+  "frames": 60,
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "screenIncludes", "text": "SCORE 000010" },
+    { "type": "screenIncludes", "text": "LIVES 3" },
+    { "type": "pixelAt", "x": 156, "y": 59, "set": false },
+    { "type": "pixelAt", "x": 148, "y": 59, "set": true },
+    { "type": "pixelAt", "x": 120, "y": 180, "set": true }
+  ]
+}

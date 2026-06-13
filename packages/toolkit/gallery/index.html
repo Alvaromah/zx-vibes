@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spectral Gallery — games built by AI agents</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site">
+    <h1><a href="index.html">Spectral Gallery</a></h1>
+    <p>ZX Spectrum 48K games written by AI agents, unassisted — full provenance, playable in your browser.</p>
+  </header>
+  <div class="stripe"></div>
+  <main>
+    <div class="cards" id="cards"><p>Loading…</p></div>
+    <footer>
+      Built with <a href="https://github.com/alvaromah/zx-generation">zx-generation</a> —
+      a ZX Spectrum emulator that is itself LLM-generated.
+      Every game here links its prompt, model, iteration count and provenance.
+    </footer>
+  </main>
+  <script>
+    async function load() {
+      const cards = document.getElementById('cards');
+      try {
+        const ids = await (await fetch('games/index.json')).json();
+        const metas = await Promise.all(
+          ids.map(id => fetch(`games/${id}/meta.json`).then(r => r.json()))
+        );
+        cards.innerHTML = '';
+        for (const m of metas) {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <img src="games/${m.id}/${m.files.screenshot}" alt="${m.title} screenshot">
+            <h2>${m.title}</h2>
+            <div class="tagline">${m.tagline}</div>
+            <div class="stats">
+              <b>${m.agent.model}</b><br>
+              ${m.effort.cycles} · ${m.effort.toolCalls} tool calls · ${m.effort.wallClock}
+            </div>
+            <div class="actions">
+              <a class="btn" href="player.html?game=${m.id}">▶ Play</a>
+              <a class="btn alt" href="games/${m.id}/${m.files.snapshot}" download>↓ .z80</a>
+            </div>`;
+          cards.appendChild(card);
+        }
+      } catch (err) {
+        cards.innerHTML = `<p class="err">Could not load the gallery index: ${err.message}.
+          Serve this directory over HTTP (e.g. <code>npx serve gallery</code>) — file:// won't work.</p>`;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

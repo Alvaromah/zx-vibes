@@ -1,0 +1,23 @@
+{
+  "id": "pong-by-agent",
+  "title": "Pong",
+  "tagline": "The Phase 4 milestone: a playable Pong built unassisted from the stock scaffold.",
+  "date": "2026-06-11",
+  "agent": {
+    "model": "Claude (general-purpose subagent)",
+    "harness": "Spectral — zxs CLI, scaffold CLAUDE.md playbook, docs/ references"
+  },
+  "prompt": "Starting point: the stock `zxs new pong` QAOP skeleton (no game code). The agent was driven only by the scaffold playbook — no human help.",
+  "effort": {
+    "cycles": "~8 build/run cycles",
+    "toolCalls": 40,
+    "wallClock": "~11 min"
+  },
+  "controls": "Q = paddle up · A = paddle down. The right paddle is a ball-tracking AI.",
+  "sourcePath": "examples/pong-by-agent",
+  "files": {
+    "snapshot": "game.z80",
+    "screenshot": "screen.png",
+    "transcript": "transcript.md"
+  }
+}

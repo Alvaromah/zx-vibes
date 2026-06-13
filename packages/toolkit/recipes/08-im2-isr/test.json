@@ -1,0 +1,11 @@
+{
+  "build": "demo.asm",
+  "frames": 60,
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "regEquals", "reg": "i", "value": "0xFE" },
+    { "type": "regEquals", "reg": "im", "value": 2 },
+    { "type": "memEquals", "addr": "0x9000", "hex": "3b00" }
+  ]
+}

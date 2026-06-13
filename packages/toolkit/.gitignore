@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+# assembler outputs anywhere (zxs build writes ./build relative to cwd) —
+# but NOT the source dirs that happen to be called "build"
+build/
+!/src/build/
+!/tests/build/
+.zxs/
+*.log
+.DS_Store

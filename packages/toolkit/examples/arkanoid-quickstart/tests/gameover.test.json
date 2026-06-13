@@ -1,0 +1,10 @@
+{
+  "build": "../src/main.asm",
+  "frames": 960,
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "screenIncludes", "text": "GAME OVER - SPACE" },
+    { "type": "screenIncludes", "text": "LIVES 0" }
+  ]
+}

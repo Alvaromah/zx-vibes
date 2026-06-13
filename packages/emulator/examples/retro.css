@@ -1,0 +1,554 @@
+/* ZX Spectrum Retro Theme - Modern & Elegant */
+
+:root {
+    --zx-black: #000000;
+    --zx-blue: #0000D7;
+    --zx-red: #D70000;
+    --zx-magenta: #D700D7;
+    --zx-green: #00D700;
+    --zx-cyan: #00D7D7;
+    --zx-yellow: #D7D700;
+    --zx-white: #D7D7D7;
+    --zx-bright-blue: #0000FF;
+    --zx-bright-red: #FF0000;
+    --zx-bright-magenta: #FF00FF;
+    --zx-bright-green: #00FF00;
+    --zx-bright-cyan: #00FFFF;
+    --zx-bright-yellow: #FFFF00;
+    --zx-bright-white: #FFFFFF;
+    
+    /* Aliases for compatibility */
+    --color-black: var(--zx-black);
+    --color-white: var(--zx-bright-white);
+    --color-cyan: var(--zx-bright-cyan);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: #1a1a1a;
+    color: var(--zx-bright-cyan);
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Page layout styles */
+body.page-layout {
+    padding: 60px 20px 20px;
+    box-sizing: border-box;
+}
+
+/* Retro CRT effect background - keeping for possible future use */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+        repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.15),
+            rgba(0, 0, 0, 0.15) 1px,
+            transparent 1px,
+            transparent 2px
+        );
+    pointer-events: none;
+    z-index: 1;
+    display: none; /* Disabled by default */
+}
+
+/* Main container - keeping for other pages */
+.spectrum-container {
+    background: var(--zx-black);
+    border: 3px solid var(--zx-bright-white);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 
+        0 0 40px rgba(0, 215, 255, 0.5),
+        inset 0 0 20px rgba(0, 0, 0, 0.5);
+    position: relative;
+    z-index: 2;
+}
+
+/* Canvas styling */
+canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    border: 2px solid #333;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+/* Screen canvas */
+#screen {
+    background: var(--color-black);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Emulator container */
+.emulator-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Title - keeping for other pages */
+h1 {
+    font-size: 24px;
+    margin: 0 0 20px 0;
+    text-align: center;
+    color: var(--zx-bright-yellow);
+    text-shadow: 
+        2px 2px 0 var(--zx-red),
+        -1px -1px 0 var(--zx-blue);
+    letter-spacing: 2px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.9; }
+}
+
+/* Info box - keeping for other pages */
+.info {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid var(--zx-cyan);
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 500px;
+}
+
+.info code {
+    background: var(--zx-blue);
+    color: var(--zx-bright-white);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+/* Retro buttons */
+.btn {
+    background: var(--zx-blue);
+    color: var(--zx-bright-yellow);
+    border: 2px solid var(--zx-bright-white);
+    padding: 8px 16px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-block;
+    margin: 4px;
+    min-width: 80px;
+}
+
+.btn:hover {
+    background: var(--zx-bright-blue);
+    box-shadow: 0 0 10px var(--zx-cyan);
+    transform: scale(1.05);
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn.active {
+    background: var(--color-cyan);
+    color: var(--color-black);
+}
+
+/* Control panel */
+.controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* Classic control panel with border - keeping for other pages */
+.controls-panel {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid var(--zx-magenta);
+    border-radius: 4px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* Rainbow stripes (like Spectrum loading) */
+.rainbow-strip {
+    height: 4px;
+    background: linear-gradient(
+        to right,
+        var(--zx-red) 0%,
+        var(--zx-yellow) 14%,
+        var(--zx-green) 28%,
+        var(--zx-cyan) 42%,
+        var(--zx-blue) 56%,
+        var(--zx-magenta) 70%,
+        var(--zx-white) 84%,
+        var(--zx-black) 100%
+    );
+    margin: 20px 0;
+    border-radius: 2px;
+}
+
+/* Loading animation - keeping for other pages */
+.loading {
+    display: inline-block;
+    color: var(--zx-bright-yellow);
+    animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+    to { visibility: hidden; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .spectrum-container {
+        padding: 16px;
+        margin: 10px;
+    }
+    
+    h1 {
+        font-size: 20px;
+    }
+    
+    .info {
+        font-size: 13px;
+        padding: 12px;
+    }
+    
+    /* Mobile adjustments */
+    body {
+        padding: 44px 0 0;
+        background: #0a0a0a;
+        overflow-x: hidden;
+    }
+
+    .top-menu {
+        height: 44px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        background: rgba(0, 0, 0, 0.95);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    .menu-container {
+        padding: 0 16px;
+    }
+
+    .brand {
+        font-size: 16px;
+        letter-spacing: 1px;
+    }
+
+    .emulator-container {
+        gap: 12px;
+        width: 100%;
+        padding: 12px 8px;
+    }
+
+    .rainbow-strip {
+        height: 2px;
+        width: 100%;
+        border-radius: 1px;
+    }
+
+    #screen {
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+        border: none;
+        border-radius: 4px;
+    }
+
+    .controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        width: 100%;
+        padding: 0 8px;
+    }
+
+    .btn {
+        padding: 12px 16px;
+        font-size: 14px;
+        border-radius: 6px;
+        font-weight: 500;
+        white-space: nowrap;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+        touch-action: manipulation;
+        border: 1px solid rgba(255,255,255,0.2);
+        transition: all 0.15s ease;
+    }
+
+    #load-btn,
+    #audio-btn {
+        grid-column: span 1;
+    }
+
+    #fullscreen-btn {
+        grid-column: span 2;
+    }
+
+    #fast-load-btn {
+        grid-column: span 2;
+        display: none;
+        margin-top: 8px;
+    }
+
+    #fast-load-btn:not([style*="none"]) {
+        display: block;
+    }
+
+    #tape-status {
+        font-size: 14px;
+        padding: 12px 16px;
+        height: auto;
+        min-height: 44px;
+        width: 100%;
+        margin: 0;
+        border-radius: 6px;
+        text-align: center;
+        line-height: 1.4;
+    }
+
+    /* Touch feedback */
+    .btn:active {
+        transform: scale(0.97);
+        background-color: rgba(255,255,255,0.1);
+    }
+
+    /* Safe area insets for modern phones */
+    @supports (padding: max(0px)) {
+        body {
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+        }
+
+        .top-menu {
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+        }
+    }
+}
+
+@media (max-width: 480px) {
+    .top-menu {
+        height: 40px;
+    }
+
+    body {
+        padding-top: 40px;
+    }
+
+    .menu-container {
+        padding: 0 12px;
+    }
+
+    .brand {
+        font-size: 14px;
+        letter-spacing: 0.5px;
+    }
+
+    .emulator-container {
+        padding: 8px 4px;
+        gap: 8px;
+    }
+
+    .btn {
+        font-size: 13px;
+        padding: 10px 8px;
+    }
+}
+
+/* Small phones */
+@media (max-width: 375px) {
+    .controls {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+    #reset-btn,
+    #pause-btn {
+        grid-column: span 1;
+    }
+
+    #load-btn {
+        grid-column: span 2;
+    }
+
+    #audio-btn {
+        grid-column: span 2;
+    }
+}
+
+/* Landscape mode adjustments */
+@media (orientation: landscape) and (max-height: 600px) {
+    body {
+        padding: 36px 0 0;
+    }
+
+    .top-menu {
+        height: 36px;
+    }
+
+    .emulator-container {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        gap: 16px;
+    }
+
+    .rainbow-strip {
+        display: none;
+    }
+
+    #screen {
+        max-height: calc(100vh - 52px);
+        max-width: calc((100vh - 52px) * 1.186);
+        width: auto;
+        height: auto;
+    }
+
+    .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: auto;
+    }
+
+    .controls .btn {
+        width: 90px;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    #tape-status {
+        position: absolute;
+        bottom: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: auto;
+        max-width: 300px;
+        padding: 6px 12px;
+        font-size: 12px;
+        min-height: 32px;
+    }
+}
+
+/* Utility classes - keeping for other pages */
+.text-red { color: var(--zx-bright-red); }
+.text-green { color: var(--zx-bright-green); }
+.text-blue { color: var(--zx-bright-blue); }
+.text-yellow { color: var(--zx-bright-yellow); }
+.text-magenta { color: var(--zx-bright-magenta); }
+.text-cyan { color: var(--zx-bright-cyan); }
+.text-white { color: var(--zx-bright-white); }
+
+.mt-10 { margin-top: 10px; }
+.mt-20 { margin-top: 20px; }
+.text-center { text-align: center; }
+
+/* Tape status */
+#tape-status {
+    visibility: hidden;
+    height: 40px;
+    padding: 10px;
+    background: var(--color-black);
+    color: var(--color-white);
+    border: 2px solid var(--color-white);
+    font-family: monospace;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Top menu bar */
+.top-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: var(--color-black);
+    border-bottom: 2px solid var(--color-white);
+    z-index: 100;
+}
+
+.menu-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0 40px;
+}
+
+.brand {
+    color: #FF0000;
+    font-size: 18px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* Hide elements */
+.hidden { display: none !important; }
+input[type="file"] { display: none; }
+
+#fast-load-btn {
+    display: none;
+}
+
+/* Fullscreen mode */
+body.fullscreen-mode {
+    background: #000;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+body.fullscreen-mode .emulator-container {
+    width: 100vw;
+    height: 100vh;
+    padding: 0;
+}
+
+body.fullscreen-mode .controls,
+body.fullscreen-mode .rainbow-strip,
+body.fullscreen-mode #tape-status,
+body.fullscreen-mode .top-menu {
+    display: none !important;
+}

@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spectral — AI agents for the ZX Spectrum</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .zx-stripes {
+      background: linear-gradient(135deg,
+        #d7000f 0 25%, #ffd300 25% 50%, #00b500 50% 75%, #00c8c8 75% 100%);
+    }
+    .crt-glow { text-shadow: 0 0 12px rgba(0, 200, 200, 0.35); }
+    .scanlines {
+      background-image: repeating-linear-gradient(
+        0deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 3px);
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200 font-sans antialiased scanlines">
+
+  <!-- ════════ HERO ════════ -->
+  <header class="relative border-b border-zinc-800">
+    <div class="zx-stripes h-2 w-full"></div>
+    <div class="max-w-5xl mx-auto px-6 py-16">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="inline-block px-3 py-1 text-xs font-mono rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700">
+          ✓ Fase 0 completada — 11/06/2026
+        </span>
+        <span class="inline-block px-3 py-1 text-xs font-mono rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
+          commit aea5037
+        </span>
+      </div>
+      <h1 class="text-6xl font-black tracking-tight text-white mb-3">
+        SPECTRAL<span class="text-cyan-400 crt-glow">_</span>
+      </h1>
+      <p class="text-2xl text-zinc-400 font-light mb-6">AI agents for the ZX Spectrum</p>
+      <p class="max-w-3xl text-zinc-300 leading-relaxed">
+        Un toolchain que permite a agentes de IA (Claude Code, Codex…) escribir juegos de
+        ZX Spectrum 48K de forma autónoma, con un loop de feedback real. Construido sobre
+        <a href="https://github.com/alvaromah/zx-generation" class="text-cyan-400 hover:underline">zx-generation</a>,
+        un emulador cycle-accurate en JavaScript puro — él mismo 100% generado por un LLM.
+        <span class="text-white font-medium">Un emulador escrito por IA ejecutando juegos escritos por IA.</span>
+      </p>
+      <div class="mt-8 font-mono text-sm bg-black/60 border border-zinc-800 rounded-lg px-5 py-4 inline-block">
+        <span class="text-zinc-500">el loop:</span>
+        <span class="text-amber-300">ensamblar</span> <span class="text-zinc-600">→</span>
+        <span class="text-emerald-300">ejecutar headless</span> <span class="text-zinc-600">→</span>
+        <span class="text-cyan-300">observar</span> <span class="text-zinc-600">→</span>
+        <span class="text-rose-300">depurar</span> <span class="text-zinc-600">→</span>
+        <span class="text-violet-300">iterar</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6">
+
+    <!-- ════════ QUÉ TENEMOS ════════ -->
+    <section class="py-14">
+      <h2 class="text-3xl font-bold text-white mb-2">① Qué tenemos <span class="text-zinc-500 font-normal text-xl">(hoy, funcionando y testeado)</span></h2>
+      <div class="zx-stripes h-1 w-24 rounded mb-8"></div>
+
+      <div class="grid md:grid-cols-3 gap-4 mb-8">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-cyan-400 font-mono text-sm mb-2">Machine headless</div>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            Un Spectrum 48K completo corriendo <strong class="text-zinc-200">dentro de Node</strong>:
+            sin DOM, sin mocks, sin emuladores externos ni sockets. Bota la ROM real hasta
+            <em>© 1982 Sinclair Research Ltd</em> y es <strong class="text-zinc-200">determinista</strong>
+            (mismo input → RAM bit-idéntica, verificado por test).
+          </p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-amber-300 font-mono text-sm mb-2">zxs CLI</div>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            <code class="text-zinc-300">build · run · doctor · bench</code>, todos con
+            <code class="text-zinc-300">--json</code> y exit codes ramificables
+            (<code>0</code> ok · <code>1</code> error · <code>2</code> cuelgue · <code>3</code> entorno).
+            Inyección de binarios en RAM, presupuestos de frames, <code>--until-pc</code>, carga de TAP.
+          </p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-emerald-300 font-mono text-sm mb-2">sjasmplus wrapper</div>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            Errores parseados a JSON con la <strong class="text-zinc-200">línea de fuente inlined</strong>
+            y hints <em>did-you-mean</em> para etiquetas mal escritas. Genera símbolos SLD
+            (debug a nivel de fuente) listos para la Fase 2.
+          </p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-rose-300 font-mono text-sm mb-2">Screenshots PNG</div>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            Framebuffer 352×296 → PNG a 2× (704×592), legible por modelos de visión.
+            Golden test del arranque: la pantalla del boot es un test de regresión.
+          </p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-violet-300 font-mono text-sm mb-2">Rendimiento</div>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            <strong class="text-white text-lg">6.625 fps</strong> — 132× el hardware real,
+            ~463 MHz equivalentes. Cinco segundos emulados cuestan ~40 ms:
+            el loop one-shot del agente es esencialmente gratis.
+          </p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-sky-300 font-mono text-sm mb-2">Calidad</div>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            11 tests (determinismo, golden screenshot, ensamblar+ejecutar e2e),
+            TypeScript estricto, CI en ubuntu+macos con sjasmplus cacheado y un
+            <em>job canario</em> contra <code>zx-generation@latest</code>.
+          </p>
+        </div>
+      </div>
+
+      <!-- terminal demo -->
+      <div class="bg-black border border-zinc-800 rounded-xl overflow-hidden">
+        <div class="flex items-center gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
+          <span class="w-3 h-3 rounded-full bg-rose-500/80"></span>
+          <span class="w-3 h-3 rounded-full bg-amber-400/80"></span>
+          <span class="w-3 h-3 rounded-full bg-emerald-500/80"></span>
+          <span class="ml-3 text-xs font-mono text-zinc-500">la demo de la Fase 0 — real, no maqueta</span>
+        </div>
+        <pre class="p-5 text-sm font-mono leading-relaxed overflow-x-auto"><code><span class="text-emerald-400">$</span> <span class="text-white">zxs build hello.asm</span>
+<span class="text-zinc-400">OK  build/hello.bin (7ms)
+    symbols: build/hello.sld</span>
+
+<span class="text-emerald-400">$</span> <span class="text-white">zxs run --bin build/hello.bin --org 0x8000 --frames 50 --screenshot out.png</span>
+<span class="text-zinc-400">ran 50 frames (3494390 T-states) in <span class="text-amber-300">6ms</span> — stopped: frames
+PC=0x8010 SP=0xFF46 AF=0x0044 HL=0x801A halted=false
+screen: 176 non-blank bitmap bytes, border 7, saved out.png</span>
+
+<span class="text-zinc-600">── out.png ─────────────────────────────┐</span>
+<span class="text-zinc-300">   HELLO ZX</span>                              <span class="text-zinc-600">│</span>
+<span class="text-zinc-600">                                         │</span>
+<span class="text-zinc-300">   © 1982 Sinclair Research Ltd</span>          <span class="text-zinc-600">│</span>
+<span class="text-zinc-600">─────────────────────────────────────────┘</span></code></pre>
+      </div>
+    </section>
+
+    <!-- ════════ QUÉ PODEMOS HACER ════════ -->
+    <section class="py-14 border-t border-zinc-800/60">
+      <h2 class="text-3xl font-bold text-white mb-2">② Qué podemos hacer <span class="text-zinc-500 font-normal text-xl">(el loop del agente, ya operativo)</span></h2>
+      <div class="zx-stripes h-1 w-24 rounded mb-8"></div>
+
+      <div class="grid md:grid-cols-2 gap-8 items-start">
+        <div>
+          <p class="text-zinc-300 leading-relaxed mb-5">
+            Un agente de código puede, <strong class="text-white">hoy mismo</strong>, sin nada más:
+          </p>
+          <ul class="space-y-3 text-sm text-zinc-300">
+            <li class="flex gap-3"><span class="text-emerald-400 font-mono">01</span> Escribir Z80, ensamblarlo y recibir los errores en JSON con sugerencias accionables.</li>
+            <li class="flex gap-3"><span class="text-emerald-400 font-mono">02</span> Inyectar el binario en RAM y ejecutarlo N frames o hasta una dirección concreta.</li>
+            <li class="flex gap-3"><span class="text-emerald-400 font-mono">03</span> Leer registros y memoria tras la ejecución (incl. registros sombra que el emulador olvida).</li>
+            <li class="flex gap-3"><span class="text-emerald-400 font-mono">04</span> Capturar la pantalla como PNG y <em>verla</em> (Claude Code lee imágenes).</li>
+            <li class="flex gap-3"><span class="text-emerald-400 font-mono">05</span> Ramificar su estrategia según el exit code, sin parsear prosa.</li>
+            <li class="flex gap-3"><span class="text-emerald-400 font-mono">06</span> Cargar TAPs reales por el camino "auténtico" de cinta.</li>
+          </ul>
+          <p class="text-zinc-400 text-sm leading-relaxed mt-5 border-l-2 border-cyan-700 pl-4">
+            La filosofía del producto: <strong class="text-zinc-200">texto primero, píxeles después</strong>.
+            Cada comando devuelve un único documento JSON con direcciones simbolizadas y un campo
+            <code class="text-cyan-300">next</code> que sugiere el siguiente paso — la herramienta
+            enseña su propio workflow.
+          </p>
+        </div>
+        <div class="bg-black border border-zinc-800 rounded-xl p-5 font-mono text-xs leading-relaxed overflow-x-auto">
+          <div class="text-zinc-500 mb-2">// zxs build --json: un error que un LLM arregla a la primera</div>
+<pre><code><span class="text-zinc-300">{
+  <span class="text-cyan-300">"ok"</span>: <span class="text-rose-400">false</span>,
+  <span class="text-cyan-300">"stage"</span>: <span class="text-amber-300">"build"</span>,
+  <span class="text-cyan-300">"errorCount"</span>: 1,
+  <span class="text-cyan-300">"errors"</span>: [{
+    <span class="text-cyan-300">"file"</span>: <span class="text-amber-300">"bad-label.asm"</span>,
+    <span class="text-cyan-300">"line"</span>: 5,
+    <span class="text-cyan-300">"message"</span>: <span class="text-amber-300">"Label not found: draw_sprtie"</span>,
+    <span class="text-cyan-300">"sourceLine"</span>: <span class="text-amber-300">"    call draw_sprtie"</span>,
+    <span class="text-cyan-300">"hint"</span>: <span class="text-emerald-300">"Did you mean 'draw_sprite'?"</span>
+  }],
+  <span class="text-cyan-300">"next"</span>: [
+    <span class="text-amber-300">"fix bad-label.asm:5, then rerun zxs build"</span>
+  ]
+}</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ CÓMO CONTINUAMOS ════════ -->
+    <section class="py-14 border-t border-zinc-800/60">
+      <h2 class="text-3xl font-bold text-white mb-2">③ Cómo continuamos <span class="text-zinc-500 font-normal text-xl">(roadmap por fases)</span></h2>
+      <div class="zx-stripes h-1 w-24 rounded mb-8"></div>
+
+      <div class="space-y-4">
+        <!-- fase 0 -->
+        <div class="flex gap-5 items-start bg-zinc-900/50 border border-emerald-900/50 rounded-xl p-5">
+          <span class="shrink-0 w-20 text-center px-2 py-1 rounded-lg bg-emerald-900/60 text-emerald-300 font-mono text-xs border border-emerald-700">✓ HECHO</span>
+          <div>
+            <h3 class="font-bold text-white">Fase 0 — Walking skeleton</h3>
+            <p class="text-sm text-zinc-400 mt-1">Emulador headless + ensamblador + CLI + screenshot. El loop existe de extremo a extremo.</p>
+          </div>
+        </div>
+        <!-- fase 1 -->
+        <div class="flex gap-5 items-start bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+          <span class="shrink-0 w-20 text-center px-2 py-1 rounded-lg bg-cyan-900/50 text-cyan-300 font-mono text-xs border border-cyan-800">4–6 días</span>
+          <div>
+            <h3 class="font-bold text-white">Fase 1 — Loop de feedback completo</h3>
+            <p class="text-sm text-zinc-400 mt-1">
+              Sesiones con ficheros <code>.zxstate</code> (el agente itera entre invocaciones) ·
+              teclas programadas por frame (<code>--keys "60:O*30"</code>) ·
+              <strong class="text-zinc-200">OCR de pantalla contra la fuente de la ROM</strong> (<code>zxs screen --text</code>: "ojos" baratos sin gastar tokens de visión) ·
+              <strong class="text-zinc-200">watchdog de cuelgues</strong>: di-halt, pc-loop, rom-error, stack-drift → exit code 2 con diagnóstico y causa probable.
+            </p>
+            <p class="text-xs text-zinc-500 mt-2 font-mono">demo: un DI/HALT deliberado sale con código 2 nombrando el PC culpable</p>
+          </div>
+        </div>
+        <!-- fase 2 -->
+        <div class="flex gap-5 items-start bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+          <span class="shrink-0 w-20 text-center px-2 py-1 rounded-lg bg-cyan-900/50 text-cyan-300 font-mono text-xs border border-cyan-800">5–8 días</span>
+          <div>
+            <h3 class="font-bold text-white">Fase 2 — Debugger y tracer</h3>
+            <p class="text-sm text-zinc-400 mt-1">
+              Símbolos SLD: breakpoints por etiqueta o <code>main.asm:42</code> · watchpoints de memoria ·
+              step / step-over · desensamblador · trace con ring buffer y perfil de PCs calientes.
+              Debugging a nivel de fuente desde una shell.
+            </p>
+          </div>
+        </div>
+        <!-- fase 3 -->
+        <div class="flex gap-5 items-start bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+          <span class="shrink-0 w-20 text-center px-2 py-1 rounded-lg bg-cyan-900/50 text-cyan-300 font-mono text-xs border border-cyan-800">3–4 días</span>
+          <div>
+            <h3 class="font-bold text-white">Fase 3 — Servidor MCP</h3>
+            <p class="text-sm text-zinc-400 mt-1">
+              <code>zxs-mcp</code>: una Machine viva entre tool calls, y <code>zx_screen</code> devuelve
+              el PNG como contenido de imagen — <strong class="text-zinc-200">Claude literalmente ve la pantalla del Spectrum</strong>.
+            </p>
+          </div>
+        </div>
+        <!-- fase 4 -->
+        <div class="flex gap-5 items-start bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+          <span class="shrink-0 w-20 text-center px-2 py-1 rounded-lg bg-cyan-900/50 text-cyan-300 font-mono text-xs border border-cyan-800">4–6 días</span>
+          <div>
+            <h3 class="font-bold text-white">Fase 4 — Conocimiento y scaffolding</h3>
+            <p class="text-sm text-zinc-400 mt-1">
+              <code>zxs new mi-juego</code>: esqueleto <em>que ya funciona</em> (nave + teclado QAOP + loop HALT-synced) con CLAUDE.md ·
+              docs destiladas anti-errores-de-LLM (screen interleave, teclado active-low, IM2, attribute clash…) ·
+              12 recetas .asm <strong class="text-zinc-200">testeadas en CI</strong> — documentación que no puede pudrirse.
+            </p>
+            <p class="text-xs text-amber-300/80 mt-2 font-mono">🏁 hito interno: Claude Code construye un Pong sin ayuda partiendo del scaffold</p>
+          </div>
+        </div>
+        <!-- fase 5 -->
+        <div class="flex gap-5 items-start bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+          <span class="shrink-0 w-20 text-center px-2 py-1 rounded-lg bg-violet-900/50 text-violet-300 font-mono text-xs border border-violet-800">continuo</span>
+          <div>
+            <h3 class="font-bold text-white">Fase 5 — Hardening y lanzamiento</h3>
+            <p class="text-sm text-zinc-400 mt-1">
+              PRs upstream a zx-generation (exports map · registros sombra en <code>getState()</code> · guards Node-safe) ·
+              caracterización ZEXDOC de la CPU · CI Windows · <code>npm publish @zx-vibes/toolkit v0.1.0</code>.
+            </p>
+          </div>
+        </div>
+      </div>
+      <p class="text-sm text-zinc-500 mt-6">Total estimado hasta una v0.1 publicable: <strong class="text-zinc-300">4–6 semanas a tiempo parcial</strong> — con loop de agente usable desde la primera semana (✓ ya cumplido).</p>
+    </section>
+
+    <!-- ════════ LA VISIÓN ════════ -->
+    <section class="py-14 border-t border-zinc-800/60">
+      <h2 class="text-3xl font-bold text-white mb-2">④ La visión comunitaria <span class="text-zinc-500 font-normal text-xl">(lo "realmente grandioso")</span></h2>
+      <div class="zx-stripes h-1 w-24 rounded mb-8"></div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-2xl mb-2">🎬</div>
+          <h3 class="font-bold text-white mb-1">El "money shot"</h3>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            Time-lapse de 3 minutos: Claude Code construye un Pong desde un prompt, y
+            <em>se autocorrige visiblemente</em> — ve estelas del sprite en el screenshot,
+            dice "el orden de borrado XOR está mal", lo arregla, re-ejecuta.
+            Ese momento de autocorrección es todo el pitch.
+          </p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-2xl mb-2">🕹️</div>
+          <h3 class="font-bold text-white mb-1">Galería jugable en el navegador</h3>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            Cada juego hecho por un agente: GIF, el prompt exacto, modelo, nº de iteraciones,
+            transcript, descarga TAP y <strong class="text-zinc-200">"Play in browser" sobre zx-generation</strong> —
+            el círculo se cierra: el emulador LLM ejecutando los juegos LLM en la web del proyecto.
+          </p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-2xl mb-2">📼</div>
+          <h3 class="font-bold text-white mb-1">Hardware real</h3>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            Un TAP generado por un agente cargado en un Spectrum de gomas, filmado en CRT.
+            Para esta comunidad, ese es el evento de credibilidad — nada lo sustituye.
+          </p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div class="text-2xl mb-2">🏆</div>
+          <h3 class="font-bold text-white mb-1">AI Game Jam + Season 01</h3>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            La gente envía <em>prompts</em>, los agentes construyen, la comunidad vota
+            (filtro anti-slop: pasar <code>zxs test</code> + que un humano lo juegue).
+            Y la serie episódica: un juego por episodio, dificultad creciente,
+            <strong class="text-zinc-200">publicando también los fracasos</strong> — "donde los agentes aún fallan" gana más confianza que un highlight reel.
+          </p>
+        </div>
+      </div>
+      <p class="text-sm text-zinc-400 leading-relaxed mt-6 border-l-2 border-amber-600 pl-4">
+        <strong class="text-zinc-200">Defensa ante el escepticismo retro:</strong> transparencia total
+        (prompts, transcripts y conteos de iteración publicados), MIT en todo, nunca competir en
+        compos humanas sin declarar, y presentarlo como una nueva rampa de entrada al Z80 —
+        el agente comete los mismos errores que un principiante de 1983.
+      </p>
+    </section>
+
+    <!-- ════════ STACK ════════ -->
+    <section class="py-14 border-t border-zinc-800/60">
+      <h2 class="text-3xl font-bold text-white mb-2">⑤ El stack, en una mirada</h2>
+      <div class="zx-stripes h-1 w-24 rounded mb-8"></div>
+      <div class="bg-black border border-zinc-800 rounded-xl p-6 font-mono text-sm overflow-x-auto">
+<pre><code><span class="text-zinc-500">┌──────────────────────────────────────────────────────────┐</span>
+<span class="text-zinc-500">│</span>  <span class="text-violet-300">Claude Code / Codex / cualquier agente</span>                  <span class="text-zinc-500">│</span>
+<span class="text-zinc-500">└───────────────┬──────────────────────────┬───────────────┘</span>
+                <span class="text-zinc-500">│ bash</span>                     <span class="text-zinc-500">│ MCP (fase 3)</span>
+        <span class="text-amber-300">┌───────▼────────┐</span>        <span class="text-cyan-300">┌────────▼────────┐</span>
+        <span class="text-amber-300">│    zxs CLI     │</span>        <span class="text-cyan-300">│    zxs-mcp      │</span>
+        <span class="text-amber-300">└───────┬────────┘</span>        <span class="text-cyan-300">└────────┬────────┘</span>
+                <span class="text-zinc-500">└──────────┬───────────────┘</span>
+                <span class="text-zinc-500">core library (TypeScript)</span>
+   <span class="text-emerald-300">Machine headless · screen PNG/OCR · watchdog · tracer</span>
+        <span class="text-zinc-500">┌──────────────┴───────────────┐</span>
+<span class="text-rose-300">┌───────▼────────┐</span>             <span class="text-sky-300">┌────────▼────────┐</span>
+<span class="text-rose-300">│   sjasmplus    │</span>             <span class="text-sky-300">│  zx-generation  │</span>
+<span class="text-rose-300">│ (subproceso)   │</span>             <span class="text-sky-300">│ @1.0.1 (npm)    │</span>
+<span class="text-rose-300">└────────────────┘</span>             <span class="text-sky-300">└─────────────────┘</span>
+ <span class="text-zinc-500">.asm → .bin+SLD                Z80+ULA+memoria+cinta</span>
+ <span class="text-zinc-500">                               in-process, sin DOM</span></code></pre>
+      </div>
+    </section>
+  </main>
+
+  <!-- ════════ FOOTER ════════ -->
+  <footer class="border-t border-zinc-800 mt-6">
+    <div class="max-w-5xl mx-auto px-6 py-10 flex flex-col md:flex-row justify-between gap-4 text-sm text-zinc-500">
+      <div>
+        <span class="text-zinc-300 font-bold">Spectral</span> · @zx-vibes/toolkit ·
+        MIT · TypeScript + Node ≥ 20 · sjasmplus 1.23.1
+      </div>
+      <div class="font-mono">48K of RAM, a trillion parameters.</div>
+    </div>
+    <div class="zx-stripes h-2 w-full"></div>
+  </footer>
+
+</body>
+</html>

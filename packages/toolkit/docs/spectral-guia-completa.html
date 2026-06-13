@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spectral — La guía completa: de la idea a la publicación</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .zx-stripes {
+      background: linear-gradient(135deg,
+        #d7000f 0 25%, #ffd300 25% 50%, #00b500 50% 75%, #00c8c8 75% 100%);
+    }
+    .crt-glow { text-shadow: 0 0 12px rgba(0, 200, 200, 0.35); }
+    .scanlines {
+      background-image: repeating-linear-gradient(
+        0deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 3px);
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200 font-sans antialiased scanlines">
+
+  <!-- ════════ HERO ════════ -->
+  <header class="relative border-b border-zinc-800">
+    <div class="zx-stripes h-2 w-full"></div>
+    <div class="max-w-5xl mx-auto px-6 py-16">
+      <div class="flex flex-wrap items-center gap-3 mb-6">
+        <span class="inline-block px-3 py-1 text-xs font-mono rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700">
+          ✓ PUBLICADO — 11/06/2026
+        </span>
+        <span class="inline-block px-3 py-1 text-xs font-mono rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
+          71 tests · 12 recetas · CI verde
+        </span>
+      </div>
+      <h1 class="text-5xl sm:text-6xl font-black tracking-tight text-white mb-3">
+        SPECTRAL<span class="text-cyan-400 crt-glow">_</span>
+      </h1>
+      <p class="text-2xl text-zinc-400 font-light mb-6">La guía completa: de la idea a la publicación</p>
+      <p class="max-w-3xl text-zinc-300 leading-relaxed">
+        Este documento explica <span class="text-white font-medium">todo desde cero</span>:
+        qué construimos, qué pasó en la sesión de hoy, qué tenemos ahora mismo y qué falta.
+        Sin asumir que recuerdas nada. Empieza por el vocabulario y termina con tu lista de tareas.
+      </p>
+      <nav class="mt-8 flex flex-wrap gap-2 text-sm font-mono">
+        <a href="#idea" class="px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:border-cyan-500 hover:text-cyan-300">① La idea</a>
+        <a href="#vocab" class="px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:border-cyan-500 hover:text-cyan-300">② Vocabulario</a>
+        <a href="#fases" class="px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:border-cyan-500 hover:text-cyan-300">③ La historia</a>
+        <a href="#hoy" class="px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:border-cyan-500 hover:text-cyan-300">④ La sesión de hoy</a>
+        <a href="#ahora" class="px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:border-cyan-500 hover:text-cyan-300">⑤ Dónde estamos</a>
+        <a href="#falta" class="px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:border-cyan-500 hover:text-cyan-300">⑥ Lo que falta</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6">
+
+    <!-- ════════ ① LA IDEA ════════ -->
+    <section id="idea" class="py-14 border-b border-zinc-900">
+      <h2 class="text-3xl font-bold text-white mb-6">① La idea en una frase</h2>
+      <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-8">
+        <p class="text-xl text-zinc-100 leading-relaxed">
+          Spectral es una caja de herramientas para que <span class="text-cyan-300 font-semibold">una IA
+          escriba juegos de ZX Spectrum ella sola</span> — los compile, los ejecute,
+          <em>vea</em> la pantalla, encuentre sus propios errores y los corrija,
+          igual que lo haría una persona delante del ordenador.
+        </p>
+        <p class="mt-5 text-zinc-400 leading-relaxed">
+          Y la segunda capa que lo hace especial: el emulador sobre el que corre todo,
+          <a href="https://github.com/Alvaromah/zx-generation" class="text-cyan-400 hover:underline">zx-generation</a>,
+          lo generó también una IA (es tuyo, está en tu GitHub). El resultado:
+        </p>
+        <p class="mt-4 font-mono text-sm bg-black/60 border border-zinc-800 rounded-lg px-5 py-4 inline-block">
+          <span class="text-amber-300">emulador escrito por IA</span>
+          <span class="text-zinc-600"> × </span>
+          <span class="text-emerald-300">juegos escritos por IA</span>
+          <span class="text-zinc-600"> × </span>
+          <span class="text-violet-300">herramientas escritas por IA</span>
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════ ② VOCABULARIO ════════ -->
+    <section id="vocab" class="py-14 border-b border-zinc-900">
+      <h2 class="text-3xl font-bold text-white mb-2">② El vocabulario</h2>
+      <p class="text-zinc-400 mb-8">Las diez palabras que lo explican todo. Con esto, el resto se lee solo.</p>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">ZX Spectrum 48K</h3>
+          <p class="text-sm text-zinc-400">Ordenador británico de 1982. Pantalla 256×192, 48 KB de memoria, procesador Z80. Los juegos se escriben en <em>ensamblador</em>: instrucciones directas al procesador.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">Emulador</h3>
+          <p class="text-sm text-zinc-400">Programa moderno que imita ese hardware antiguo. zx-generation es el nuestro: un ZX Spectrum que vive dentro de JavaScript.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">Headless</h3>
+          <p class="text-sm text-zinc-400">"Sin cabeza": ejecutar el emulador sin ventana, solo en memoria. Corre <span class="text-white">132× más rápido</span> que el hardware real — una IA puede hacer miles de pruebas por minuto.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">sjasmplus</h3>
+          <p class="text-sm text-zinc-400">El <em>ensamblador</em>: traduce el código fuente Z80 (texto) a binario (los bytes que entiende el procesador).</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">zxs (la CLI)</h3>
+          <p class="text-sm text-zinc-400">Nuestra caja de herramientas de comandos: <code class="text-cyan-300">zxs build</code> compila, <code class="text-cyan-300">zxs run</code> ejecuta, <code class="text-cyan-300">zxs screen</code> enseña la pantalla. Es lo que usa el agente en su bucle.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">MCP</h3>
+          <p class="text-sm text-zinc-400">El protocolo con el que Claude se conecta a herramientas. Nuestro servidor <code class="text-cyan-300">zxs-mcp</code> le da un Spectrum vivo: ejecuta código y <span class="text-white">ve la pantalla como imagen</span> en la conversación.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">Watchdog</h3>
+          <p class="text-sm text-zinc-400">El "perro guardián": clasifica cuelgues. No dice "no funciona" — dice <em>por qué</em>: "HALT con interrupciones apagadas", "bucle infinito", "pila corrupta"…</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">Git · GitHub · repo</h3>
+          <p class="text-sm text-zinc-400">Git guarda la historia del código en <em>commits</em> (instantáneas con autor y mensaje). GitHub la publica. Un repo <em>público</em> lo puede leer y usar cualquiera.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">CI (Integración Continua)</h3>
+          <p class="text-sm text-zinc-400">Un robot de GitHub que, en cada cambio, compila y ejecuta todos los tests en máquinas limpias (Linux, macOS…). Si algo se rompe, se pone rojo y te enteras al momento.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-lg p-5">
+          <h3 class="font-mono text-amber-300 mb-1">PR (Pull Request)</h3>
+          <p class="text-sm text-zinc-400">La forma civilizada de proponer un cambio: "aquí está mi mejora, revísala y si te gusta, incorpórala (<em>merge</em>)".</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ ③ LA HISTORIA ════════ -->
+    <section id="fases" class="py-14 border-b border-zinc-900">
+      <h2 class="text-3xl font-bold text-white mb-2">③ La historia hasta ayer: cinco fases</h2>
+      <p class="text-zinc-400 mb-8">Cada fase con su commit y sus tests.</p>
+      <ol class="relative border-l border-zinc-800 space-y-8 pl-8">
+        <li>
+          <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-xs font-mono text-cyan-300 border border-zinc-700">0</span>
+          <h3 class="font-semibold text-white">El esqueleto que anda</h3>
+          <p class="text-sm text-zinc-400 mt-1">Un Spectrum headless dentro de Node: arranca la ROM real, compila con sjasmplus, ejecuta, saca capturas PNG. ~6.600 fps (el hardware real va a 50).</p>
+        </li>
+        <li>
+          <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-xs font-mono text-cyan-300 border border-zinc-700">1</span>
+          <h3 class="font-semibold text-white">El bucle de feedback</h3>
+          <p class="text-sm text-zinc-400 mt-1">Sesiones que sobreviven entre comandos, teclas programadas por fotograma, OCR de pantalla (ojos baratos para la IA) y el watchdog de cuelgues.</p>
+        </li>
+        <li>
+          <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-xs font-mono text-cyan-300 border border-zinc-700">2</span>
+          <h3 class="font-semibold text-white">El depurador</h3>
+          <p class="text-sm text-zinc-400 mt-1">Desensamblador Z80 completo, breakpoints por etiqueta o línea de fuente, watchpoints de memoria, paso a paso, trazado de puntos calientes.</p>
+        </li>
+        <li>
+          <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-xs font-mono text-cyan-300 border border-zinc-700">3</span>
+          <h3 class="font-semibold text-white">El servidor MCP</h3>
+          <p class="text-sm text-zinc-400 mt-1">Claude ve el Spectrum: la pantalla llega como imagen a la conversación.</p>
+        </li>
+        <li>
+          <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-xs font-mono text-cyan-300 border border-zinc-700">4</span>
+          <h3 class="font-semibold text-white">La capa de conocimiento</h3>
+          <p class="text-sm text-zinc-400 mt-1">8 docs de referencia, libro de recetas probado en CI, y <code class="text-cyan-300">zxs new</code>: esqueleto de juego funcional con manual para el agente.</p>
+        </li>
+      </ol>
+      <div class="mt-10 bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-6">
+        <h3 class="text-emerald-300 font-semibold mb-2">🏆 El hito que validó todo</h3>
+        <p class="text-zinc-300 text-sm leading-relaxed">
+          Un agente de IA, <span class="text-white font-medium">sin ayuda humana</span>, partió del esqueleto
+          de <code class="text-cyan-300">zxs new</code> y construyó un <span class="text-white font-medium">Pong jugable</span>
+          en ~8 ciclos de compilar-ejecutar-mirar-corregir, 40 llamadas a herramientas, 11 minutos.
+          Está en <code class="text-cyan-300">examples/pong-by-agent/</code> con su procedencia completa.
+          Y dejó una lección que abre el siguiente capítulo…
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════ ④ LA SESIÓN DE HOY ════════ -->
+    <section id="hoy" class="py-14 border-b border-zinc-900">
+      <h2 class="text-3xl font-bold text-white mb-8">④ La sesión de hoy, paso a paso</h2>
+
+      <!-- 4.1 -->
+      <article class="mb-10">
+        <h3 class="text-xl font-semibold text-white mb-3"><span class="text-cyan-400 font-mono">4.1</span> El punto ciego del watchdog</h3>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-6 space-y-3 text-sm text-zinc-300 leading-relaxed">
+          <p>Cuando el agente construía el Pong, un error estrelló el programa contra el <span class="text-white">editor de BASIC</span> (la pantalla de inicio del Spectrum). El watchdog <span class="text-rose-300">no lo detectó</span>. ¿Por qué? El editor es un programa educado: duerme la CPU entre fotogramas, <em>exactamente igual que un juego sano</em>. Un coche parado en la cuneta con el motor al ralentí parece un coche aparcado.</p>
+          <p><span class="text-emerald-300 font-medium">El arreglo:</span> el watchdog ahora vigila <em>desde dónde</em> se ejecuta el código. Tu juego vive en la RAM; el editor vive en la ROM. Si un programa que corría en RAM lleva más de un segundo ejecutando solo ROM → veredicto <code class="text-cyan-300">pc-in-rom</code>: "tu programa ha perdido el control y ha caído al sistema". Con explicación y sugerencias, como todos los veredictos.</p>
+        </div>
+      </article>
+
+      <!-- 4.2 -->
+      <article class="mb-10">
+        <h3 class="text-xl font-semibold text-white mb-3"><span class="text-cyan-400 font-mono">4.2</span> El libro de recetas, completo (12/12)</h3>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-6 text-sm text-zinc-300 leading-relaxed">
+          <p class="mb-4">Una <em>receta</em> es un bloque de código Z80 documentado, copiable, <span class="text-white">con test automático</span> — si está en el libro, funciona, y el CI lo garantiza. Hoy se escribieron las 6 que faltaban:</p>
+          <div class="grid sm:grid-cols-2 gap-2 font-mono text-xs">
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-amber-300">sprites 16×16 enmascarados</span> — muñecos sin borrar el fondo</div>
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-amber-300">IM2</span> — código que corre 50 veces/segundo, el ritual completo</div>
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-amber-300">efectos de sonido</span> — pitidos sin estropear el borde</div>
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-amber-300">marcador BCD</span> — puntuaciones sin divisiones</div>
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-amber-300">azar (PRNG)</span> — aleatorio reproducible, clave para tests</div>
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-amber-300">efectos de color</span> — animación barata con atributos</div>
+          </div>
+          <p class="mt-4 text-zinc-400">Detalle bonito: la receta del azar se verificó dos veces — el Z80 en el emulador y una simulación independiente en JavaScript produjeron <em>exactamente</em> los mismos bytes.</p>
+        </div>
+      </article>
+
+      <!-- 4.3 -->
+      <article class="mb-10">
+        <h3 class="text-xl font-semibold text-white mb-3"><span class="text-cyan-400 font-mono">4.3</span> La galería web</h3>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-6 space-y-3 text-sm text-zinc-300 leading-relaxed">
+          <p>La meta comunitaria: una <span class="text-white">galería de juegos hechos por IA, jugables en el navegador, con transparencia total</span>. Hoy existe. Cada juego es una ficha: captura, modelo de IA, <em>el prompt</em>, iteraciones, tiempo, controles, procedencia… y el botón <span class="text-cyan-300 font-mono">▶ Jugar</span>.</p>
+          <p>El truco de "Jugar": al Pong corriendo en el emulador le hicimos una <span class="text-white">foto congelada de toda su memoria</span> (un snapshot <code class="text-cyan-300">.z80</code>). La página carga zx-generation —tu emulador también corre en navegador— y le inyecta esa foto. El juego revive en el punto exacto donde estaba.</p>
+          <p class="text-zinc-400">Verificado con un Chrome automatizado: la página renderiza y el Pong corre.</p>
+        </div>
+      </article>
+
+      <!-- 4.4 -->
+      <article class="mb-10">
+        <h3 class="text-xl font-semibold text-white mb-3"><span class="text-cyan-400 font-mono">4.4</span> La publicación en GitHub</h3>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-6 space-y-3 text-sm text-zinc-300 leading-relaxed">
+          <p>Decidiste: repo <span class="text-white">público</span> y commits con tu email <span class="text-white">noreply</span> de GitHub (enlaza los commits a tu cuenta sin exponer tu correo personal). Se reescribió la historia completa con esa identidad <em>antes</em> de publicar — después ya no se puede.</p>
+          <p>El robot de CI se estrenó… <span class="text-emerald-300">y cazó un bug real al primer intento</span>: la regla <code class="text-cyan-300">build/</code> del <code class="text-cyan-300">.gitignore</code> (pensada para ignorar binarios compilados) también se tragaba las carpetas de <em>código fuente</em> llamadas <code class="text-cyan-300">src/build/</code>. El primer push subió el proyecto sin el módulo que habla con el ensamblador. En tu máquina todo funcionaba; en la máquina limpia del CI, no. <span class="text-zinc-400">Para esto exactamente existe el CI.</span> Arreglado y verificado.</p>
+          <p>Y se activó <span class="text-white">GitHub Pages</span> (hosting gratuito que sirve ficheros del repo): la galería quedó online.</p>
+        </div>
+      </article>
+
+      <!-- 4.5 -->
+      <article class="mb-10">
+        <h3 class="text-xl font-semibold text-white mb-3"><span class="text-cyan-400 font-mono">4.5</span> Cuatro regalos a zx-generation</h3>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-6 text-sm text-zinc-300 leading-relaxed">
+          <p class="mb-4">Construyendo Spectral encontramos cuatro problemas en tu emulador. Se convirtieron en cuatro PRs, cada uno con tests nuevos:</p>
+          <ul class="space-y-3">
+            <li class="flex gap-3"><span class="text-cyan-400 font-mono shrink-0">#2</span><span><span class="text-white">El cargador de snapshots leía mal el color del borde</span> — el formato .z80 lo guarda en los bits 1-3 de un byte; el código leía los bits 0-2. Nos afecta directo: la galería carga snapshots.</span></li>
+            <li class="flex gap-3"><span class="text-cyan-400 font-mono shrink-0">#3</span><span><span class="text-white">Guardar estado perdía los "registros sombra"</span> — el Z80 tiene registros de repuesto que casi todos los juegos usan; la función de guardado los olvidaba. Como una partida guardada que pierde la mitad del inventario.</span></li>
+            <li class="flex gap-3"><span class="text-cyan-400 font-mono shrink-0">#4</span><span><span class="text-white">El emulador no arrancaba fuera del navegador</span> — pedía cosas que solo existen en navegadores (canvas, document) aunque no fuera a usarlas. Ahora corre headless en Node, que es lo que Spectral hace a todas horas.</span></li>
+            <li class="flex gap-3"><span class="text-cyan-400 font-mono shrink-0">#5</span><span><span class="text-white">Una puerta de entrada oficial</span> — antes había que importar las piezas internas "por la ventana" (rutas de ficheros internos); ahora hay un índice público y un mapa de exports. Verificado que las rutas viejas siguen funcionando.</span></li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- 4.6 -->
+      <article class="mb-10">
+        <h3 class="text-xl font-semibold text-white mb-3"><span class="text-cyan-400 font-mono">4.6</span> La "arqueología": un CI que nunca estuvo verde</h3>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-6 space-y-3 text-sm text-zinc-300 leading-relaxed">
+          <p>Al abrir los PRs, sus checks salieron <span class="text-rose-300">rojos</span>. Investigando apareció la sorpresa: no eran los cambios — <span class="text-white">el robot de CI de zx-generation llevaba roto desde siempre</span>. Nunca había pasado en verde. Capas, como una excavación:</p>
+          <div class="space-y-2 font-mono text-xs">
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-rose-300">capa 1</span> — GitHub retiró una pieza de los workflows: todo run moría al arrancar, antes de un solo test</div>
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-rose-300">capa 2</span> — el job de calidad comprobaba un fichero con nombre inexistente y leía una salida que jest nunca imprime</div>
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-rose-300">capa 3</span> — exigía 80% de cobertura de tests; la real es ~47%. Un listón decorativo = rojo eterno</div>
+            <div class="bg-black/40 border border-zinc-800 rounded px-3 py-2"><span class="text-rose-300">capa 4</span> — 27 ficheros fuera del formato del propio repo, 13 errores de lint, avisos de seguridad en dependencias</div>
+          </div>
+          <p>Con tu autorización se mergearon los 4 PRs (+ uno de seguridad pendiente desde julio) y un <span class="text-white">PR de reparación integral</span>: acciones actualizadas, pasos arreglados, formato y lint saldados, auditoría limpia, y el listón de cobertura puesto en el valor real <em>como trinquete</em> — ya no falla siempre; falla solo si alguien la empeora.</p>
+          <p class="text-emerald-300 font-medium">Resultado: el primer CI verde de la historia de zx-generation. Y de propina, su documentación quedó publicada online.</p>
+        </div>
+      </article>
+
+      <!-- 4.7 -->
+      <article>
+        <h3 class="text-xl font-semibold text-white mb-3"><span class="text-cyan-400 font-mono">4.7</span> El vídeo: preparado, te toca a ti</h3>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-6 text-sm text-zinc-300 leading-relaxed">
+          <p>El "money shot" del proyecto: grabar el terminal mientras un agente construye un juego desde cero, en time-lapse, con el momento de autocorrección visible (ahora, con <code class="text-cyan-300">pc-in-rom</code>, el error sale <em>con nombre</em> en pantalla). No puedo pulsar el botón de grabar por ti, pero el guion completo está en <code class="text-cyan-300">.harness/tasks/pending/T-20260611-07-video-runbook.md</code>: preparación, herramienta, el prompt exacto, qué capturar y el post-procesado.</p>
+        </div>
+      </article>
+    </section>
+
+    <!-- ════════ ⑤ DÓNDE ESTAMOS ════════ -->
+    <section id="ahora" class="py-14 border-b border-zinc-900">
+      <h2 class="text-3xl font-bold text-white mb-8">⑤ Dónde estamos ahora mismo</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-zinc-500 font-mono text-xs uppercase tracking-wider border-b border-zinc-800">
+              <th class="py-3 pr-4">Qué</th><th class="py-3 pr-4">Dónde</th><th class="py-3">Estado</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-900">
+            <tr><td class="py-3 pr-4 text-white">Spectral (el toolkit)</td><td class="py-3 pr-4"><a class="text-cyan-400 hover:underline" href="https://github.com/Alvaromah/spectral">github.com/Alvaromah/spectral</a></td><td class="py-3 text-emerald-300">Público · CI verde · 71 tests</td></tr>
+            <tr><td class="py-3 pr-4 text-white">La galería jugable</td><td class="py-3 pr-4"><a class="text-cyan-400 hover:underline" href="https://alvaromah.github.io/spectral/">alvaromah.github.io/spectral</a></td><td class="py-3 text-emerald-300">Online, con el Pong del agente</td></tr>
+            <tr><td class="py-3 pr-4 text-white">zx-generation (el emulador)</td><td class="py-3 pr-4"><a class="text-cyan-400 hover:underline" href="https://github.com/Alvaromah/zx-generation">github.com/Alvaromah/zx-generation</a></td><td class="py-3 text-emerald-300">Mejoras mergeadas · CI verde por 1ª vez · 327 tests</td></tr>
+            <tr><td class="py-3 pr-4 text-white">Docs del emulador</td><td class="py-3 pr-4"><a class="text-cyan-400 hover:underline" href="https://alvaromah.github.io/zx-generation/">alvaromah.github.io/zx-generation</a></td><td class="py-3 text-emerald-300">Online</td></tr>
+            <tr><td class="py-3 pr-4 text-white">Recetas probadas</td><td class="py-3 pr-4 font-mono text-zinc-400">recipes/</td><td class="py-3 text-emerald-300">12/12 en CI</td></tr>
+            <tr><td class="py-3 pr-4 text-white">El Pong histórico</td><td class="py-3 pr-4 font-mono text-zinc-400">examples/pong-by-agent/</td><td class="py-3 text-emerald-300">Con procedencia completa</td></tr>
+            <tr><td class="py-3 pr-4 text-white">Memoria del proyecto</td><td class="py-3 pr-4 font-mono text-zinc-400">.harness/</td><td class="py-3 text-emerald-300">Estado, decisiones y cola al día</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ════════ ⑥ LO QUE FALTA ════════ -->
+    <section id="falta" class="py-14 border-b border-zinc-900">
+      <h2 class="text-3xl font-bold text-white mb-8">⑥ Lo que falta (y quién hace cada cosa)</h2>
+      <div class="space-y-4">
+        <div class="bg-amber-950/30 border border-amber-800/50 rounded-xl p-6">
+          <h3 class="text-amber-300 font-semibold mb-1">1 · Publicar el paquete en npm <span class="text-xs font-mono text-zinc-500">(te toca a ti + yo)</span></h3>
+          <p class="text-sm text-zinc-300 leading-relaxed">npm es la tienda de paquetes de JavaScript: publicar <code class="text-cyan-300">@zx-vibes/toolkit</code> permite a cualquiera usar <code class="text-cyan-300">npx zxs</code> sin clonar nada. Solo necesito que escribas <code class="bg-black/50 px-1.5 py-0.5 rounded text-amber-200">! npm login</code> en la sesión; del resto (publicar v0.1.0 y verificar instalación limpia) me encargo yo.</p>
+        </div>
+        <div class="bg-amber-950/30 border border-amber-800/50 rounded-xl p-6">
+          <h3 class="text-amber-300 font-semibold mb-1">2 · Versión nueva de zx-generation <span class="text-xs font-mono text-zinc-500">(te toca a ti + yo)</span></h3>
+          <p class="text-sm text-zinc-300 leading-relaxed">Las mejoras están en main pero sin publicar. Una <em>release</em> se dispara etiquetando: <code class="bg-black/50 px-1.5 py-0.5 rounded text-amber-200">git tag v1.1.0 && git push --tags</code> (sugiero 1.1.0, no 1.0.2: hay funcionalidad nueva, no solo arreglos). Cuando exista, yo actualizo Spectral para usarla y quito los apaños internos.</p>
+        </div>
+        <div class="bg-amber-950/30 border border-amber-800/50 rounded-xl p-6">
+          <h3 class="text-amber-300 font-semibold mb-1">3 · Grabar el vídeo <span class="text-xs font-mono text-zinc-500">(te toca a ti, guion listo)</span></h3>
+          <p class="text-sm text-zinc-300 leading-relaxed">Con el runbook en la mano: terminal grande, <code class="text-cyan-300">asciinema</code> o QuickTime, el prompt mínimo, y a dejar que el agente trabaje. Yo te acompaño en el re-run cuando quieras.</p>
+        </div>
+        <div class="bg-zinc-900/70 border border-zinc-800 rounded-xl p-6">
+          <h3 class="text-zinc-300 font-semibold mb-1">Cola futura <span class="text-xs font-mono text-zinc-500">(cuando toque)</span></h3>
+          <p class="text-sm text-zinc-400 leading-relaxed">Carril de CI para Windows · mejor carga de cintas .tap · más juegos para la galería · la idea grande: <span class="text-zinc-200">jams de juegos hechos por IA con transparencia total</span>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ CIERRE ════════ -->
+    <section class="py-14">
+      <div class="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-10 text-center">
+        <h2 class="text-2xl font-bold text-white mb-4">El cierre: por qué esto importa</h2>
+        <p class="max-w-3xl mx-auto text-zinc-300 leading-relaxed">
+          Hoy el proyecto cruzó la línea de "experimento privado" a
+          <span class="text-white font-medium">proyecto público verificable</span>: cualquiera puede clonar
+          Spectral, ejecutar sus tests, jugar al Pong que escribió una IA y leer el prompt que lo originó.
+          Y la pieza de abajo del todo —el emulador— salió ganando: cuatro arreglos reales y su robot de
+          calidad funcionando por primera vez.
+        </p>
+        <p class="mt-6 font-mono text-sm text-zinc-400">
+          una IA generó el emulador · una IA construyó las herramientas ·<br class="hidden sm:block">
+          una IA escribió el juego · una IA arregló y publicó el conjunto<br>
+          <span class="text-cyan-300 crt-glow">— contigo decidiendo en cada puerta.</span>
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-zinc-800">
+    <div class="zx-stripes h-1 w-full"></div>
+    <div class="max-w-5xl mx-auto px-6 py-8 text-xs text-zinc-500 font-mono flex flex-wrap gap-4 justify-between">
+      <span>Spectral — guía completa · 11/06/2026</span>
+      <span>versión markdown: <code>docs/spectral-guia-completa.md</code></span>
+    </div>
+  </footer>
+
+</body>
+</html>

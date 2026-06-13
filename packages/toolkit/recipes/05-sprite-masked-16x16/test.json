@@ -1,0 +1,12 @@
+{
+  "build": "demo.asm",
+  "frames": 60,
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "pixelAt", "x": 46, "y": 46, "set": true },
+    { "type": "pixelAt", "x": 52, "y": 46, "set": false },
+    { "type": "pixelAt", "x": 42, "y": 46, "set": true },
+    { "type": "pixelAt", "x": 46, "y": 40, "set": true },
+    { "type": "pixelAt", "x": 56, "y": 46, "set": true }
+  ]
+}

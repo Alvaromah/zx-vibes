@@ -1,0 +1,13 @@
+{
+  "build": "../src/main.asm",
+  "frames": 100,
+  "keys": "10:P*60,20:SPACE*5",
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "screenChanged", "equals": true },
+    { "type": "cellsNonBlank", "min": 30 },
+    { "type": "memEquals", "addr": "0xBF00", "hex": "1F" },
+    { "type": "memEquals", "addr": "0xBF03", "hex": "01" }
+  ]
+}

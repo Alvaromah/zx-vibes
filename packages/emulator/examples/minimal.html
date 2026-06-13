@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ZX Spectrum</title>
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        background: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="screen"></canvas>
+    <script type="module">
+      import { ZXSpectrum } from 'https://cdn.jsdelivr.net/npm/zx-generation@latest/dist/zxgeneration.esm.js';
+      new ZXSpectrum('#screen');
+    </script>
+  </body>
+</html>
