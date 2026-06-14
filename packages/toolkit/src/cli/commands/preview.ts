@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createServer, type ServerResponse } from 'node:http';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, relative } from 'node:path';
 import { createRequire } from 'node:module';
@@ -20,6 +20,7 @@ const require = createRequire(import.meta.url);
 
 export interface PreviewCommandOptions {
   port: string;
+  strictPort: boolean;
   watch: boolean;
   json: boolean;
 }
@@ -32,9 +33,22 @@ interface PreviewBuild {
 
 const WATCH_EXTENSIONS = new Set(['.asm', '.inc', '.bin', '.json']);
 const WATCH_SKIP_DIRS = new Set(['.git', '.zxs', 'build', 'dist', 'node_modules']);
+const PREVIEW_HOST = '127.0.0.1';
+const MAX_PORT_FALLBACK_ATTEMPTS = 20;
+
+interface PreviewListenResult {
+  port: number;
+  requestedPort: number;
+}
+
+interface PreviewListenOptions {
+  host?: string;
+  strictPort?: boolean;
+  maxAttempts?: number;
+}
 
 export async function previewCommand(opts: PreviewCommandOptions): Promise<number> {
-  const port = parsePort(opts.port);
+  const requestedPort = parsePort(opts.port);
   const loaded = loadProjectConfig();
   const entry = configuredEntry(undefined, loaded.config);
   if (!entry) {
@@ -81,9 +95,10 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
   ]);
 
   const clients = new Set<ServerResponse>();
+  let selectedPort = requestedPort;
 
   const server = createServer((req, res) => {
-    const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
+    const url = new URL(req.url ?? '/', `http://${PREVIEW_HOST}:${selectedPort}`);
     if (opts.watch && url.pathname === '/events') {
       res.writeHead(200, {
         'content-type': 'text/event-stream',
@@ -114,7 +129,8 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
   });
 
   let watchTimer: NodeJS.Timeout | undefined;
-  if (opts.watch) {
+  const startWatcher = () => {
+    if (!opts.watch) return;
     let lastSourceHash = hashPreviewInputs(process.cwd());
     watchTimer = setInterval(async () => {
       const sourceHash = hashPreviewInputs(process.cwd());
@@ -140,41 +156,96 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
     server.once('close', () => {
       if (watchTimer) clearInterval(watchTimer);
     });
-  }
+  };
 
   return await new Promise<number>((resolve) => {
-    let settled = false;
-    server.once('error', (err) => {
-      if (settled) return;
-      settled = true;
-      const listenError = err as Error & { code?: string };
-      const code = typeof listenError.code === 'string' ? ` (${listenError.code})` : '';
-      const message =
-        listenError.code === 'EADDRINUSE'
-          ? `Preview port ${port} is already in use`
-          : `Preview server failed to listen on port ${port}${code}: ${listenError.message}`;
-      resolve(emitCliError(userError(message, 'preview'), opts.json, 'preview'));
-    });
-    server.listen(port, '127.0.0.1', () => {
-      settled = true;
-      emit(
-        {
-          ok: true,
-          stage: 'preview',
-          url: `http://127.0.0.1:${port}/`,
-          watch: opts.watch,
-          buildId: currentBuild.buildId,
-          builtAt: currentBuild.builtAt,
-          build: currentBuild.outputs,
-        },
-        opts.json,
-        () =>
-          `Preview running at http://127.0.0.1:${port}/` +
-          ` (build ${currentBuild.buildId}${opts.watch ? ', watching' : ''})`
-      );
-      resolve(EXIT.OK);
-    });
+    listenWithPortFallback(server, requestedPort, { host: PREVIEW_HOST, strictPort: opts.strictPort })
+      .then((listen) => {
+        selectedPort = listen.port;
+        startWatcher();
+        emit(
+          {
+            ok: true,
+            stage: 'preview',
+            url: `http://${PREVIEW_HOST}:${selectedPort}/`,
+            port: selectedPort,
+            requestedPort,
+            portFallback: selectedPort !== requestedPort,
+            watch: opts.watch,
+            buildId: currentBuild.buildId,
+            builtAt: currentBuild.builtAt,
+            build: currentBuild.outputs,
+          },
+          opts.json,
+          () =>
+            `Preview running at http://${PREVIEW_HOST}:${selectedPort}/` +
+            ` (build ${currentBuild.buildId}${opts.watch ? ', watching' : ''}` +
+            `${selectedPort !== requestedPort ? `, requested port ${requestedPort} was busy` : ''})`
+        );
+        resolve(EXIT.OK);
+      })
+      .catch((err: unknown) => {
+        resolve(emitCliError(err, opts.json, 'preview'));
+      });
   });
+}
+
+export function listenWithPortFallback(
+  server: Server,
+  requestedPort: number,
+  opts: PreviewListenOptions = {}
+): Promise<PreviewListenResult> {
+  const host = opts.host ?? PREVIEW_HOST;
+  const strictPort = opts.strictPort ?? false;
+  const maxAttempts = strictPort ? 1 : (opts.maxAttempts ?? MAX_PORT_FALLBACK_ATTEMPTS);
+  let port = requestedPort;
+  let attempts = 0;
+
+  return new Promise((resolve, reject) => {
+    const tryListen = () => {
+      attempts += 1;
+
+      const onError = (err: Error) => {
+        server.off('error', onError);
+        server.off('listening', onListening);
+
+        const listenError = err as Error & { code?: string };
+        if (listenError.code === 'EADDRINUSE' && !strictPort && attempts < maxAttempts && port < 65535) {
+          port += 1;
+          tryListen();
+          return;
+        }
+
+        reject(userError(previewListenErrorMessage(listenError, requestedPort, port), 'preview'));
+      };
+
+      const onListening = () => {
+        server.off('error', onError);
+        server.off('listening', onListening);
+        resolve({ port, requestedPort });
+      };
+
+      server.once('error', onError);
+      server.once('listening', onListening);
+      try {
+        server.listen(port, host);
+      } catch (err) {
+        onError(err as Error);
+      }
+    };
+
+    tryListen();
+  });
+}
+
+function previewListenErrorMessage(err: Error & { code?: string }, requestedPort: number, lastPort: number): string {
+  if (err.code === 'EADDRINUSE') {
+    return requestedPort === lastPort
+      ? `Preview port ${requestedPort} is already in use`
+      : `Preview ports ${requestedPort}-${lastPort} are already in use`;
+  }
+  const code = typeof err.code === 'string' ? ` (${err.code})` : '';
+  return `Preview server failed to listen on port ${lastPort}${code}: ${err.message}`;
 }
 
 async function writePreviewBuild(opts: {

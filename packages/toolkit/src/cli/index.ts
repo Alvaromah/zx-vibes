@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { readFileSync } from 'node:fs';
 import { benchCommand } from './commands/bench.js';
 import { buildCommand } from './commands/build.js';
 import {
@@ -35,6 +36,14 @@ import {
 } from './commands/state-cmds.js';
 import { EXIT, argvWantsJson, emitCliError, userError } from './output.js';
 
+interface PackageMetadata {
+  version: string;
+}
+
+const packageMetadata = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+) as PackageMetadata;
+
 const program = new Command();
 program.exitOverride();
 program.configureOutput({ writeErr: () => undefined });
@@ -42,7 +51,7 @@ program.configureOutput({ writeErr: () => undefined });
 program
   .name('zxs')
   .description('zx-vibes — AI agent toolchain for the ZX Spectrum')
-  .version('0.1.0');
+  .version(packageMetadata.version);
 
 const jsonOpt = ['--json', 'machine-readable JSON output', false] as const;
 const stateOpt = ['--state <file>', 'session state file (default .zxs/state.zxstate)'] as const;
@@ -334,6 +343,7 @@ program
   .command('preview')
   .description('Build the current project and serve it in a browser player')
   .option('--port <n>', 'local preview port', '5173')
+  .option('--strict-port', 'fail if --port is already in use instead of trying later ports', false)
   .option('--watch', 'rebuild the preview snapshot and reload the page on source changes', false)
   .option(...jsonOpt)
   .action(async (opts) => {

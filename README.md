@@ -106,7 +106,9 @@ pnpm exec zxs bench --frames 2000
 
 `zxs preview` serves a browser player with a visible build hash. Add
 `--watch` to rebuild the snapshot and reload the page when source/config files
-change.
+change. If the requested port is busy, preview tries later ports and prints the
+URL it actually selected; add `--strict-port` when a busy `--port` should be an
+error.
 
 Debug and inspection commands are also available:
 
