@@ -5,6 +5,48 @@ Keep 5-10 useful entries, or roughly the last 30 days.
 Older details should live in task files under `tasks/done/` or
 `tasks/archive/`, or in git history.
 
+## 2026-06-14 - P1-1 generated projects run without global zxs
+
+Areas: toolkit, scaffolding, distribution
+
+Summary:
+Updated `zxs new` so generated projects install dependencies by default and
+then work through project-local npm scripts. Added `--no-install` for local
+checkout/offline workflows, updated starter Makefiles to use
+`npx --no-install zxs`, and added generated-playbook recovery guidance for a
+missing local `zxs` bin.
+
+Files touched:
+
+- `packages/toolkit/src/cli/commands/new.ts`
+- `packages/toolkit/src/cli/index.ts`
+- `starters/*/`
+- `packages/toolkit/templates/*/`
+- `packages/create-zx-vibes/starters/*/`
+- `packages/toolkit/tests/cli/scaffold-e2e.test.ts`
+- `.changeset/runnable-zxs-new.md`
+
+Validation:
+
+- `pnpm --filter @zx-vibes/toolkit typecheck`
+- `pnpm --filter @zx-vibes/toolkit lint` (exit 0; existing warnings only)
+- `pnpm --filter @zx-vibes/toolkit test`
+- `pnpm --filter create-zx-vibes typecheck`
+- `pnpm --filter create-zx-vibes lint` (exit 0; existing warnings only)
+- `pnpm --filter create-zx-vibes test`
+- `pnpm --filter create-zx-vibes run check:assets`
+- `pnpm --filter @zx-vibes/emulator lint` (exit 0; existing warnings only)
+- `pnpm --filter @zx-vibes/emulator test` (342 passed)
+- Fresh generated-project smoke: default `zxs new`, `npm run build`, and
+  `npm test` all passed.
+
+Follow-ups:
+
+- Continue with `FEEDBACK.md` P1-2 (`docs/reference/sound.md`) when requested.
+
+Task file:
+`.harness/tasks/done/T-20260614-01-p1-1-runnable-zxs-new.md`
+
 ## 2026-06-14 - Root operational harness created
 
 Areas: distribution, toolkit, assembler, emulator, scaffolding, reference-docs,

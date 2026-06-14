@@ -83,4 +83,7 @@ pnpm run verify
 
 ## Recent area notes
 
+- 2026-06-14: P1-1 added `.changeset/runnable-zxs-new.md` for the
+  user-facing scaffold behavior change and documented local checkout smoke
+  usage in the root README.
 - Root harness initialized this area on 2026-06-14.

@@ -85,4 +85,6 @@ integration.
 
 ## Recent area notes
 
+- 2026-06-14: P1-1 updated `zxs new` to install generated project
+  dependencies by default, added `--no-install`, and adjusted scaffold tests.
 - Root harness initialized this area on 2026-06-14.
