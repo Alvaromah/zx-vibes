@@ -21,8 +21,8 @@
     "node": ">=20"
   },
   "bin": {
-    "spectral-asm": "dist/cli.js",
-    "zxasm": "dist/cli.js"
+    "spectral-asm": "bin/zxasm.js",
+    "zxasm": "bin/zxasm.js"
   },
   "exports": {
     ".": {
@@ -34,6 +34,7 @@
     }
   },
   "files": [
+    "bin",
     "dist",
     "README.md"
   ],
@@ -42,7 +43,7 @@
     "prepack": "pnpm run build",
     "test": "tsup --silent && node ../../scripts/ensure-shebang.js --silent dist/cli.js && vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src tests",
+    "lint": "eslint src tests bin",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {

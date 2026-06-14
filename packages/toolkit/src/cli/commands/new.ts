@@ -41,7 +41,11 @@ export function newCommand(name: string, opts: { json: boolean; template?: strin
   const template = opts.template ?? 'game';
   const templateDir = join(root, 'templates', template);
   if (!existsSync(templateDir)) {
-    throw userError(`Unknown template '${template}'. Available templates live in ${join(root, 'templates')}`, 'new');
+    const templatesDir = join(root, 'templates');
+    const available = readdirSync(templatesDir)
+      .filter((entry) => statSync(join(templatesDir, entry)).isDirectory())
+      .sort();
+    throw userError(`Unknown template '${template}'. Available: ${available.join(', ')}`, 'new');
   }
   copyTemplate(templateDir, dest, name);
 

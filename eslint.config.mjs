@@ -30,6 +30,8 @@ export default [
     files: [
       'packages/emulator/src/**/*.js',
       'packages/emulator/tests/**/*.js',
+      'packages/asm/bin/**/*.js',
+      'packages/toolkit/bin/**/*.js',
       'packages/create-zx-vibes/scripts/**/*.js',
       'packages/zx-vibes/bin/**/*.js',
     ],
