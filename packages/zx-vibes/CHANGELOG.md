@@ -1,5 +1,13 @@
 # zx-vibes
 
+## 0.1.2
+
+### Patch Changes
+
+- c813e18: Keep `zxs --version` synced with package metadata, document preview options in CLI regression tests, and let `zxs preview` fall forward to the next available port unless `--strict-port` is used.
+- Updated dependencies [c813e18]
+  - @zx-vibes/toolkit@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes
