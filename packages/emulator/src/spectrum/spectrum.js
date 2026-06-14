@@ -74,11 +74,12 @@ export class ZXSpectrum {
     this.tape = new Tape(this);
 
     // Setup sound callbacks
+    this._prevTapeBit = 1; // last tape EAR level, for loading-sound mixing
     if (this.sound) {
       this.ula.setPortWriteCallback((portValue) => {
         if (this.sound && this.sound.enabled && this.useAudioWorklet) {
           const tStateOffset = this.cpu.cycles - this.frameStartCycles;
-          this.sound.setBeeperState(portValue, tStateOffset);
+          this.sound.setBeeperState(this._mixTapeAudio(portValue), tStateOffset);
         }
       });
 
@@ -232,6 +233,14 @@ export class ZXSpectrum {
       document.addEventListener('keydown', this._keyDownHandler);
       document.addEventListener('keyup', this._keyUpHandler);
     }
+
+    // Release every key when the window loses focus. Otherwise a key still held
+    // during an alt-tab / click-away never receives its keyup and stays stuck —
+    // the classic "UP is always pressed" bug.
+    if (typeof window !== 'undefined') {
+      this._blurHandler = () => this.ula.clearKeys();
+      window.addEventListener('blur', this._blurHandler);
+    }
   }
 
   /**
@@ -304,10 +313,8 @@ export class ZXSpectrum {
    * @returns {void}
    */
   _handleKeyUp(e) {
-    if (!this.running) {
-      return;
-    }
-
+    // Always honour key releases, even while paused/stopped: if the keydown was
+    // seen while running, dropping its keyup would leave the key stuck "pressed".
     const handled = this._processKey(e.key, false);
     if (handled) {
       e.preventDefault();
@@ -376,6 +383,9 @@ export class ZXSpectrum {
   _setupVisibilityHandling() {
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          this.ula.clearKeys(); // drop any held keys when the tab is backgrounded
+        }
         if (this.running && this.sound && this.sound.audioContext) {
           if (document.hidden) {
             this.sound.audioContext.suspend().catch((err) => console.warn('Failed to suspend audio context:', err));
@@ -515,6 +525,22 @@ export class ZXSpectrum {
    * @private
    * @returns {void}
    */
+  /**
+   * Fold the current tape EAR input into the speaker bit while a tape is playing,
+   * so the loading signal is audible (real hardware mixes EAR into the audio out).
+   * A no-op during normal play, when no tape is running.
+   *
+   * @private
+   * @param {number} portValue - last value written to port 0xFE
+   * @returns {number} value with the tape level mixed into the speaker bit
+   */
+  _mixTapeAudio(portValue) {
+    if (this.tape && this.tape.playing) {
+      return (portValue & 0xef) | (this._prevTapeBit ? 0x10 : 0);
+    }
+    return portValue;
+  }
+
   runFrame() {
     let tStates = 0;
 
@@ -532,6 +558,14 @@ export class ZXSpectrum {
 
       const tapeInputBit = this.tape.update(this.cpu.cycles);
       this.ula.setTapeInput(tapeInputBit);
+      // Make the tape loading signal audible like real hardware: the ULA mixes the
+      // EAR input into the speaker output, so emit an audio edge on each tape flip.
+      if (tapeInputBit !== this._prevTapeBit) {
+        this._prevTapeBit = tapeInputBit;
+        if (this.sound && this.sound.enabled && this.useAudioWorklet && this.tape.playing) {
+          this.sound.setBeeperState(this._mixTapeAudio(this.ula.lastPortFE), this.cpu.cycles - this.frameStartCycles);
+        }
+      }
 
       if (this.ula.shouldGenerateInterrupt()) {
         this.cpu.interrupt();
@@ -1066,6 +1100,9 @@ export class ZXSpectrum {
     if (this.options.handleKeyboard && this._keyDownHandler) {
       document.removeEventListener('keydown', this._keyDownHandler);
       document.removeEventListener('keyup', this._keyUpHandler);
+    }
+    if (this._blurHandler && typeof window !== 'undefined') {
+      window.removeEventListener('blur', this._blurHandler);
     }
 
     // Destroy touch keyboard
