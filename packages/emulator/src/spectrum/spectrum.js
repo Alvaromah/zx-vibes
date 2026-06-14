@@ -232,6 +232,14 @@ export class ZXSpectrum {
       document.addEventListener('keydown', this._keyDownHandler);
       document.addEventListener('keyup', this._keyUpHandler);
     }
+
+    // Release every key when the window loses focus. Otherwise a key still held
+    // during an alt-tab / click-away never receives its keyup and stays stuck —
+    // the classic "UP is always pressed" bug.
+    if (typeof window !== 'undefined') {
+      this._blurHandler = () => this.ula.clearKeys();
+      window.addEventListener('blur', this._blurHandler);
+    }
   }
 
   /**
@@ -304,10 +312,8 @@ export class ZXSpectrum {
    * @returns {void}
    */
   _handleKeyUp(e) {
-    if (!this.running) {
-      return;
-    }
-
+    // Always honour key releases, even while paused/stopped: if the keydown was
+    // seen while running, dropping its keyup would leave the key stuck "pressed".
     const handled = this._processKey(e.key, false);
     if (handled) {
       e.preventDefault();
@@ -376,6 +382,9 @@ export class ZXSpectrum {
   _setupVisibilityHandling() {
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          this.ula.clearKeys(); // drop any held keys when the tab is backgrounded
+        }
         if (this.running && this.sound && this.sound.audioContext) {
           if (document.hidden) {
             this.sound.audioContext.suspend().catch((err) => console.warn('Failed to suspend audio context:', err));
@@ -1066,6 +1075,9 @@ export class ZXSpectrum {
     if (this.options.handleKeyboard && this._keyDownHandler) {
       document.removeEventListener('keydown', this._keyDownHandler);
       document.removeEventListener('keyup', this._keyUpHandler);
+    }
+    if (this._blurHandler && typeof window !== 'undefined') {
+      window.removeEventListener('blur', this._blurHandler);
     }
 
     // Destroy touch keyboard
