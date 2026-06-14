@@ -9,3 +9,8 @@ coverage/
 *.tgz
 tmp/
 temp/
+
+# Local agent workspace
+AGENTS.md
+CLAUDE.md
+.harness/
