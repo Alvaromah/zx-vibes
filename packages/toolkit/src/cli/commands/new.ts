@@ -63,6 +63,10 @@ export function newCommand(name: string, opts: { json: boolean; template?: strin
   if (existsSync(docsSrc)) {
     cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
   }
+  const skillsSrc = join(root, 'docs', 'agents', 'skills');
+  if (existsSync(skillsSrc)) {
+    cpSync(skillsSrc, join(dest, 'docs', 'agents', 'skills'), { recursive: true });
+  }
 
   const shouldInstall = opts.install ?? true;
   const installResult = shouldInstall ? installDependencies(dest, opts.json) : undefined;
@@ -89,7 +93,7 @@ export function newCommand(name: string, opts: { json: boolean; template?: strin
         shouldInstall
           ? 'Installed local zx-vibes dependency; npm scripts now use the project-local zxs bin.'
           : 'Skipped dependency installation; run npm install before npm scripts or npx zxs.',
-        'Agent playbooks are in AGENTS.md and CLAUDE.md; reference docs are in docs/reference/.',
+        'Agent playbooks are in AGENTS.md and CLAUDE.md; skill router is in docs/agents/skills/INDEX.md; reference docs are in docs/reference/.',
         '',
         ...next.map((n) => `  ${n}`),
       ].join('\n')

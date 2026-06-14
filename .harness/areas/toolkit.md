@@ -85,6 +85,9 @@ integration.
 
 ## Recent area notes
 
+- 2026-06-14: T-20260614-02 added toolkit docs sync/check for
+  `docs/reference` and `docs/agents/skills`, packages `docs/agents`, and
+  extends `zxs new` scaffold tests for the skills router.
 - 2026-06-14: P1-1 updated `zxs new` to install generated project
   dependencies by default, added `--no-install`, and adjusted scaffold tests.
 - Root harness initialized this area on 2026-06-14.

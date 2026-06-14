@@ -51,17 +51,20 @@
   "files": [
     "bin",
     "dist",
+    "docs/agents",
     "docs/reference",
     "recipes",
     "templates"
   ],
   "scripts": {
-    "build": "tsup && node ../../scripts/ensure-shebang.js dist/cli/index.js dist/mcp/server.js",
+    "build": "tsup && node ../../scripts/ensure-shebang.js dist/cli/index.js dist/mcp/server.js && node scripts/sync-docs.js",
+    "sync:docs": "node scripts/sync-docs.js",
+    "check:docs": "node scripts/sync-docs.js --check",
     "prepack": "pnpm run build",
-    "test": "tsup --silent && node ../../scripts/ensure-shebang.js --silent dist/cli/index.js dist/mcp/server.js && vitest run",
+    "test": "node scripts/sync-docs.js --check && tsup --silent && node ../../scripts/ensure-shebang.js --silent dist/cli/index.js dist/mcp/server.js && vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src tests bin",
+    "lint": "eslint src tests bin scripts",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {

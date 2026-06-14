@@ -8,6 +8,10 @@ emulator runs headless and FAST (130× real hardware) — run it constantly.
 This project expects the local `zx-vibes` devDependency. If `zxs` is not found,
 run `npm install`; then use `npm run build`, `npm test`, or `npx zxs <cmd>`.
 
+Before loading a domain skill, read `docs/agents/skills/INDEX.md`. It routes
+assembler, screen/rendering, keyboard, timing, ROM, colour, sound, and debug
+work to the smallest local context.
+
 ## The loop (non-negotiable)
 
 After EVERY source change:

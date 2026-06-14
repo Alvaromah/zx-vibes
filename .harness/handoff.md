@@ -8,8 +8,8 @@ TASK if continuing the `FEEDBACK.md` backlog; otherwise ASK.
 
 ## Next action
 
-P1-1 from `FEEDBACK.md` is complete on branch
-`codex/p1-1-runnable-zxs-new`. If continuing the backlog, start with P1-2
+No active task. P1-1 from `FEEDBACK.md` and the project-local agent skills
+docs task are complete. If continuing the backlog, start with P1-2
 (`docs/reference/sound.md`) and keep one branch/PR per item.
 
 ## Read order
@@ -24,10 +24,11 @@ P1-1 from `FEEDBACK.md` is complete on branch
 
 Current task:
 
-- None active. Last completed: `T-20260614-01`.
+- None active. Last completed: `T-20260614-02`.
 
 Relevant recent entries:
 
+- `recent.md` entry for project-local agent skills docs.
 - `recent.md` entry for P1-1 generated projects running without global `zxs`.
 - `recent.md` entry for 2026-06-14 root harness creation.
 
@@ -38,6 +39,8 @@ Relevant decisions:
 
 Relevant areas:
 
+- Agent skills docs touched toolkit, assembler, emulator, scaffolding,
+  reference-docs, and distribution.
 - P1-1 touched toolkit, scaffolding, and distribution.
 
 ## Assumptions to verify

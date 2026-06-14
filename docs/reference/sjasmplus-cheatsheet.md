@@ -1,8 +1,22 @@
-# sjasmplus cheatsheet (as Spectral uses it)
+# sjasmplus compatibility and migration notes
 
-Read this for assembler syntax and to decode its error messages.
+Read this only when a project explicitly uses external `sjasmplus` or when you
+are porting existing sjasmplus code. For normal `zx-vibes` projects, start with
+the embedded assembler reference: [assembler-syntax.md](assembler-syntax.md).
 
-## The skeleton every file needs
+By default `zx-vibes` uses the embedded `@zx-vibes/asm` backend, so the starter
+and recipe workflow does not require an external assembler:
+
+```bash
+zxs build src/main.asm
+zxs test recipes
+```
+
+Use `--assembler sjasmplus` or `ZXS_ASSEMBLER=sjasmplus` for advanced
+sjasmplus-only features such as Lua, snapshot/tape emission, or syntax outside
+the embedded starter-game subset.
+
+## External sjasmplus skeleton
 
 ```asm
     DEVICE ZXSPECTRUM48     ; enables SAVESNA/SAVETAP and SLD debug output
@@ -15,18 +29,6 @@ start:
 
 `zxs build file.asm` adds `--raw` (plain binary) and `--sld` (debug symbols
 — this is what makes `zxs break add my_label` work) automatically.
-
-By default `zx-vibes` uses the embedded `@zx-vibes/asm` backend, so the
-starter and recipe workflow does not require an external assembler:
-
-```bash
-zxs build src/main.asm
-zxs test recipes
-```
-
-Use `--assembler sjasmplus` or `ZXS_ASSEMBLER=sjasmplus` for advanced
-sjasmplus-only features such as Lua, snapshot/tape emission, or anything
-outside the embedded starter-game subset.
 
 ## Syntax you'll actually use
 
@@ -43,7 +45,10 @@ start:                      ; global label (column 0, colon optional)
     INCLUDE "lib/keys.asm"  ; path relative to THIS file
 ```
 
-Macros, IFDEF, modules and Lua exist — you won't need them for a first game.
+Most of this syntax is also supported by `@zx-vibes/asm`; check
+[assembler-syntax.md](assembler-syntax.md) before assuming a sjasmplus feature
+is available in the embedded backend. Lua, `SAVESNA`, and tape/snapshot output
+remain external sjasmplus workflows.
 
 ## Error messages decoded
 

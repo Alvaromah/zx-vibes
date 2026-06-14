@@ -70,4 +70,7 @@ pnpm --filter @zx-vibes/emulator start
 
 ## Recent area notes
 
+- 2026-06-14: T-20260614-02 added agent skills for Spectrum screen, keyboard,
+  attributes, timing/interrupts, beeper, ROM routines, rendering tradeoffs, and
+  debug triage; no emulator code changed.
 - Root harness initialized this area on 2026-06-14.

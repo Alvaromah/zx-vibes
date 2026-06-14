@@ -72,6 +72,9 @@ pnpm --filter create-zx-vibes run check:assets
 
 ## Recent area notes
 
+- 2026-06-14: T-20260614-02 updated starter/template playbooks to route agents
+  through `docs/agents/skills/INDEX.md` and both generators now copy
+  `docs/agents/skills` into generated projects.
 - 2026-06-14: P1-1 updated starter/template Makefiles for project-local
   `zxs`, added local-bin recovery guidance to generated playbooks, and synced
   `packages/create-zx-vibes/starters/`.

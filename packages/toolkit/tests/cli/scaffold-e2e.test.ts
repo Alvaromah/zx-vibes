@@ -34,14 +34,21 @@ describe('zxs new (scaffold)', () => {
     const project = join(cwd, 'mygame');
     expect(existsSync(join(project, '.gitignore'))).toBe(true); // renamed from 'gitignore'
     expect(existsSync(join(project, 'docs', 'reference', 'screen-layout.md'))).toBe(true);
+    expect(existsSync(join(project, 'docs', 'agents', 'skills', 'INDEX.md'))).toBe(true);
+    expect(existsSync(join(project, 'docs', 'agents', 'skills', 'z80-asm-zx-vibes', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(project, 'docs', 'agents', 'skills', 'zx-screen', 'SKILL.md'))).toBe(true);
     expect(existsSync(join(project, 'docs', 'agents', 'codex-mcp.toml'))).toBe(true);
     expect(existsSync(join(project, '.mcp.json'))).toBe(true);
+    const skillsIndex = readFileSync(join(project, 'docs', 'agents', 'skills', 'INDEX.md'), 'utf8');
+    expect(skillsIndex).toContain('z80-asm-zx-vibes/SKILL.md');
+    expect(skillsIndex).toContain('zx-screen/SKILL.md');
     const agentsMd = readFileSync(join(project, 'AGENTS.md'), 'utf8');
     const claudeMd = readFileSync(join(project, 'CLAUDE.md'), 'utf8');
     expect(claudeMd).toBe(agentsMd);
     expect(agentsMd).toContain('mygame');
     expect(agentsMd).toContain('zxs run');
     expect(agentsMd).toContain('If `zxs` is not found');
+    expect(agentsMd).toContain('docs/agents/skills/INDEX.md');
     expect(agentsMd).toContain('docs/reference/screen-layout.md');
     expect(agentsMd).not.toContain('docs/screen-layout.md');
     const packageJson = JSON.parse(readFileSync(join(project, 'package.json'), 'utf8')) as {

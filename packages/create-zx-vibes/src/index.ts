@@ -60,6 +60,8 @@ function createProject(name: string, template: string, install: boolean): void {
 
   const docsSrc = join(root, 'docs', 'reference');
   if (existsSync(docsSrc)) cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
+  const skillsSrc = join(root, 'docs', 'agents', 'skills');
+  if (existsSync(skillsSrc)) cpSync(skillsSrc, join(dest, 'docs', 'agents', 'skills'), { recursive: true });
 
   if (install) {
     const command = pnpmInstallCommand();

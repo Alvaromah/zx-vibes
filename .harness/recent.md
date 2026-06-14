@@ -5,6 +5,54 @@ Keep 5-10 useful entries, or roughly the last 30 days.
 Older details should live in task files under `tasks/done/` or
 `tasks/archive/`, or in git history.
 
+## 2026-06-14 - Project-local agent skills docs added
+
+Areas: toolkit, assembler, emulator, scaffolding, reference-docs, distribution
+
+Summary:
+Added canonical Codex-style skills under `docs/agents/skills/` for embedded
+assembler syntax, ZX screen/keyboard/attributes/timing/sound/ROM/debug topics,
+rendering patterns, and platformer/arcade/text-adventure genres. Added
+`docs/reference/assembler-syntax.md`, updated the reference index, and narrowed
+the sjasmplus cheatsheet to optional external sjasmplus usage.
+
+Files touched:
+
+- `docs/agents/skills/`
+- `docs/reference/assembler-syntax.md`
+- `docs/reference/INDEX.md`
+- `docs/reference/sjasmplus-cheatsheet.md`
+- `packages/toolkit/scripts/sync-docs.js`
+- `packages/toolkit/package.json`
+- `packages/toolkit/src/cli/commands/new.ts`
+- `packages/create-zx-vibes/src/index.ts`
+- `starters/*/AGENT_PLAYBOOK.md`
+- `packages/toolkit/templates/*/AGENT_PLAYBOOK.md`
+- `packages/create-zx-vibes/starters/*/AGENT_PLAYBOOK.md`
+- synced docs under `packages/toolkit/docs/` and `packages/create-zx-vibes/docs/`
+
+Validation:
+
+- `pnpm --filter @zx-vibes/toolkit run check:docs`
+- `pnpm --filter create-zx-vibes run check:assets`
+- `pnpm --filter @zx-vibes/toolkit typecheck`
+- `pnpm --filter @zx-vibes/toolkit lint` (exit 0; existing warnings only)
+- `pnpm --filter @zx-vibes/toolkit test`
+- `pnpm --filter create-zx-vibes typecheck`
+- `pnpm --filter create-zx-vibes lint` (exit 0; existing warnings only)
+- `pnpm --filter create-zx-vibes build`
+- `pnpm --filter create-zx-vibes test`
+- `pnpm --filter @zx-vibes/asm test`
+- Temp `create-zx-vibes` scaffold smoke verified generated skills/reference
+  files and `AGENTS.md` router reference.
+
+Follow-ups:
+
+- None.
+
+Task file:
+`.harness/tasks/done/T-20260614-02-agent-skills-docs.md`
+
 ## 2026-06-14 - P1-1 generated projects run without global zxs
 
 Areas: toolkit, scaffolding, distribution
