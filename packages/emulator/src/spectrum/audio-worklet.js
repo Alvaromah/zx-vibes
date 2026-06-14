@@ -1,3 +1,5 @@
+import { BeeperResampler } from './beeper-dsp.js';
+
 export class SpectrumAudioWorklet {
   /* -------------------------- ZX constants --------------------------- */
   static T_STATES_PER_FRAME = 69_888; // PAL Spectrum
@@ -223,127 +225,65 @@ export class SpectrumAudioWorklet {
 
   /* ======================= PRIVATE HELPERS =========================== */
   #buildProcessorSource(sr) {
-    /* String-template so we can embed sample-rate-dependent constants */
+    /* String-template so we can embed sample-rate-dependent constants. The
+       shared band-limited resampler is inlined via toString() so there is one
+       source of truth for the DSP across the worklet, the fallback and tests. */
     return `
-            class ZXBeeperProcessor extends AudioWorkletProcessor {
-                static T_STATES_PER_FRAME = 69888;
-                static FRAMES_PER_SECOND  = 50;
-                static CPU_FREQ = ZXBeeperProcessor.T_STATES_PER_FRAME *
-                                   ZXBeeperProcessor.FRAMES_PER_SECOND;
+            const BeeperResampler = ${BeeperResampler.toString()};
 
+            class ZXBeeperProcessor extends AudioWorkletProcessor {
                 constructor () {
                     super();
-                    this.sr = ${sr};                              // fixed
-                    this.tStatesPerSample =
-                        ZXBeeperProcessor.CPU_FREQ / this.sr;
-                    this.samplesPerFrame =
-                        Math.round(this.sr / ZXBeeperProcessor.FRAMES_PER_SECOND);
+                    this.sr = ${sr};
+                    this.samplesPerFrame = Math.round(this.sr / 50);
+                    this.resampler = new BeeperResampler(this.sr, 3500000);
+                    this.tmp = new Float32Array(this.samplesPerFrame + 16);
 
-                    /* Edge data -------------------------------------- */
-                    this.edgeBuf      = null;
-                    this.edgeCount    = 0;
-
-                    /* Synth state ----------------------------------- */
-                    this.currentLevel    = 0;
-                    this.generatorTState = 0;      // absolute
-
-                    /* Filters: 3.5 kHz low-pass + DC blocker -------- */
-                    const fc = 3500;
-                    this.lpAlpha =
-                        1 - Math.exp(-2 * Math.PI * fc / this.sr);
-                    this.lpState   = 0;
-                    this.dcCoeff   = 0.9995;
-                    this.dcPrevIn  = 0;
-                    this.dcPrevOut = 0;
-
-                    /* Frame buffer ---------------------------------- */
-                    this.frameBuf   =
-                        new Float32Array(this.samplesPerFrame + 128);
-                    this.fbPos      = 0;
-                    this.frameReady = false;
+                    /* Sample ring buffer: decouples bursty postMessage frame
+                       delivery from the steady audio callback, so late or
+                       batched frames no longer drop/repeat (the old clicks). */
+                    this.RING   = this.samplesPerFrame * 8;
+                    this.ring   = new Float32Array(this.RING);
+                    this.rHead  = 0;
+                    this.rTail  = 0;
+                    this.avail  = 0;
+                    this.lastOut = 0;
 
                     this.port.onmessage = e => this.#onMessage(e.data);
                 }
 
-                /* ------------------ messages ---------------------- */
                 #onMessage (d) {
                     if (d.frame) {
-                        this.edgeBuf      = new Float64Array(d.edges);
-                        this.edgeCount    = d.edgeCount | 0;
-                        this.frameTStates = d.frameTStates | 0;
-                        this.syncTState   = d.syncTState | 0;
-
-                        this.#renderFrame();
-                        this.frameReady = true;
-
-                    } else if (d.reset) {
-                        this.currentLevel = 0;
-                        this.lpState      = 0;
-                        this.dcPrevIn     = 0;
-                        this.dcPrevOut    = 0;
-                        this.fbPos        = 0;
-                        this.frameReady   = false;
-                        this.generatorTState = 0;
-                    }
-                }
-
-                /* -------------- render single 20 ms frame ---------- */
-                #renderFrame () {
-                    const N = this.samplesPerFrame;
-                    let eix = 0;
-
-                    for (let s = 0; s < N; ++s) {
-                        const relTS = s * this.tStatesPerSample;
-                        while (eix < this.edgeCount &&
-                               this.edgeBuf[eix * 2] <= relTS) {
-                            this.currentLevel = this.edgeBuf[eix * 2 + 1];
-                            ++eix;
+                        const edgeBuf = new Float64Array(d.edges);
+                        const n = this.resampler.renderFrame(
+                            edgeBuf, d.edgeCount | 0, d.frameTStates | 0, this.tmp);
+                        for (let s = 0; s < n; ++s) {
+                            if (this.avail < this.RING) {
+                                this.ring[this.rHead] = this.tmp[s];
+                                this.rHead = (this.rHead + 1) % this.RING;
+                                ++this.avail;
+                            }
                         }
-
-                        /* low-pass */
-                        this.lpState += this.lpAlpha *
-                                        (this.currentLevel - this.lpState);
-
-                        /* bipolar + DC-block */
-                        const bb  = (this.lpState - 0.5) * 2;
-                        const out = bb - this.dcPrevIn +
-                                    this.dcCoeff * this.dcPrevOut;
-                        this.dcPrevIn  = bb;
-                        this.dcPrevOut = out;
-
-                        this.frameBuf[s] = out * 0.6;
+                        /* return buffer for reuse */
+                        this.port.postMessage({ returnBuffer: edgeBuf.buffer },
+                                              [edgeBuf.buffer]);
+                    } else if (d.reset) {
+                        this.resampler.reset();
+                        this.rHead = this.rTail = this.avail = 0;
+                        this.lastOut = 0;
                     }
-
-                    /* advance generator clock & PLL correction */
-                    this.generatorTState += N * this.tStatesPerSample;
-                    const drift = this.syncTState - this.generatorTState;
-                    this.generatorTState += drift * 0.05;        // 5 % pull
-
-                    this.fbPos = 0;
-
-                    /* return buffer for reuse */
-                    this.port.postMessage({ returnBuffer: this.edgeBuf.buffer },
-                                          [this.edgeBuf.buffer]);
-                    this.edgeBuf = null;
-                    this.edgeCount = 0;
                 }
 
-                /* ---------------- audio callback ------------------ */
                 process (_in, out) {
                     const ch = out[0][0];
                     if (!ch) return true;
-
                     for (let i = 0, n = ch.length; i < n; ++i) {
-                        if (this.frameReady && this.fbPos < this.samplesPerFrame) {
-                            ch[i] = this.frameBuf[this.fbPos++];
-                        } else {
-                            /* hold last sample to avoid clicks */
-                            ch[i] = this.fbPos ? this.frameBuf[this.fbPos - 1] : 0;
+                        if (this.avail > 0) {
+                            this.lastOut = this.ring[this.rTail];
+                            this.rTail = (this.rTail + 1) % this.RING;
+                            --this.avail;
                         }
-                        if (this.fbPos >= this.samplesPerFrame) {
-                            this.frameReady = false;
-                            this.fbPos = 0;
-                        }
+                        ch[i] = this.lastOut; // hold last sample on underrun (click-free)
                     }
                     return true;
                 }
