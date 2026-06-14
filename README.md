@@ -178,6 +178,41 @@ pnpm run pack
 pnpm run verify
 ```
 
+### Local Clone Workflows
+
+`pnpm exec zxs ...` is a project-local command. It expects to run inside a
+directory with a `package.json`, so from an empty parent directory pnpm exits
+before `zxs` starts. When testing a clone before publishing changes, build the
+monorepo and invoke the built CLI directly:
+
+```bash
+cd /path/to/zx-vibes
+pnpm install
+pnpm run build
+
+mkdir -p /tmp/zx-vibes-local
+cd /tmp/zx-vibes-local
+node /path/to/zx-vibes/packages/toolkit/dist/cli/index.js new my-game --template platformer
+cd my-game
+node /path/to/zx-vibes/packages/toolkit/dist/cli/index.js verify
+```
+
+After a generated project has installed `zx-vibes`, use the normal project-local
+commands:
+
+```bash
+pnpm exec zxs verify
+pnpm exec zxs preview
+```
+
+`pnpm run pack` writes package tarballs to `.packs/`. Installing only
+`.packs/zx-vibes-*.tgz` is not an all-local monorepo install: packed
+`workspace:*` dependencies are rewritten to exact published versions, so
+`@zx-vibes/toolkit`, `@zx-vibes/asm`, and `@zx-vibes/emulator` resolve like
+regular registry dependencies. Use the built CLI workflow above for local
+clone testing, or publish all package tarballs to a local registry when you
+need to test unpublished package metadata together.
+
 Target a single package when iterating:
 
 ```bash

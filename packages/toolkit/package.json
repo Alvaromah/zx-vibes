@@ -32,9 +32,9 @@
     "node": ">=20"
   },
   "bin": {
-    "zxs": "dist/cli/index.js",
-    "zxs-mcp": "dist/mcp/server.js",
-    "zx-vibes": "dist/cli/index.js"
+    "zxs": "bin/zxs.js",
+    "zxs-mcp": "bin/zxs-mcp.js",
+    "zx-vibes": "bin/zx-vibes.js"
   },
   "exports": {
     ".": {
@@ -49,6 +49,7 @@
     }
   },
   "files": [
+    "bin",
     "dist",
     "docs/reference",
     "recipes",
@@ -60,7 +61,7 @@
     "test": "tsup --silent && node ../../scripts/ensure-shebang.js --silent dist/cli/index.js dist/mcp/server.js && vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src tests",
+    "lint": "eslint src tests bin",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {

@@ -14,6 +14,14 @@ function zxs(cwd: string, ...args: string[]) {
 }
 
 describe('zxs new (scaffold)', () => {
+  it('documents the template option in command help', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'zxs-new-help-'));
+    const help = zxs(cwd, 'new', '--help');
+    expect(help.status, help.stdout + help.stderr).toBe(0);
+    expect(help.stdout).toContain('--template <name>');
+    expect(help.stdout).toContain('starter template: game or platformer');
+  });
+
   it('creates a working game that passes its own smoke test', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'zxs-new-'));
     const created = zxs(cwd, 'new', 'mygame');
@@ -45,6 +53,13 @@ describe('zxs new (scaffold)', () => {
     expect(test.status, test.stdout + test.stderr).toBe(0);
     const json = JSON.parse(test.stdout) as { passed: number; total: number };
     expect(json.passed).toBe(json.total);
+  });
+
+  it('rejects unknown templates with the available template names', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'zxs-new-template-'));
+    const created = zxs(cwd, 'new', 'badtemplate', '--template', 'does-not-exist');
+    expect(created.status).toBe(1);
+    expect(created.stderr).toContain("Unknown template 'does-not-exist'. Available: game, platformer");
   });
 
   it('rejects existing directories and bad names', () => {
