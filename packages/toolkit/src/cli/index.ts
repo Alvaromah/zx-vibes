@@ -334,6 +334,7 @@ program
   .command('preview')
   .description('Build the current project and serve it in a browser player')
   .option('--port <n>', 'local preview port', '5173')
+  .option('--watch', 'rebuild the preview snapshot and reload the page on source changes', false)
   .option(...jsonOpt)
   .action(async (opts) => {
     process.exitCode = await previewCommand(opts);

@@ -100,6 +100,7 @@ declare module '@zx-vibes/emulator/src/spectrum/ula.js' {
     shouldGenerateInterrupt(): boolean;
     setBorderColor(color: number): void;
     setTapeInput(bit: number): void;
+    setPortWriteCallback(callback: (value: number) => void): void;
   }
 
   export const SPECTRUM_KEYS: Record<string, { row: number; col: number }>;

@@ -34,7 +34,7 @@ cd my-game
 pnpm exec zxs doctor
 pnpm exec zxs build
 pnpm exec zxs verify
-pnpm exec zxs preview
+pnpm exec zxs preview --watch
 ```
 
 Use the `platformer` starter when you want a slightly more game-shaped baseline:
@@ -70,7 +70,9 @@ The intended loop is:
 2. Run `pnpm exec zxs build`.
 3. Run `pnpm exec zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png`.
 4. Inspect the screen with `pnpm exec zxs screen --text --png screen.png`.
-5. Run `pnpm exec zxs verify`.
+5. If sound is part of the task, assert `audio.beeperEdges > 0` in run JSON or
+   add a declarative `{ "type": "beeperEdges", "min": 1 }` test.
+6. Run `pnpm exec zxs verify`.
 
 Agents can use the same commands directly, or connect through the MCP server for
 structured build, run, screen, inspect, debug, keyboard, and state tools.
@@ -94,9 +96,13 @@ pnpm exec zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot sc
 pnpm exec zxs screen --text --png screen.png
 pnpm exec zxs test tests
 pnpm exec zxs verify
-pnpm exec zxs preview --port 5173
+pnpm exec zxs preview --port 5173 --watch
 pnpm exec zxs bench --frames 2000
 ```
+
+`zxs preview` serves a browser player with a visible build hash. Add
+`--watch` to rebuild the snapshot and reload the page when source/config files
+change.
 
 Debug and inspection commands are also available:
 
@@ -202,7 +208,7 @@ commands:
 
 ```bash
 pnpm exec zxs verify
-pnpm exec zxs preview
+pnpm exec zxs preview --watch
 ```
 
 `pnpm run pack` writes package tarballs to `.packs/`. Installing only

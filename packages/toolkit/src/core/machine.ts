@@ -40,6 +40,17 @@ export interface RegistersFull {
   halted: boolean;
 }
 
+export interface AudioActivity {
+  /** Writes to the ULA port 0xFE during the last observed run. */
+  portFEWrites: number;
+  /** Changes of bit 4 of port 0xFE during the last observed run. */
+  beeperEdges: number;
+  /** Current bit-4 speaker level after the last observed write. */
+  beeperLevel: number;
+  /** Last value written to port 0xFE. */
+  lastPortFE: number;
+}
+
 /**
  * Headless ZX Spectrum 48K: composes the DOM-free internals of zx-generation
  * (Z80, SpectrumMemory, SpectrumULA, SpectrumDisplay, Tape) the same way the
@@ -57,12 +68,22 @@ export class Machine {
   /** T-states elapsed inside the current (incomplete) frame. */
   tStatesIntoFrame = 0;
 
+  private audioActivity: AudioActivity = {
+    portFEWrites: 0,
+    beeperEdges: 0,
+    beeperLevel: 0,
+    lastPortFE: 0,
+  };
+  private beeperLevel = 0;
+
   private constructor() {
     this.memory = new SpectrumMemory();
     this.ula = new SpectrumULA();
     this.cpu = new Z80(this.memory, this.ula);
     this.tape = new Tape({ cpu: this.cpu, ula: this.ula });
     this.display = new SpectrumDisplay();
+    this.resetAudioActivity();
+    this.ula.setPortWriteCallback((value: number) => this.recordPortFEWrite(value));
   }
 
   /** Fresh machine with the 48K ROM loaded, CPU at the reset vector. */
@@ -98,6 +119,33 @@ export class Machine {
 
   run(opts: RunOptions = {}): RunOutcome {
     return runMachine(this, opts);
+  }
+
+  /** Clears per-run audio counters while preserving the current speaker baseline. */
+  resetAudioActivity(): void {
+    this.beeperLevel = this.ula.speakerBit & 0x01;
+    this.audioActivity = {
+      portFEWrites: 0,
+      beeperEdges: 0,
+      beeperLevel: this.beeperLevel,
+      lastPortFE: this.ula.lastPortFE & 0xff,
+    };
+  }
+
+  getAudioActivity(): AudioActivity {
+    return { ...this.audioActivity };
+  }
+
+  private recordPortFEWrite(value: number): void {
+    const portValue = value & 0xff;
+    const level = (portValue & 0x10) !== 0 ? 1 : 0;
+    this.audioActivity.portFEWrites++;
+    if (level !== this.beeperLevel) {
+      this.audioActivity.beeperEdges++;
+      this.beeperLevel = level;
+    }
+    this.audioActivity.beeperLevel = level;
+    this.audioActivity.lastPortFE = portValue;
   }
 
   /**

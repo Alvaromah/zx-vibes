@@ -34,7 +34,9 @@ type Assertion =
   | { type: 'regEquals'; reg: string; value: number | string }
   | { type: 'borderColor'; equals: number }
   | { type: 'pixelAt'; x: number; y: number; set: boolean }
-  | { type: 'screenChanged'; equals: boolean };
+  | { type: 'screenChanged'; equals: boolean }
+  | { type: 'beeperEdges'; min?: number; max?: number }
+  | { type: 'portFEWrites'; min?: number; max?: number };
 
 export interface TestResult {
   spec: string;
@@ -145,6 +147,7 @@ async function runSpec(specPath: string): Promise<TestResult> {
   runner.applyDue(0);
   const wd = (spec.detectHangs ?? true) ? new Watchdog() : undefined;
   wd?.attach(m);
+  m.resetAudioActivity();
   const outcome = m.run({
     frames: Math.max(spec.frames ?? 120, runner.planFrames),
     onFrame: (f) => runner.applyDue(f),
@@ -154,6 +157,7 @@ async function runSpec(specPath: string): Promise<TestResult> {
 
   const status = outcome.hang ? 'hang' : 'ok';
   const text = screenText(m);
+  const audio = m.getAudioActivity();
   const allRows = text.rows.join('\n');
 
   for (const a of spec.assert) {
@@ -208,6 +212,18 @@ async function runSpec(specPath: string): Promise<TestResult> {
         if (changed !== a.equals) failures.push(`screenChanged: expected ${a.equals}, got ${changed}`);
         break;
       }
+      case 'beeperEdges':
+        if (a.min !== undefined && audio.beeperEdges < a.min)
+          failures.push(`beeperEdges: ${audio.beeperEdges} < min ${a.min}`);
+        if (a.max !== undefined && audio.beeperEdges > a.max)
+          failures.push(`beeperEdges: ${audio.beeperEdges} > max ${a.max}`);
+        break;
+      case 'portFEWrites':
+        if (a.min !== undefined && audio.portFEWrites < a.min)
+          failures.push(`portFEWrites: ${audio.portFEWrites} < min ${a.min}`);
+        if (a.max !== undefined && audio.portFEWrites > a.max)
+          failures.push(`portFEWrites: ${audio.portFEWrites} > max ${a.max}`);
+        break;
     }
   }
 

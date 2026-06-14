@@ -19,6 +19,10 @@ without having run and looked.** Exit codes: 0 ok · 1 build error ·
 2 hang detected (the report names the PC and likely cause) · 3 environment.
 
 Test input by scheduling keys: `zxs run --bin ... --keys "10:P*30,50:SPACE*5"`.
+If the change includes sound, check `audio.beeperEdges` in `zxs run --json`
+and add `{ "type": "beeperEdges", "min": 1 }` to a test.
+For browser playback, use `zxs preview --watch`; the page shows the current
+build hash. Without `--watch`, restart preview after source changes.
 
 ## When stuck
 
