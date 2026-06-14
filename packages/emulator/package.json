@@ -1,6 +1,6 @@
 {
   "name": "@zx-vibes/emulator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ZX Spectrum 48K emulator foundation for zx-vibes.",
   "main": "dist/zxgeneration.umd.min.js",
   "module": "dist/zxgeneration.esm.js",
