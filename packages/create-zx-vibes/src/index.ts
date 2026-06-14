@@ -13,7 +13,7 @@ program
   .description('Create a zx-vibes ZX Spectrum agent project')
   .argument('[name]', 'project directory name')
   .option('--template <name>', 'starter template: game or platformer', 'game')
-  .option('--install', 'run pnpm install after copying files (requires published zx-vibes packages)', false)
+  .option('--install', 'run pnpm install after copying files', false)
   .action((name: string | undefined, opts: { template: string; install?: boolean }) => {
     if (!name) {
       throw new Error('project name is required');
@@ -59,7 +59,8 @@ function createProject(name: string, template: string, install: boolean): void {
   if (existsSync(docsSrc)) cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
 
   if (install) {
-    const result = spawnSync('pnpm', ['install'], { cwd: dest, stdio: 'inherit', shell: process.platform === 'win32' });
+    const command = pnpmInstallCommand();
+    const result = spawnSync(command.bin, command.args, { cwd: dest, stdio: 'inherit' });
     if (result.error) {
       console.warn(`warning: could not run pnpm install (${result.error.message}); run pnpm install manually later`);
     } else if ((result.status ?? 1) !== 0) {
@@ -70,10 +71,12 @@ function createProject(name: string, template: string, install: boolean): void {
   console.log(`Created ${name}/ from the ${template} starter.`);
   console.log('');
   console.log(`  cd ${name}`);
-  console.log('  pnpm install  # after zx-vibes packages are published');
+  if (!install) console.log('  pnpm install');
   console.log('  pnpm exec zxs verify');
-  console.log('');
-  console.log('Install is opt-in for now: pass --install once zx-vibes packages are published.');
+  if (!install) {
+    console.log('');
+    console.log('Pass --install to install dependencies during project creation.');
+  }
 }
 
 function copyTemplate(src: string, dest: string, name: string): void {
@@ -88,4 +91,11 @@ function copyTemplate(src: string, dest: string, name: string): void {
       writeFileSync(to, content);
     }
   }
+}
+
+function pnpmInstallCommand(): { bin: string; args: string[] } {
+  if (process.platform === 'win32') {
+    return { bin: 'cmd.exe', args: ['/d', '/s', '/c', 'pnpm install'] };
+  }
+  return { bin: 'pnpm', args: ['install'] };
 }
