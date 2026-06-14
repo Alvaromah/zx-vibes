@@ -1,6 +1,6 @@
 {
   "name": "@zx-vibes/asm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "zx-vibes Z80 assembler/disassembler for ZX Spectrum 48K workflows.",
   "license": "MIT",
   "author": "Alvaro Mateos",
