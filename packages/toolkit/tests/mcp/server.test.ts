@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdtempSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -122,6 +122,26 @@ describe('zx-vibes MCP server', () => {
     const mem = result['memory'] as { addr: string; ascii: string };
     expect(mem.addr).toContain('msg');
     expect(mem.ascii).toBe('HELLO ZX.');
+  });
+
+  it('zx_run reports beeper activity', async () => {
+    writeFileSync(
+      join(projectRoot, 'beeper.bin'),
+      Buffer.from([0x3e, 0x10, 0xd3, 0xfe, 0xaf, 0xd3, 0xfe, 0xfb, 0x76, 0x18, 0xfd])
+    );
+    const result = textJson(
+      await call('zx_run', {
+        bin: 'beeper.bin',
+        org: '0x8000',
+        frames: 2,
+      })
+    );
+    expect(result['audio']).toMatchObject({
+      beeperEdges: 2,
+      portFEWrites: 2,
+      beeperLevel: 0,
+      lastPortFE: 0,
+    });
   });
 
   it('zx_debug: breakpoint by label, continue, step, disasm', async () => {

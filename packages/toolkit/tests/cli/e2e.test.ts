@@ -84,6 +84,25 @@ describe('zxs e2e (session + exit codes)', () => {
     expect(mem.json!['hex']).toBe(Buffer.from('HELLO ZX\0').toString('hex'));
   });
 
+  it('run JSON reports beeper activity', () => {
+    const binPath = join(cwd, 'beeper.bin');
+    writeFileSync(
+      binPath,
+      Buffer.from([0x3e, 0x10, 0xd3, 0xfe, 0xaf, 0xd3, 0xfe, 0xfb, 0x76, 0x18, 0xfd])
+    );
+    const res = zxs(cwd, 'run', '--bin', binPath, '--org', '0x8000', '--frames', '2', '--json');
+
+    expect(res.status).toBe(0);
+    expect(res.json).toMatchObject({
+      audio: {
+        beeperEdges: 2,
+        portFEWrites: 2,
+        beeperLevel: 0,
+        lastPortFE: '0x00',
+      },
+    });
+  });
+
   it('the tight-loop verdict suggests --keys for input waits', () => {
     const binPath = join(cwd, 'loop.bin');
     writeFileSync(binPath, Buffer.from([0x18, 0xfe])); // JR $

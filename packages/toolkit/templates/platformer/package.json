@@ -8,7 +8,7 @@
     "run": "zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png",
     "test": "zxs test tests",
     "verify": "zxs verify",
-    "preview": "zxs preview"
+    "preview": "zxs preview --watch"
   },
   "devDependencies": {
     "zx-vibes": "^0.1.0"

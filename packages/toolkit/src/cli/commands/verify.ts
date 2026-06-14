@@ -44,7 +44,9 @@ export async function verifyCommand(opts: VerifyCommandOptions): Promise<number>
     machine.loadBinary(new Uint8Array(readFileSync(buildResult.outputs.bin)), parseAddress(configuredOrg(undefined, loaded.config)));
     const wd = new Watchdog();
     wd.attach(machine);
+    machine.resetAudioActivity();
     const outcome = machine.run({ frames: 300, watchdog: wd });
+    const audio = machine.getAudioActivity();
     wd.detach();
     const text = screenText(machine);
     screenshotPath = opts.screenshot ?? join('.zxs', 'verify-screen.png');
@@ -56,6 +58,7 @@ export async function verifyCommand(opts: VerifyCommandOptions): Promise<number>
       framesRun: outcome.framesRun,
       haltSynced: wd.haltSynced(outcome.framesRun),
       screen: { nonBlankCells: text.nonBlankCells, png: screenshotPath },
+      audio,
       ...(outcome.hang ? { hang: outcome.hang } : {}),
     };
   }

@@ -90,6 +90,7 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
 
   const frameBudget = opts.untilBreak ? Math.max(frames, 3000) : frames;
   const started = performance.now();
+  m.resetAudioActivity();
   const outcome = m.run({
     frames: Math.max(frameBudget, runner.planFrames),
     ...(opts.untilPc !== undefined ? { untilPC: parseAddress(opts.untilPc) } : {}),
@@ -101,6 +102,7 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
     ...(monitor ? { watchpoints: monitor } : {}),
   });
   const wallTimeMs = Math.round(performance.now() - started);
+  const audio = m.getAudioActivity();
   monitor?.detach();
   wd?.detach();
 
@@ -167,6 +169,12 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
     tstatesRun: outcome.tstatesRun,
     wallTimeMs,
     ...(wd ? { loop: { haltSynced: wd.haltSynced(outcome.framesRun) } } : {}),
+    audio: {
+      beeperEdges: audio.beeperEdges,
+      portFEWrites: audio.portFEWrites,
+      beeperLevel: audio.beeperLevel,
+      lastPortFE: hex(audio.lastPortFE, 2),
+    },
     registers: {
       pc: hex(regs.pc),
       sp: hex(regs.sp),
@@ -219,6 +227,7 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
       `screen: ${text.nonBlankCells} non-blank cells, border ${text.borderColor}` +
         (screenshotPath ? `, saved ${screenshotPath}` : '')
     );
+    lines.push(`audio: ${audio.beeperEdges} beeper edges from ${audio.portFEWrites} port writes`);
     if (opts.text) lines.push('┌' + '─'.repeat(32) + '┐', ...text.rows.map((r) => `│${r}│`), '└' + '─'.repeat(32) + '┘');
     return lines.join('\n');
   });

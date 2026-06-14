@@ -110,6 +110,7 @@ class SpectralSession {
 
     wd?.attach(m);
     monitor?.attach(m);
+    m.resetAudioActivity();
     const outcome = m.run({
       ...opts,
       frames: Math.max(opts.frames ?? 300, runner.planFrames),
@@ -162,6 +163,7 @@ class SpectralSession {
       framesRun: outcome.framesRun,
       tstatesRun: outcome.tstatesRun,
       ...(haltSynced !== undefined ? { loop: { haltSynced } } : {}),
+      audio: m.getAudioActivity(),
       registers: {
         pc: this.sym(regs.pc),
         sp: hex(regs.sp),

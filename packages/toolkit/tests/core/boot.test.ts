@@ -62,4 +62,28 @@ describe('Machine.loadBinary', () => {
     expect(() => m.loadBinary(new Uint8Array(16), 0x3fff)).toThrow(/RAM/);
     expect(() => m.loadBinary(new Uint8Array(2), 0xffff)).toThrow(/RAM/);
   });
+
+  it('reports beeper activity from port 0xFE writes', () => {
+    const m = Machine.boot();
+    // LD A,0x10 ; OUT (0xFE),A ; XOR A ; OUT (0xFE),A ; EI ; HALT ; JR HALT
+    const program = new Uint8Array([0x3e, 0x10, 0xd3, 0xfe, 0xaf, 0xd3, 0xfe, 0xfb, 0x76, 0x18, 0xfd]);
+    m.loadBinary(program, 0x8000);
+
+    m.resetAudioActivity();
+    m.run({ frames: 2 });
+    expect(m.getAudioActivity()).toMatchObject({
+      portFEWrites: 2,
+      beeperEdges: 2,
+      beeperLevel: 0,
+      lastPortFE: 0,
+    });
+
+    m.resetAudioActivity();
+    m.run({ frames: 1 });
+    expect(m.getAudioActivity()).toMatchObject({
+      portFEWrites: 0,
+      beeperEdges: 0,
+      beeperLevel: 0,
+    });
+  });
 });

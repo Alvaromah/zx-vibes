@@ -118,6 +118,9 @@ export class ZXSpectrum {
     // Custom key mappings
     this.customKeyMap = {};
 
+    // Audio resume gesture handling
+    this._audioResumeHandler = null;
+
     // Touch keyboard
     this.touchKeyboard = null;
 
@@ -136,6 +139,9 @@ export class ZXSpectrum {
 
     // Setup visibility handling
     this._setupVisibilityHandling();
+
+    // Setup audio resume handling for browser autoplay policies
+    this._setupAudioResumeHandling();
 
     // Initialize with ROM if provided
     if (this.options.rom) {
@@ -379,6 +385,38 @@ export class ZXSpectrum {
         }
       });
     }
+  }
+
+  /**
+   * Resume suspended audio contexts from user gestures.
+   *
+   * @private
+   * @returns {void}
+   */
+  _setupAudioResumeHandling() {
+    if (!this.sound || typeof document === 'undefined') {
+      return;
+    }
+    this._audioResumeHandler = () => {
+      this.resumeAudio().catch((err) => console.warn('Failed to resume audio context:', err));
+    };
+    document.addEventListener('pointerdown', this._audioResumeHandler);
+    document.addEventListener('keydown', this._audioResumeHandler);
+  }
+
+  /**
+   * Remove audio gesture listeners installed by _setupAudioResumeHandling().
+   *
+   * @private
+   * @returns {void}
+   */
+  _removeAudioResumeHandling() {
+    if (!this._audioResumeHandler || typeof document === 'undefined') {
+      return;
+    }
+    document.removeEventListener('pointerdown', this._audioResumeHandler);
+    document.removeEventListener('keydown', this._audioResumeHandler);
+    this._audioResumeHandler = null;
   }
 
   /**
@@ -947,6 +985,23 @@ export class ZXSpectrum {
   }
 
   /**
+   * Resume the browser audio context after a user gesture.
+   *
+   * @async
+   * @returns {Promise<boolean>} True when audio is running after the attempt
+   */
+  async resumeAudio() {
+    const context = this.sound?.audioContext;
+    if (!context) {
+      return false;
+    }
+    if (context.state === 'suspended') {
+      await context.resume();
+    }
+    return context.state === 'running';
+  }
+
+  /**
    * Enable or disable audio debug mode
    *
    * @param {boolean} enabled - True to enable debug mode
@@ -1005,6 +1060,7 @@ export class ZXSpectrum {
    */
   destroy() {
     this.stop();
+    this._removeAudioResumeHandling();
 
     // Remove keyboard handlers
     if (this.options.handleKeyboard && this._keyDownHandler) {

@@ -36,6 +36,7 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       })),
       putImageData: jest.fn(),
       fillRect: jest.fn(),
+      clearRect: jest.fn(),
       fillStyle: '',
       };
     }

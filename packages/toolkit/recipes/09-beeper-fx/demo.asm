@@ -1,6 +1,6 @@
 ; Demo: play a zap on a blue border, then settle into a HALT-synced idle.
-; Headless zxs has no audio out — what the test asserts is the contract:
-; the effect terminates, the border survives, and the loop stays healthy.
+; Headless zxs has no audio out, but it reports beeper edges. The test asserts
+; that the effect toggles sound, terminates, preserves the border, and idles.
     DEVICE ZXSPECTRUM48
     ORG 0x8000
 
