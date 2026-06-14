@@ -1,4 +1,8 @@
-# zx-vibes
+<p align="center">
+  <img src="assets/zx-vibes-logo.png" alt="ZX Vibes sticker logo" width="520">
+</p>
+
+# ZX Vibes
 
 ZX Spectrum vibe-coding toolkit for coding agents and humans.
 
