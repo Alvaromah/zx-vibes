@@ -1,7 +1,8 @@
+import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EXIT, emit, userError } from '../output.js';
+import { EXIT, emit, envError, userError } from '../output.js';
 
 /** Walks up from this module to the package root (the dir holding templates/). */
 function toolkitRoot(): string {
@@ -29,7 +30,7 @@ function copyTemplate(src: string, dest: string, name: string): void {
   }
 }
 
-export function newCommand(name: string, opts: { json: boolean; template?: string }): number {
+export function newCommand(name: string, opts: { json: boolean; template?: string; install?: boolean }): number {
   if (!/^[a-z0-9][a-z0-9-_]*$/i.test(name)) {
     throw userError(`Invalid project name '${name}' (use letters, digits, - and _)`, 'new');
   }
@@ -63,24 +64,68 @@ export function newCommand(name: string, opts: { json: boolean; template?: strin
     cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
   }
 
+  const shouldInstall = opts.install ?? true;
+  const installResult = shouldInstall ? installDependencies(dest, opts.json) : undefined;
   const next = [
     `cd ${name}`,
-    'zxs build src/main.asm',
-    'zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png',
-    'zxs verify',
+    ...(shouldInstall ? [] : ['npm install']),
+    'npm run build',
+    'npm test',
+    'npm run verify',
   ];
   emit(
-    { ok: true, stage: 'new', project: dest, template, next },
+    {
+      ok: true,
+      stage: 'new',
+      project: dest,
+      template,
+      install: shouldInstall ? installResult : { ok: false, skipped: true },
+      next,
+    },
     opts.json,
     () =>
       [
         `Created ${name}/ from the ${template} starter.`,
+        shouldInstall
+          ? 'Installed local zx-vibes dependency; npm scripts now use the project-local zxs bin.'
+          : 'Skipped dependency installation; run npm install before npm scripts or npx zxs.',
         'Agent playbooks are in AGENTS.md and CLAUDE.md; reference docs are in docs/reference/.',
         '',
         ...next.map((n) => `  ${n}`),
       ].join('\n')
   );
   return EXIT.OK;
+}
+
+function installDependencies(dest: string, json: boolean): { ok: true; command: string } {
+  const command = npmInstallCommand();
+  const result = spawnSync(command.bin, command.args, {
+    cwd: dest,
+    encoding: 'utf8',
+    stdio: json ? 'pipe' : 'inherit',
+  });
+  if (result.error) {
+    throw envError(
+      `Created project but could not run npm install (${result.error.message}). Run npm install inside the project, then npm run build.`,
+      'new'
+    );
+  }
+  if ((result.status ?? 1) !== 0) {
+    const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
+    const detail = stderr ? `: ${stderr}` : '';
+    throw envError(
+      `Created project but npm install failed with exit code ${result.status ?? 1}${detail}. Run npm install inside the project, then npm run build.`,
+      'new'
+    );
+  }
+  return { ok: true, command: 'npm install' };
+}
+
+function npmInstallCommand(): { bin: string; args: string[] } {
+  if (process.platform === 'win32') {
+    return { bin: 'cmd.exe', args: ['/d', '/s', '/c', 'npm install'] };
+  }
+  return { bin: 'npm', args: ['install'] };
 }
 
 function codexToml(): string {

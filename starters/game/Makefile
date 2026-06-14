@@ -1,15 +1,17 @@
-# __NAME__ — Spectral shortcuts (zxs must be on PATH)
+# __NAME__ — Spectral shortcuts
+
+ZXS ?= npx --no-install zxs
 
 build:
-	zxs build
+	$(ZXS) build
 
 run: build
-	zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png
+	$(ZXS) run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png
 
 test:
-	zxs verify
+	$(ZXS) verify
 
 screen:
-	zxs screen --text
+	$(ZXS) screen --text
 
 .PHONY: build run test screen

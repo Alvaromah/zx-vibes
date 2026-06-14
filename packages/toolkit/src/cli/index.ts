@@ -290,6 +290,7 @@ program
   .description('Scaffold a game project (working skeleton + agent playbook + docs)')
   .argument('<name>', 'project directory name')
   .option('--template <name>', 'starter template: game or platformer', 'game')
+  .option('--no-install', 'skip npm install after scaffolding')
   .option(...jsonOpt)
   .action((name: string, opts) => {
     process.exitCode = newCommand(name, opts);

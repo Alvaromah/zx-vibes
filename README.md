@@ -205,13 +205,14 @@ pnpm run build
 
 mkdir -p /tmp/zx-vibes-local
 cd /tmp/zx-vibes-local
-node /path/to/zx-vibes/packages/toolkit/dist/cli/index.js new my-game --template platformer
+node /path/to/zx-vibes/packages/toolkit/dist/cli/index.js new my-game --template platformer --no-install
 cd my-game
 node /path/to/zx-vibes/packages/toolkit/dist/cli/index.js verify
 ```
 
-After a generated project has installed `zx-vibes`, use the normal project-local
-commands:
+Published `zxs new` installs `zx-vibes` by default. Use `--no-install` when
+testing an unpublished local checkout as above. Once dependencies are installed,
+use the normal project-local commands:
 
 ```bash
 pnpm exec zxs verify

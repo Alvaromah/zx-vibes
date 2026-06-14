@@ -3,6 +3,11 @@
 You are developing a Z80 assembly game with a real feedback loop. The
 emulator runs headless and FAST (130× real hardware) — run it constantly.
 
+## Tooling
+
+This project expects the local `zx-vibes` devDependency. If `zxs` is not found,
+run `npm install`; then use `npm run build`, `npm test`, or `npx zxs <cmd>`.
+
 ## The loop (non-negotiable)
 
 After EVERY source change:

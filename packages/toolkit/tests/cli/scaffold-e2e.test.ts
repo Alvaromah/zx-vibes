@@ -20,12 +20,16 @@ describe('zxs new (scaffold)', () => {
     expect(help.status, help.stdout + help.stderr).toBe(0);
     expect(help.stdout).toContain('--template <name>');
     expect(help.stdout).toContain('starter template: game or platformer');
+    expect(help.stdout).toContain('--no-install');
   });
 
   it('creates a working game that passes its own smoke test', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'zxs-new-'));
-    const created = zxs(cwd, 'new', 'mygame');
-    expect(created.status).toBe(0);
+    const created = zxs(cwd, 'new', 'mygame', '--no-install');
+    expect(created.status, created.stdout + created.stderr).toBe(0);
+    expect(created.stdout).toContain('npm install');
+    expect(created.stdout).toContain('npm run build');
+    expect(created.stdout).toContain('npm test');
 
     const project = join(cwd, 'mygame');
     expect(existsSync(join(project, '.gitignore'))).toBe(true); // renamed from 'gitignore'
@@ -37,8 +41,16 @@ describe('zxs new (scaffold)', () => {
     expect(claudeMd).toBe(agentsMd);
     expect(agentsMd).toContain('mygame');
     expect(agentsMd).toContain('zxs run');
+    expect(agentsMd).toContain('If `zxs` is not found');
     expect(agentsMd).toContain('docs/reference/screen-layout.md');
     expect(agentsMd).not.toContain('docs/screen-layout.md');
+    const packageJson = JSON.parse(readFileSync(join(project, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(packageJson.scripts.build).toBe('zxs build');
+    expect(packageJson.scripts.test).toBe('zxs test tests');
+    expect(packageJson.devDependencies['zx-vibes']).toBe('^0.1.0');
 
     // The skeleton must build, run HALT-synced, and move under scheduled keys.
     const test = zxs(project, 'test', 'tests', '--json');
@@ -47,7 +59,7 @@ describe('zxs new (scaffold)', () => {
 
   it('creates a platformer starter with movement and jump checks', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'zxs-new-platformer-'));
-    const created = zxs(cwd, 'new', 'myplatformer', '--template', 'platformer');
+    const created = zxs(cwd, 'new', 'myplatformer', '--template', 'platformer', '--no-install');
     expect(created.status, created.stdout + created.stderr).toBe(0);
 
     const project = join(cwd, 'myplatformer');
@@ -66,9 +78,9 @@ describe('zxs new (scaffold)', () => {
 
   it('rejects existing directories and bad names', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'zxs-new-'));
-    expect(zxs(cwd, 'new', 'ok-name').status).toBe(0);
-    expect(zxs(cwd, 'new', 'ok-name').status).toBe(1); // already exists
-    expect(zxs(cwd, 'new', '../evil').status).toBe(1);
+    expect(zxs(cwd, 'new', 'ok-name', '--no-install').status).toBe(0);
+    expect(zxs(cwd, 'new', 'ok-name', '--no-install').status).toBe(1); // already exists
+    expect(zxs(cwd, 'new', '../evil', '--no-install').status).toBe(1);
   });
 });
 
