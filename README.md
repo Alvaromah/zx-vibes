@@ -55,7 +55,8 @@ The generated project includes:
 - `lib/` helpers for screen and keyboard routines.
 - `tests/smoke.test.json` for declarative verification.
 - `zx.config.json` for build configuration.
-- `CLAUDE.md` with an agent playbook that also works as human guidance.
+- `AGENTS.md` and `CLAUDE.md` with the same agent playbook that also works as
+  human guidance.
 - npm scripts for `build`, `run`, `test`, `verify`, and `preview`.
 
 ## Working With an Agent

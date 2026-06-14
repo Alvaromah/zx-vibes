@@ -54,6 +54,9 @@ function createProject(name: string, template: string, install: boolean): void {
   const dest = resolve(process.cwd(), name);
   if (existsSync(dest)) throw new Error(`Directory already exists: ${dest}`);
   copyTemplate(src, dest, name);
+  const agentPlaybook = readFileSync(join(src, 'AGENT_PLAYBOOK.md'), 'utf8').replaceAll('__NAME__', name);
+  writeFileSync(join(dest, 'AGENTS.md'), agentPlaybook);
+  writeFileSync(join(dest, 'CLAUDE.md'), agentPlaybook);
 
   const docsSrc = join(root, 'docs', 'reference');
   if (existsSync(docsSrc)) cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
@@ -82,6 +85,7 @@ function createProject(name: string, template: string, install: boolean): void {
 function copyTemplate(src: string, dest: string, name: string): void {
   mkdirSync(dest, { recursive: true });
   for (const entry of readdirSync(src)) {
+    if (entry === 'AGENT_PLAYBOOK.md') continue;
     const from = join(src, entry);
     const to = join(dest, entry === 'gitignore' ? '.gitignore' : entry);
     if (statSync(from).isDirectory()) {

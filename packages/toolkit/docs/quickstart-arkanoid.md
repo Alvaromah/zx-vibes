@@ -49,7 +49,7 @@ Esto crea un juego *que ya funciona* (una nave que se mueve con QAOP), con:
 - `src/main.asm` — el código
 - `lib/` — rutinas probadas (limpiar pantalla, sprites XOR, teclado)
 - `tests/` — tests declarativos para `zxs test`
-- `CLAUDE.md` / `AGENTS.md` — el manual si lo va a pilotar un agente
+- `AGENTS.md` / `CLAUDE.md` — el manual si lo va a pilotar un agente
 
 Y este es **el bucle sagrado**, el gesto que repetirás cien veces:
 
@@ -687,7 +687,7 @@ de menor a mayor:
 
 Todo lo que acabas de hacer a mano, un agente lo hace solo — esa es la
 tesis de Spectral. En el directorio del proyecto (`zxs new` ya dejó el
-manual `CLAUDE.md`/`AGENTS.md` preparado), abre Claude Code y di:
+manual `AGENTS.md`/`CLAUDE.md` preparado), abre Claude Code y di:
 
 ```
 Build a playable Arkanoid. Follow CLAUDE.md.

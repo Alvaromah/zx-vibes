@@ -16,6 +16,7 @@ function toolkitRoot(): string {
 function copyTemplate(src: string, dest: string, name: string): void {
   mkdirSync(dest, { recursive: true });
   for (const entry of readdirSync(src)) {
+    if (entry === 'AGENT_PLAYBOOK.md') continue;
     const from = join(src, entry);
     // npm strips .gitignore from packages; the template ships it unprefixed.
     const to = join(dest, entry === 'gitignore' ? '.gitignore' : entry);
@@ -49,8 +50,9 @@ export function newCommand(name: string, opts: { json: boolean; template?: strin
   }
   copyTemplate(templateDir, dest, name);
 
-  // Same playbook under the name Codex-style agents look for.
-  writeFileSync(join(dest, 'AGENTS.md'), readFileSync(join(dest, 'CLAUDE.md'), 'utf8'));
+  const agentPlaybook = readFileSync(join(templateDir, 'AGENT_PLAYBOOK.md'), 'utf8').replaceAll('__NAME__', name);
+  writeFileSync(join(dest, 'AGENTS.md'), agentPlaybook);
+  writeFileSync(join(dest, 'CLAUDE.md'), agentPlaybook);
   writeFileSync(join(dest, '.mcp.json'), `${claudeMcpJson()}\n`);
   mkdirSync(join(dest, 'docs', 'agents'), { recursive: true });
   writeFileSync(join(dest, 'docs', 'agents', 'codex-mcp.toml'), `${codexToml()}\n`);

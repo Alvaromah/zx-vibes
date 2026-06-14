@@ -32,11 +32,13 @@ describe('zxs new (scaffold)', () => {
     expect(existsSync(join(project, 'docs', 'reference', 'screen-layout.md'))).toBe(true);
     expect(existsSync(join(project, 'docs', 'agents', 'codex-mcp.toml'))).toBe(true);
     expect(existsSync(join(project, '.mcp.json'))).toBe(true);
+    const agentsMd = readFileSync(join(project, 'AGENTS.md'), 'utf8');
     const claudeMd = readFileSync(join(project, 'CLAUDE.md'), 'utf8');
-    expect(claudeMd).toContain('mygame');
-    expect(claudeMd).toContain('zxs run');
-    expect(claudeMd).toContain('docs/reference/screen-layout.md');
-    expect(claudeMd).not.toContain('docs/screen-layout.md');
+    expect(claudeMd).toBe(agentsMd);
+    expect(agentsMd).toContain('mygame');
+    expect(agentsMd).toContain('zxs run');
+    expect(agentsMd).toContain('docs/reference/screen-layout.md');
+    expect(agentsMd).not.toContain('docs/screen-layout.md');
 
     // The skeleton must build, run HALT-synced, and move under scheduled keys.
     const test = zxs(project, 'test', 'tests', '--json');

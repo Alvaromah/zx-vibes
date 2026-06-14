@@ -50,4 +50,3 @@ build hash. Without `--watch`, restart preview after source changes.
 
 `zxs verify` must pass. When you add a mechanic, add an assertion to
 `tests/smoke.test.json` (or a new spec) that would catch its regression.
-

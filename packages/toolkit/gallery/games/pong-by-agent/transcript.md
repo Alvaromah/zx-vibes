@@ -7,7 +7,7 @@ and provenance live in `packages/toolkit/examples/pong-by-agent/` in the zx-vibe
 ## The run
 
 - **Agent**: Claude (general-purpose subagent), driven only by the
-  scaffold's CLAUDE.md playbook, the `docs/` references, and the `zxs` CLI.
+  scaffold's AGENTS.md/CLAUDE.md playbook, the `docs/` references, and the `zxs` CLI.
 - **Starting point**: `zxs new pong` (the stock QAOP skeleton — no game code).
 - **Effort**: ~8 build/run cycles, 40 tool calls, ~11 minutes wall clock.
 

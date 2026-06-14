@@ -8,7 +8,7 @@ The Phase 4 milestone artifact: a playable ZX Spectrum 48K Pong built
 ## Provenance (full transparency)
 
 - **Agent**: Claude (general-purpose subagent), driven only by the scaffold's
-  CLAUDE.md playbook, the `docs/` references, and the `zxs` CLI.
+  AGENTS.md/CLAUDE.md playbook, the `docs/` references, and the `zxs` CLI.
 - **Starting point**: `zxs new pong` (the stock QAOP skeleton — no game code).
 - **Effort**: ~8 build/run cycles, 40 tool calls, ~11 minutes wall clock.
 - **The bug story**: the agent's only real bug was a zero-terminated string
