@@ -6,8 +6,8 @@ Last updated: 2026-06-14
 
 `zx-vibes` is a pnpm monorepo for a ZX Spectrum 48K coding-agent toolchain. It
 packages an embedded TypeScript Z80 assembler, a JavaScript Spectrum emulator,
-the `zxs` CLI, an MCP server, starter projects, reference docs, and a playable
-gallery.
+the `zxs` CLI, an MCP server, starter projects, reference docs, project-local
+agent skills, and a playable gallery.
 
 The primary users are humans and coding agents building small ZX Spectrum
 projects with a closed feedback loop: assemble, run headless, inspect screen
@@ -28,8 +28,9 @@ artifacts during builds.
 - `scaffolding` (`packages/create-zx-vibes/`, `starters/`,
   `packages/toolkit/templates/`): project generator and source starter/template
   assets.
-- `reference-docs` (`docs/reference/` plus copied package docs): Spectrum
-  reference docs copied into generated projects and toolkit docs.
+- `reference-docs` (`docs/reference/`, `docs/agents/skills/`, plus copied
+  package docs): Spectrum reference docs and agent skills copied into generated
+  projects and toolkit docs.
 - `gallery` (`gallery/`, `packages/toolkit/gallery/`): static GitHub Pages
   gallery with playable generated game artifacts.
 - `distribution` (repo root, `.github/`, `.changeset/`, `packages/zx-vibes/`):
@@ -44,7 +45,9 @@ umbrella `zx-vibes` package exposes bin shims that delegate to toolkit and asm.
 `create-zx-vibes` builds a generator package and syncs root `starters/` and
 `docs/` into `packages/create-zx-vibes/` through
 `packages/create-zx-vibes/scripts/sync-assets.js`. The toolkit separately ships
-templates, recipes, docs, examples, and gallery assets.
+templates, recipes, docs, examples, and gallery assets, with
+`packages/toolkit/scripts/sync-docs.js` checking its copied reference docs and
+agent skills.
 
 CI builds, typechecks, lints, and tests across Node 20/22 and major OSes.
 GitHub Pages deploys the root `gallery/` directory. Release validation uses the
@@ -68,7 +71,7 @@ changesets.
 - Keep starter projects compatible with the embedded `@zx-vibes/asm` assembler
   unless the change is explicitly about optional `sjasmplus` support.
 - If root `starters/` or `docs/` change, check copied assets for
-  `create-zx-vibes`.
+  `create-zx-vibes`; if root docs change, also check toolkit docs sync.
 - Keep a single canonical `AGENTS.md` at the repository root. Area-specific
   guidance belongs in `.harness/areas/*.md`, not package-level `AGENTS.md`
   files.

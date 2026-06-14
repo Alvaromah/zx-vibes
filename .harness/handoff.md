@@ -4,12 +4,13 @@ Last updated: 2026-06-14
 
 ## Mode for next session
 
-ASK
+TASK if continuing the `FEEDBACK.md` backlog; otherwise ASK.
 
 ## Next action
 
-Use this root harness as the entry point for future work. There is no active
-implementation task queued by this setup session.
+No active task. P1-1 from `FEEDBACK.md` and the project-local agent skills
+docs task are complete. If continuing the backlog, start with P1-2
+(`docs/reference/sound.md`) and keep one branch/PR per item.
 
 ## Read order
 
@@ -23,10 +24,12 @@ implementation task queued by this setup session.
 
 Current task:
 
-- None.
+- None active. Last completed: `T-20260614-02`.
 
 Relevant recent entries:
 
+- `recent.md` entry for project-local agent skills docs.
+- `recent.md` entry for P1-1 generated projects running without global `zxs`.
 - `recent.md` entry for 2026-06-14 root harness creation.
 
 Relevant decisions:
@@ -36,12 +39,17 @@ Relevant decisions:
 
 Relevant areas:
 
-- All areas were initialized during harness creation.
+- Agent skills docs touched toolkit, assembler, emulator, scaffolding,
+  reference-docs, and distribution.
+- P1-1 touched toolkit, scaffolding, and distribution.
 
 ## Assumptions to verify
 
 - The area map reflects the current README and workspace package layout.
 - Root `starters/` and `docs/` remain the source assets for generator sync.
+- `pnpm --filter @zx-vibes/emulator lint test` is not a valid combined pnpm
+  invocation here; it forwards `test` as an ESLint path. Run emulator `lint`
+  and `test` separately.
 
 ## Validation expectations
 

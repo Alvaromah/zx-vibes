@@ -67,4 +67,7 @@ pnpm --filter @zx-vibes/asm test
 
 ## Recent area notes
 
+- 2026-06-14: T-20260614-02 added `docs/reference/assembler-syntax.md` and
+  `docs/agents/skills/z80-asm-zx-vibes/` documenting the embedded assembler
+  surface from `packages/asm/README.md`.
 - Root harness initialized this area on 2026-06-14.

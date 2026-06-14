@@ -83,4 +83,10 @@ pnpm run verify
 
 ## Recent area notes
 
+- 2026-06-14: T-20260614-02 updated toolkit package metadata so
+  `@zx-vibes/toolkit` ships `docs/agents` and added package-level docs
+  sync/check scripts.
+- 2026-06-14: P1-1 added `.changeset/runnable-zxs-new.md` for the
+  user-facing scaffold behavior change and documented local checkout smoke
+  usage in the root README.
 - Root harness initialized this area on 2026-06-14.
