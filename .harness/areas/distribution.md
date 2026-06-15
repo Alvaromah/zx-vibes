@@ -83,6 +83,9 @@ pnpm run verify
 
 ## Recent area notes
 
+- 2026-06-15: T-20260615-01 added changeset
+  `.changeset/feedback-toolkit-improvements.md`; root `pnpm run verify`
+  passed after cross-package toolkit/docs/scaffold changes.
 - 2026-06-14: T-20260614-02 updated toolkit package metadata so
   `@zx-vibes/toolkit` ships `docs/agents` and added package-level docs
   sync/check scripts.

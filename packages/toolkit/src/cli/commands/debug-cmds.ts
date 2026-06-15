@@ -1,8 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { disassemble, disassembleOne } from '../../core/disasm.js';
+import { structureDisasmLine } from '../../core/disasm-analysis.js';
+import { disassemble, disassembleOne, type DisasmLine } from '../../core/disasm.js';
 import type { Machine } from '../../core/machine.js';
 import { SymbolTable } from '../../core/symbols.js';
 import { Tracer } from '../../core/trace.js';
+import { loadMachineFromSource, type MachineSourceOptions } from '../machine-source.js';
 import { EXIT, emit, ensureParentDir, hex, parseAddress, parseCount, userError } from '../output.js';
 import {
   loadSessionMachine,
@@ -170,6 +172,10 @@ export function watchRmCommand(idOrAll: string, opts: { state?: string; json: bo
   return removed > 0 ? EXIT.OK : EXIT.USER_ERROR;
 }
 
+export function watchClearCommand(opts: { state?: string; json: boolean }): number {
+  return watchRmCommand('all', opts);
+}
+
 /* ───────────────────── step ───────────────────── */
 
 export function stepCommand(
@@ -243,29 +249,40 @@ export function stepCommand(
 
 export function disasmCommand(
   spec: string,
-  opts: { count: string; state?: string; json: boolean }
+  opts: { count: string; state?: string; json: boolean } & MachineSourceOptions
 ): number {
-  const m = loadSessionMachine(opts.state);
-  if (!m) {
-    throw userError('No session state found. Run `zxs run` first.', 'disasm');
-  }
+  const loaded = loadMachineFromSource(opts, 'disasm');
+  const m = loaded.machine;
   const meta = loadSessionMeta(opts.state);
   const symbols = loadSymbols(meta);
+  const range = parseAddressRange(spec);
   const addr =
-    spec.toUpperCase() === 'PC' ? m.cpu.registers.getPC() : resolveSpec(spec, symbols);
+    range?.from ?? (spec.toUpperCase() === 'PC' ? m.cpu.registers.getPC() : resolveSpec(spec, symbols));
   if (addr === undefined) {
     throw userError(`Cannot resolve '${spec}' to an address`, 'disasm');
   }
 
   const count = parseCount(opts.count, 'instruction count');
-  const lines = disassemble((a) => m.memory.read(a), addr, count).map((l) => ({
-    addr: sym(l.addr, symbols),
-    bytes: l.bytes.map((b) => b.toString(16).padStart(2, '0')).join(' '),
-    text: l.text,
-    ...(symbols?.addrToSource(l.addr) ? { source: symbols.addrToSource(l.addr) } : {}),
-  }));
+  const rawLines = range
+    ? disassembleRange((a) => m.memory.read(a), range.from, range.to)
+    : disassemble((a) => m.memory.read(a), addr, count);
+  const lines = rawLines.map((l) => {
+    const structured = structureDisasmLine(l);
+    return {
+      addr: sym(l.addr, symbols),
+      address: hex(l.addr),
+      endAddress: hex(structured.endAddress),
+      bytes: l.bytes.map((b) => b.toString(16).padStart(2, '0')).join(' '),
+      byteValues: l.bytes,
+      text: l.text,
+      mnemonic: structured.mnemonic,
+      operands: structured.operands,
+      targets: structured.targets.map((t) => ({ ...t, addr: hex(t.addr) })),
+      ...(symbols?.addrToSource(l.addr) ? { source: symbols.addrToSource(l.addr) } : {}),
+    };
+  });
 
-  emit({ ok: true, stage: 'disasm', lines }, opts.json, () =>
+  emit({ ok: true, stage: 'disasm', source: loaded.source, lines }, opts.json, () =>
     lines.map((l) => `${l.addr.padEnd(24)} ${l.bytes.padEnd(12)} ${l.text}`).join('\n')
   );
   return EXIT.OK;
@@ -278,13 +295,12 @@ export function traceCommand(opts: {
   top: string;
   last: string;
   out?: string;
+  save?: boolean;
   state?: string;
   json: boolean;
-}): number {
-  const m = loadSessionMachine(opts.state);
-  if (!m) {
-    throw userError('No session state found. Run `zxs run` first.', 'trace');
-  }
+} & MachineSourceOptions): number {
+  const loaded = loadMachineFromSource(opts, 'trace');
+  const m = loaded.machine;
   const meta = loadSessionMeta(opts.state);
   const symbols = loadSymbols(meta);
   const last = parseCount(opts.last, 'recent instruction count');
@@ -296,7 +312,8 @@ export function traceCommand(opts: {
     frames,
     onInstruction: (pc) => tracer.onInstruction(pc),
   });
-  const statePath = saveSessionMachine(m, opts.state);
+  const saveState = opts.save !== false && !loaded.readOnly;
+  const statePath = saveState ? saveSessionMachine(m, opts.state) : undefined;
 
   const read = (a: number) => m.memory.read(a);
   const hot = tracer.topHot(top).map((h) => ({
@@ -312,11 +329,12 @@ export function traceCommand(opts: {
   const report = {
     ok: true,
     stage: 'trace',
+    source: loaded.source,
     framesRun: outcome.framesRun,
     instructions: tracer.instructionCount,
     hot,
     recent: recent.slice(-20),
-    statePath,
+    ...(statePath ? { statePath } : { readOnly: true }),
   };
   if (opts.out) {
     ensureParentDir(opts.out);
@@ -335,3 +353,24 @@ export function traceCommand(opts: {
 }
 
 export type { Machine };
+
+function parseAddressRange(spec: string): { from: number; to: number } | undefined {
+  if (!spec.includes('-')) return undefined;
+  const parts = spec.split('-');
+  if (parts.length !== 2) return undefined;
+  const from = parseAddress(parts[0]!.trim());
+  const to = parseAddress(parts[1]!.trim());
+  if (to < from) throw userError(`Invalid disassembly range: ${spec}`, 'disasm');
+  return { from, to };
+}
+
+function disassembleRange(read: (addr: number) => number, from: number, to: number): DisasmLine[] {
+  const lines: DisasmLine[] = [];
+  let addr = from;
+  while (addr <= to) {
+    const line = disassembleOne(read, addr);
+    lines.push(line);
+    addr += Math.max(1, line.bytes.length);
+  }
+  return lines;
+}

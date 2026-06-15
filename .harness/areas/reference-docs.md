@@ -76,6 +76,9 @@ behavior changes.
 
 ## Recent area notes
 
+- 2026-06-15: T-20260615-01 added sound, testing assertion, and
+  reverse-engineering references plus a reverse-engineering skill; synced
+  toolkit and create-package copies.
 - 2026-06-14: T-20260614-02 added project-local agent skills and
   `docs/reference/assembler-syntax.md`; sjasmplus notes now defer to the
   embedded assembler reference for normal zx-vibes work.

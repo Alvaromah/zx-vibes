@@ -9,7 +9,8 @@ import { userError } from './output.js';
 export const BOOT_FRAMES = 250;
 
 export function sessionStatePath(stateFile?: string): string {
-  return stateFile ?? join(process.cwd(), '.zxs', 'state.zxstate');
+  if (stateFile) return stateFile;
+  return join(process.env['ZXS_STATE_DIR'] ?? join(process.cwd(), '.zxs'), 'state.zxstate');
 }
 
 export function readStateFile(path: string): ZxState {
@@ -22,10 +23,46 @@ export function readStateFile(path: string): ZxState {
 
 /** Atomic write (tmp + rename) so a crashed command never corrupts the session. */
 export function writeStateFile(path: string, state: ZxState): void {
+  writeJsonFile(path, state);
+}
+
+export function writeJsonFile(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp`;
-  writeFileSync(tmp, JSON.stringify(state));
-  renameSync(tmp, path);
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmp, JSON.stringify(value));
+  replaceFileWithRetry(tmp, path);
+}
+
+function replaceFileWithRetry(tmp: string, path: string): void {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      renameSync(tmp, path);
+      return;
+    } catch (err) {
+      lastErr = err;
+      const code = (err as NodeJS.ErrnoException).code;
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '') || attempt === 5) break;
+      sleepSync(20 * (attempt + 1));
+      if (attempt >= 2) {
+        try {
+          rmSync(path, { force: true });
+        } catch {
+          // Keep retrying the rename; the original error is more useful.
+        }
+      }
+    }
+  }
+  try {
+    rmSync(tmp, { force: true });
+  } catch {
+    // Ignore cleanup failure and throw the write error.
+  }
+  throw lastErr;
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 export function loadSessionMachine(stateFile?: string): Machine | null {
@@ -85,10 +122,7 @@ export function loadSessionMeta(stateFile?: string): SessionMeta {
 
 export function saveSessionMeta(meta: SessionMeta, stateFile?: string): void {
   const path = sessionMetaPath(stateFile);
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp`;
-  writeFileSync(tmp, JSON.stringify(meta, null, 2));
-  renameSync(tmp, path);
+  writeJsonFile(path, meta);
 }
 
 /* ───────────────────────── boot cache ───────────────────────── */

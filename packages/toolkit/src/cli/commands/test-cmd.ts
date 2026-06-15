@@ -30,6 +30,8 @@ type Assertion =
   | { type: 'haltSynced'; equals: boolean }
   | { type: 'screenIncludes'; text: string }
   | { type: 'cellsNonBlank'; min?: number; max?: number }
+  | { type: 'attrNonBlank'; min?: number; max?: number }
+  | { type: 'coloredCells'; min?: number; max?: number }
   | { type: 'memEquals'; addr: string; hex: string }
   | { type: 'regEquals'; reg: string; value: number | string }
   | { type: 'borderColor'; equals: number }
@@ -51,6 +53,22 @@ export interface TestSuiteResult {
   failed: number;
   results: TestResult[];
 }
+
+export const ASSERTION_REFERENCE = [
+  { type: 'status', fields: { equals: ['ok', 'hang'] }, description: 'Expected run status.' },
+  { type: 'haltSynced', fields: { equals: 'boolean' }, description: 'Whether the main loop stayed synchronized to HALT/frame cadence.' },
+  { type: 'screenChanged', fields: { equals: 'boolean' }, description: 'Whether bitmap or attribute memory changed during the run.' },
+  { type: 'cellsNonBlank', fields: { min: 'number?', max: 'number?' }, description: 'Counts 8x8 cells with at least one set bitmap pixel.' },
+  { type: 'attrNonBlank', fields: { min: 'number?', max: 'number?' }, description: 'Counts attribute cells whose byte is not the default 0x38.' },
+  { type: 'coloredCells', fields: { min: 'number?', max: 'number?' }, description: 'Alias of attrNonBlank for attribute-only colour tests.' },
+  { type: 'screenIncludes', fields: { text: 'string' }, description: 'Checks ROM-font/OCR text rows.' },
+  { type: 'memEquals', fields: { addr: 'address', hex: 'hex bytes' }, description: 'Checks exact memory bytes.' },
+  { type: 'regEquals', fields: { reg: 'register', value: 'number|address string' }, description: 'Checks a CPU register value.' },
+  { type: 'pixelAt', fields: { x: '0..255', y: '0..191', set: 'boolean' }, description: 'Checks a Spectrum bitmap pixel.' },
+  { type: 'borderColor', fields: { equals: '0..7' }, description: 'Checks ULA border colour.' },
+  { type: 'beeperEdges', fields: { min: 'number?', max: 'number?' }, description: 'Checks changes of port 0xFE bit 4.' },
+  { type: 'portFEWrites', fields: { min: 'number?', max: 'number?' }, description: 'Checks writes to ULA port 0xFE.' },
+] as const;
 
 const SKIP_DIRS = new Set(['node_modules', '.git', '.zxs', 'build', 'dist']);
 
@@ -159,6 +177,9 @@ async function runSpec(specPath: string): Promise<TestResult> {
   const text = screenText(m);
   const audio = m.getAudioActivity();
   const allRows = text.rows.join('\n');
+  const attrChangedCells = text.attrs
+    .filter((a) => a.attr !== 0x38)
+    .reduce((sum, a) => sum + a.count, 0);
 
   for (const a of spec.assert) {
     switch (a.type) {
@@ -183,6 +204,13 @@ async function runSpec(specPath: string): Promise<TestResult> {
           failures.push(`cellsNonBlank: ${text.nonBlankCells} < min ${a.min}`);
         if (a.max !== undefined && text.nonBlankCells > a.max)
           failures.push(`cellsNonBlank: ${text.nonBlankCells} > max ${a.max}`);
+        break;
+      case 'attrNonBlank':
+      case 'coloredCells':
+        if (a.min !== undefined && attrChangedCells < a.min)
+          failures.push(`${a.type}: ${attrChangedCells} < min ${a.min}`);
+        if (a.max !== undefined && attrChangedCells > a.max)
+          failures.push(`${a.type}: ${attrChangedCells} > max ${a.max}`);
         break;
       case 'memEquals': {
         const addr = parseAddress(a.addr);
@@ -251,7 +279,17 @@ export async function runTestSuite(path: string): Promise<TestSuiteResult> {
   };
 }
 
-export async function testCommand(path: string, opts: { json: boolean }): Promise<number> {
+export async function testCommand(path: string, opts: { json: boolean; listAssertions?: boolean }): Promise<number> {
+  if (opts.listAssertions) {
+    emit(
+      { ok: true, stage: 'test', assertions: ASSERTION_REFERENCE },
+      opts.json,
+      () =>
+        ASSERTION_REFERENCE.map((a) => `${a.type}: ${a.description}`).join('\n')
+    );
+    return EXIT.OK;
+  }
+
   const suite = await runTestSuite(path);
   if (suite.total === 0) {
     throw userError(`No test.json / *.test.json found under ${path}`, 'test');

@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { createServer, type Server, type ServerResponse } from 'node:http';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, relative } from 'node:path';
 import { createRequire } from 'node:module';
 import { build } from '../../build/sjasmplus.js';
-import { Machine } from '../../core/machine.js';
+import { loadSnapshotMachine } from '../../core/snapshot.js';
 import { writeZ80v1 } from '../../core/state.js';
 import { EXIT, emit, emitCliError, parseAddress, parsePort, userError } from '../output.js';
+import { bootCachedMachine, BOOT_FRAMES } from '../session.js';
 import {
   configuredAssembler,
   configuredEntry,
@@ -22,6 +24,16 @@ export interface PreviewCommandOptions {
   port: string;
   strictPort: boolean;
   watch: boolean;
+  list?: boolean;
+  stop?: boolean;
+  detach?: boolean;
+  detachedChild?: boolean;
+  json: boolean;
+}
+
+export interface PlayCommandOptions {
+  port: string;
+  strictPort: boolean;
   json: boolean;
 }
 
@@ -29,12 +41,24 @@ interface PreviewBuild {
   buildId: string;
   builtAt: string;
   outputs: { bin?: string; sld?: string };
+  bootFrames: number;
+}
+
+interface PreviewServerRecord {
+  pid: number;
+  port: number;
+  requestedPort: number;
+  url: string;
+  startedAt: string;
+  watch: boolean;
+  buildId?: string;
 }
 
 const WATCH_EXTENSIONS = new Set(['.asm', '.inc', '.bin', '.json']);
 const WATCH_SKIP_DIRS = new Set(['.git', '.zxs', 'build', 'dist', 'node_modules']);
 const PREVIEW_HOST = '127.0.0.1';
 const MAX_PORT_FALLBACK_ATTEMPTS = 20;
+const PREVIEW_SERVER_RECORD = join('.zxs', 'preview-server.json');
 
 interface PreviewListenResult {
   port: number;
@@ -48,6 +72,10 @@ interface PreviewListenOptions {
 }
 
 export async function previewCommand(opts: PreviewCommandOptions): Promise<number> {
+  if (opts.list) return previewListCommand(opts);
+  if (opts.stop) return previewStopCommand(opts);
+  if (opts.detach && !opts.detachedChild) return previewDetachCommand(opts);
+
   const requestedPort = parsePort(opts.port);
   const loaded = loadProjectConfig();
   const entry = configuredEntry(undefined, loaded.config);
@@ -163,6 +191,16 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
       .then((listen) => {
         selectedPort = listen.port;
         startWatcher();
+        const record = writePreviewServerRecord({
+          pid: process.pid,
+          port: selectedPort,
+          requestedPort,
+          url: `http://${PREVIEW_HOST}:${selectedPort}/`,
+          startedAt: new Date().toISOString(),
+          watch: opts.watch,
+          buildId: currentBuild.buildId,
+        });
+        server.once('close', () => clearPreviewServerRecord(record.pid));
         emit(
           {
             ok: true,
@@ -174,13 +212,20 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
             watch: opts.watch,
             buildId: currentBuild.buildId,
             builtAt: currentBuild.builtAt,
+            boot: { mode: 'fresh-rom-cache', frames: currentBuild.bootFrames },
             build: currentBuild.outputs,
           },
           opts.json,
           () =>
-            `Preview running at http://${PREVIEW_HOST}:${selectedPort}/` +
-            ` (build ${currentBuild.buildId}${opts.watch ? ', watching' : ''}` +
-            `${selectedPort !== requestedPort ? `, requested port ${requestedPort} was busy` : ''})`
+            [
+              selectedPort !== requestedPort
+                ? `WARNING: requested preview port ${requestedPort} was busy; using ${selectedPort}`
+                : undefined,
+              `Preview running at http://${PREVIEW_HOST}:${selectedPort}/` +
+                ` (build ${currentBuild.buildId}${opts.watch ? ', watching' : ''})`,
+            ]
+              .filter((line): line is string => line !== undefined)
+              .join('\n')
         );
         resolve(EXIT.OK);
       })
@@ -188,6 +233,256 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
         resolve(emitCliError(err, opts.json, 'preview'));
       });
   });
+}
+
+export async function playCommand(file: string, opts: PlayCommandOptions): Promise<number> {
+  const requestedPort = parsePort(opts.port);
+  const playDir = join('.zxs', 'play');
+  mkdirSync(playDir, { recursive: true });
+
+  const emulatorPkg = dirname(require.resolve('@zx-vibes/emulator/package.json'));
+  const emulatorBundle = join(emulatorPkg, 'dist', 'zxgeneration.esm.js');
+  if (!existsSync(emulatorBundle)) {
+    throw userError('Emulator browser bundle is missing. Run pnpm --filter @zx-vibes/emulator build first.', 'play');
+  }
+
+  const mode = preparePlayable(file, playDir);
+  writeFileSync(join(playDir, 'index.html'), playHtml(mode));
+
+  const files = new Map<string, string>([
+    ['/', join(playDir, 'index.html')],
+    ['/index.html', join(playDir, 'index.html')],
+    ['/48k.rom', join(emulatorPkg, 'rom', '48k.rom')],
+    ['/zxgeneration.esm.js', emulatorBundle],
+    ['/game.z80', join(playDir, 'game.z80')],
+    ['/game.tap', join(playDir, 'game.tap')],
+  ]);
+
+  let selectedPort = requestedPort;
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? '/', `http://${PREVIEW_HOST}:${selectedPort}`);
+    const path = files.get(url.pathname);
+    if (!path || !existsSync(path)) {
+      res.writeHead(404);
+      res.end('not found');
+      return;
+    }
+    const type = path.endsWith('.html')
+      ? 'text/html'
+      : path.endsWith('.js')
+        ? 'text/javascript'
+        : 'application/octet-stream';
+    res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' });
+    res.end(readFileSync(path));
+  });
+
+  return await new Promise<number>((resolve) => {
+    listenWithPortFallback(server, requestedPort, { host: PREVIEW_HOST, strictPort: opts.strictPort })
+      .then((listen) => {
+        selectedPort = listen.port;
+        const record = writePreviewServerRecord({
+          pid: process.pid,
+          port: selectedPort,
+          requestedPort,
+          url: `http://${PREVIEW_HOST}:${selectedPort}/`,
+          startedAt: new Date().toISOString(),
+          watch: false,
+        });
+        server.once('close', () => clearPreviewServerRecord(record.pid));
+        emit(
+          {
+            ok: true,
+            stage: 'play',
+            url: record.url,
+            file,
+            mode,
+            port: selectedPort,
+            requestedPort,
+            portFallback: selectedPort !== requestedPort,
+          },
+          opts.json,
+          () =>
+            [
+              selectedPort !== requestedPort
+                ? `WARNING: requested play port ${requestedPort} was busy; using ${selectedPort}`
+                : undefined,
+              `Play running at ${record.url} (${mode})`,
+            ]
+              .filter((line): line is string => line !== undefined)
+              .join('\n')
+        );
+        resolve(EXIT.OK);
+      })
+      .catch((err: unknown) => {
+        resolve(emitCliError(err, opts.json, 'play'));
+      });
+  });
+}
+
+function previewListCommand(opts: { json: boolean }): number {
+  const record = readPreviewServerRecord();
+  const running = record ? isProcessRunning(record.pid) : false;
+  emit(
+    {
+      ok: true,
+      stage: 'preview',
+      servers: record ? [{ ...record, running }] : [],
+    },
+    opts.json,
+    () => (record ? `${running ? 'running' : 'stale'} pid=${record.pid} ${record.url}` : 'no tracked preview server')
+  );
+  return EXIT.OK;
+}
+
+function previewStopCommand(opts: { json: boolean }): number {
+  const record = readPreviewServerRecord();
+  if (!record) {
+    emit({ ok: true, stage: 'preview', stopped: false }, opts.json, () => 'no tracked preview server');
+    return EXIT.OK;
+  }
+  let stopped = false;
+  if (isProcessRunning(record.pid)) {
+    process.kill(record.pid);
+    stopped = true;
+  }
+  clearPreviewServerRecord(record.pid);
+  emit(
+    { ok: true, stage: 'preview', stopped, pid: record.pid, url: record.url },
+    opts.json,
+    () => (stopped ? `stopped preview pid ${record.pid}` : `removed stale preview pid ${record.pid}`)
+  );
+  return EXIT.OK;
+}
+
+function previewDetachCommand(opts: PreviewCommandOptions): number {
+  const args = process.argv.slice(1).filter((arg) => arg !== '--detach');
+  args.push('--detached-child');
+  const child = spawn(process.execPath, args, {
+    cwd: process.cwd(),
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
+  mkdirSync(dirname(PREVIEW_SERVER_RECORD), { recursive: true });
+  writeFileSync(
+    PREVIEW_SERVER_RECORD,
+    JSON.stringify(
+      {
+        pid: child.pid ?? -1,
+        port: parsePort(opts.port),
+        requestedPort: parsePort(opts.port),
+        url: `http://${PREVIEW_HOST}:${parsePort(opts.port)}/`,
+        startedAt: new Date().toISOString(),
+        watch: opts.watch,
+      },
+      null,
+      2
+    )
+  );
+  emit(
+    {
+      ok: true,
+      stage: 'preview',
+      detached: true,
+      pid: child.pid,
+      next: ['zxs preview --list', 'zxs preview --stop'],
+    },
+    opts.json,
+    () => `preview starting in background (pid ${child.pid}); run zxs preview --list for the URL`
+  );
+  return EXIT.OK;
+}
+
+function readPreviewServerRecord(): PreviewServerRecord | undefined {
+  if (!existsSync(PREVIEW_SERVER_RECORD)) return undefined;
+  try {
+    return JSON.parse(readFileSync(PREVIEW_SERVER_RECORD, 'utf8')) as PreviewServerRecord;
+  } catch {
+    return undefined;
+  }
+}
+
+function writePreviewServerRecord(record: PreviewServerRecord): PreviewServerRecord {
+  mkdirSync(dirname(PREVIEW_SERVER_RECORD), { recursive: true });
+  writeFileSync(PREVIEW_SERVER_RECORD, JSON.stringify(record, null, 2));
+  return record;
+}
+
+function clearPreviewServerRecord(pid: number): void {
+  const current = readPreviewServerRecord();
+  if (!current || current.pid === pid) {
+    rmSync(PREVIEW_SERVER_RECORD, { force: true });
+  }
+}
+
+function isProcessRunning(pid: number): boolean {
+  if (pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function preparePlayable(file: string, playDir: string): 'snapshot' | 'tape' {
+  const ext = extname(file).toLowerCase();
+  const data = new Uint8Array(readFileSync(file));
+  if (ext === '.z80') {
+    writeFileSync(join(playDir, 'game.z80'), data);
+    return 'snapshot';
+  }
+  if (ext === '.sna') {
+    const machine = loadSnapshotMachine(file, data);
+    writeFileSync(join(playDir, 'game.z80'), writeZ80v1(machine));
+    return 'snapshot';
+  }
+  if (ext === '.tap' || ext === '.tzx') {
+    writeFileSync(join(playDir, 'game.tap'), data);
+    return 'tape';
+  }
+  throw userError('zxs play supports .z80, .sna, .tap, and .tzx files', 'play');
+}
+
+function playHtml(mode: 'snapshot' | 'tape'): string {
+  const loader =
+    mode === 'snapshot'
+      ? `const snapshot = new Uint8Array(await (await fetch('./game.z80')).arrayBuffer());
+          spectrum.loadZ80Snapshot(snapshot);`
+      : `const tape = await (await fetch('./game.tap')).arrayBuffer();
+          spectrum.loadTape(tape, 'game.tap');
+          spectrum.playTape();`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zx-vibes play</title>
+  <style>
+    body { margin: 0; background: #111; color: #f5f5f5; font: 14px system-ui, sans-serif; display: grid; min-height: 100vh; place-items: center; }
+    main { display: grid; gap: 10px; justify-items: center; }
+    canvas { image-rendering: pixelated; box-shadow: 0 0 0 1px #333; }
+    .status { color: #a7f3d0; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <main>
+    <canvas id="screen"></canvas>
+    <div class="status">${mode}</div>
+  </main>
+  <script type="module">
+    import { ZXSpectrum } from './zxgeneration.esm.js';
+    new ZXSpectrum('#screen', {
+      rom: './48k.rom',
+      scale: 2,
+      sound: true,
+      onReady: async (spectrum) => {
+        ${loader}
+      },
+    });
+  </script>
+</body>
+</html>`;
 }
 
 export function listenWithPortFallback(
@@ -264,13 +559,13 @@ async function writePreviewBuild(opts: {
   const bin = new Uint8Array(readFileSync(result.outputs.bin));
   const buildId = createHash('sha1').update(bin).digest('hex').slice(0, 12);
   const builtAt = new Date().toISOString();
-  const machine = Machine.boot();
+  const machine = bootCachedMachine();
   machine.loadBinary(bin, parseAddress(opts.org));
   machine.run({ frames: 1 });
   writeFileSync(join(opts.previewDir, 'game.z80'), writeZ80v1(machine));
   writeFileSync(join(opts.previewDir, 'preview.json'), JSON.stringify({ buildId, builtAt, outputs: result.outputs }, null, 2));
   writeFileSync(join(opts.previewDir, 'index.html'), previewHtml({ buildId, builtAt, watch: opts.watch }));
-  return { buildId, builtAt, outputs: result.outputs };
+  return { buildId, builtAt, outputs: result.outputs, bootFrames: BOOT_FRAMES };
 }
 
 function hashPreviewInputs(root: string): string {

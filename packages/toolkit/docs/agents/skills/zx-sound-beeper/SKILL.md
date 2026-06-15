@@ -31,6 +31,7 @@ border writes that touch port `0xFE`, or tests that assert audio activity.
 ## Local Docs and Recipes to Load
 
 - `docs/reference/rom-routines.md`
+- `docs/reference/sound.md`
 - `docs/reference/attributes-and-colour.md`
 - `docs/reference/interrupts-and-timing.md`
 - `packages/toolkit/recipes/09-beeper-fx/recipe.asm`
@@ -44,6 +45,8 @@ the ROM BEEPER entry point.
 
 - Run a sound path long enough to observe audio edges. Recipe-style tests can
   assert `beeperEdges` and a memory flag showing the effect returned.
+- Use `zxs run --wav out.wav --json` when you need a playable artifact or
+  `audio.edgeTimeline` / `audio.toneSegments` to reason about pitch.
 - Verify border color after sound effects. Because border and beeper share
   port `0xFE`, a passing audio test can still hide border flicker.
 - Confirm the main loop remains `haltSynced: true` unless the effect is

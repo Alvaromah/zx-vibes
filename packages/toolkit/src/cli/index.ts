@@ -10,22 +10,39 @@ import {
   stepCommand,
   traceCommand,
   watchAddCommand,
+  watchClearCommand,
   watchListCommand,
   watchRmCommand,
 } from './commands/debug-cmds.js';
 import { doctorCommand } from './commands/doctor.js';
+import {
+  gfxAttrsCommand,
+  gfxBlitLinearCommand,
+  gfxFindCommand,
+  gfxFontCommand,
+  gfxLinearCommand,
+  gfxScreenCommand,
+} from './commands/gfx.js';
 import { keyCommand, typeCommand } from './commands/input-cmds.js';
 import { newCommand } from './commands/new.js';
-import { previewCommand } from './commands/preview.js';
+import { playCommand, previewCommand } from './commands/preview.js';
 import {
+  memDumpCommand,
+  memLoadCommand,
   memReadCommand,
   memWriteCommand,
   regsCommand,
   regsSetCommand,
 } from './commands/inspect-cmds.js';
 import { runCommand } from './commands/run.js';
+import { scanCommand, xrefCommand } from './commands/scan.js';
 import { screenCommand } from './commands/screen.js';
 import { setupCommand } from './commands/setup.js';
+import {
+  snapshotInfoCommand,
+  snapshotMemCommand,
+  snapshotRamCommand,
+} from './commands/snapshot.js';
 import { testCommand } from './commands/test-cmd.js';
 import { verifyCommand } from './commands/verify.js';
 import {
@@ -55,6 +72,10 @@ program
 
 const jsonOpt = ['--json', 'machine-readable JSON output', false] as const;
 const stateOpt = ['--state <file>', 'session state file (default .zxs/state.zxstate)'] as const;
+const z80Opt = ['--z80 <file>', '.z80 v1 snapshot to read'] as const;
+const snaOpt = ['--sna <file>', '48K .sna snapshot to read'] as const;
+const binOpt = ['--bin <file>', 'raw binary to inject into RAM for read-only inspection'] as const;
+const orgOpt = ['--org <addr>', 'load address for --bin', '0x8000'] as const;
 
 program
   .command('build')
@@ -83,12 +104,19 @@ program
   .option('--frames <n>', 'frame budget (50 = 1 second)', '300')
   .option('--until-pc <addr>', 'stop when PC reaches this address')
   .option('--until-break', 'run until a breakpoint/watchpoint hits (≥3000 frame budget)', false)
+  .option('--until-watch', 'raise the frame budget while waiting for a watchpoint', false)
+  .option('--until-write <range>', 'temporary write watchpoint; stop when the range is written')
+  .option('--until-change <addr>', 'temporary write watchpoint for an address')
+  .option('--watch-read <range>', 'temporary read watchpoint for this run')
+  .option('--watch-write <range>', 'temporary write watchpoint for this run')
   .option('--keys <spec>', 'scheduled keys, e.g. "60:O*30,120:SPACE*5"')
   .option('--fresh', 'ignore the session and boot clean', false)
   .option('--no-save', 'do not persist the session state after the run')
+  .option('--read-only', 'alias for --no-save in investigation workflows', false)
   .option('--no-detect-hangs', 'disable the hang/crash watchdog')
   .option(...stateOpt)
   .option('--screenshot <file>', 'save a PNG of the final screen')
+  .option('--wav <file>', 'save beeper output from this run as a WAV file')
   .option('--text', 'include the 32x24 character grid in the report', false)
   .option(...jsonOpt)
   .action(async (opts) => {
@@ -102,6 +130,10 @@ program
   .option('--attrs', 'include the attribute summary', false)
   .option('--text', '(default) include the character grid', true)
   .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
   .option(...jsonOpt)
   .action((opts) => {
     process.exitCode = screenCommand(opts);
@@ -135,9 +167,35 @@ mem
   .argument('<addr>', 'address (0x8000, $8000 or 32768)')
   .option('--len <n>', 'bytes to read', '64')
   .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
   .option(...jsonOpt)
   .action((addr: string, opts) => {
     process.exitCode = memReadCommand(addr, opts);
+  });
+mem
+  .command('dump')
+  .requiredOption('--range <from-to>', 'address range to export, e.g. 0x4000-0x5aff')
+  .requiredOption('--out <file>', 'binary output path')
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((opts) => {
+    process.exitCode = memDumpCommand(opts);
+  });
+mem
+  .command('load')
+  .argument('<addr>', 'address to write to')
+  .requiredOption('--bin <file>', 'binary file to load into the session')
+  .option(...stateOpt)
+  .option(...jsonOpt)
+  .action((addr: string, opts) => {
+    process.exitCode = memLoadCommand(addr, opts);
   });
 mem
   .command('write')
@@ -152,6 +210,10 @@ mem
 const regs = program.command('regs').description('Inspect or set CPU registers');
 regs
   .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
   .option(...jsonOpt)
   .action((opts) => {
     process.exitCode = regsCommand(opts);
@@ -249,6 +311,14 @@ watch
   .action((idOrAll: string, opts) => {
     process.exitCode = watchRmCommand(idOrAll, opts);
   });
+watch
+  .command('clear')
+  .description('Remove all watchpoints')
+  .option(...stateOpt)
+  .option(...jsonOpt)
+  .action((opts) => {
+    process.exitCode = watchClearCommand(opts);
+  });
 
 program
   .command('step')
@@ -267,6 +337,10 @@ program
   .argument('<spec>', 'address, label, file.asm:line, or PC')
   .option('--count <n>', 'instructions to disassemble', '16')
   .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
   .option(...jsonOpt)
   .action((spec: string, opts) => {
     process.exitCode = disasmCommand(spec, opts);
@@ -279,7 +353,12 @@ program
   .option('--top <n>', 'hot addresses to report', '10')
   .option('--last <n>', 'recent instructions to keep', '50')
   .option('--out <file>', 'write the full report as JSON')
+  .option('--no-save', 'do not persist session changes after tracing')
   .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
   .option(...jsonOpt)
   .action((opts) => {
     process.exitCode = traceCommand(opts);
@@ -300,9 +379,184 @@ program
   .command('test')
   .description('Run declarative asm tests (test.json / *.test.json specs)')
   .argument('[path]', 'directory or spec file to test', '.')
+  .option('--list-assertions', 'print the supported assertion vocabulary', false)
   .option(...jsonOpt)
   .action(async (path: string, opts) => {
     process.exitCode = await testCommand(path, opts);
+  });
+
+const snapshot = program.command('snapshot').description('Inspect and export .z80/.sna snapshots');
+snapshot
+  .command('info')
+  .argument('<file>', '.z80 or .sna snapshot')
+  .option(...jsonOpt)
+  .action((file: string, opts) => {
+    process.exitCode = snapshotInfoCommand(file, opts);
+  });
+snapshot
+  .command('ram')
+  .argument('<file>', '.z80 or .sna snapshot')
+  .requiredOption('--out <file>', 'write the 48K RAM image')
+  .option(...jsonOpt)
+  .action((file: string, opts) => {
+    process.exitCode = snapshotRamCommand(file, opts);
+  });
+snapshot
+  .command('mem')
+  .argument('<file>', '.z80 or .sna snapshot')
+  .argument('<addr>', 'start address')
+  .option('--len <n>', 'bytes to read/export', '64')
+  .option('--out <file>', 'write bytes to a binary file')
+  .option(...jsonOpt)
+  .action((file: string, addr: string, opts) => {
+    process.exitCode = snapshotMemCommand(file, addr, opts);
+  });
+
+const gfx = program.command('gfx').description('Decode Spectrum graphics and asset data');
+gfx
+  .command('screen')
+  .requiredOption('--out <png>', 'PNG output path')
+  .option('--scale <n>', 'nearest-neighbor scale', '2')
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((opts) => {
+    process.exitCode = gfxScreenCommand(opts);
+  });
+gfx
+  .command('attrs')
+  .requiredOption('--out <png>', 'PNG output path')
+  .option('--scale <n>', 'nearest-neighbor scale', '8')
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((opts) => {
+    process.exitCode = gfxAttrsCommand(opts);
+  });
+gfx
+  .command('linear')
+  .argument('<addr>', 'start address')
+  .requiredOption('--out <png>', 'PNG output path')
+  .requiredOption('--width-bytes <n>', 'bytes per row')
+  .requiredOption('--height <n>', 'rows per item')
+  .option('--stride <n>', 'bytes between rows')
+  .option('--count <n>', 'number of items', '1')
+  .option('--columns <n>', 'sheet columns')
+  .option('--scale <n>', 'nearest-neighbor scale', '4')
+  .option('--ink <n>', 'ink color index 0-7')
+  .option('--paper <n>', 'paper color index 0-7')
+  .option('--invert', 'invert 1bpp pixels', false)
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((addr: string, opts) => {
+    process.exitCode = gfxLinearCommand(addr, opts);
+  });
+gfx
+  .command('sheet')
+  .argument('<addr>', 'start address')
+  .requiredOption('--out <png>', 'PNG output path')
+  .requiredOption('--width-bytes <n>', 'bytes per row')
+  .requiredOption('--height <n>', 'rows per item')
+  .option('--stride <n>', 'bytes between rows')
+  .option('--count <n>', 'number of items', '1')
+  .option('--columns <n>', 'sheet columns')
+  .option('--scale <n>', 'nearest-neighbor scale', '4')
+  .option('--invert', 'invert 1bpp pixels', false)
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((addr: string, opts) => {
+    process.exitCode = gfxLinearCommand(addr, opts);
+  });
+gfx
+  .command('font')
+  .argument('<addr>', 'font/UDG table start address')
+  .requiredOption('--out <png>', 'PNG output path')
+  .option('--glyphs <n>', 'number of 8x8 glyphs', '96')
+  .option('--columns <n>', 'sheet columns', '16')
+  .option('--scale <n>', 'nearest-neighbor scale', '4')
+  .option('--invert', 'invert 1bpp pixels', false)
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((addr: string, opts) => {
+    process.exitCode = gfxFontCommand(addr, opts);
+  });
+gfx
+  .command('find')
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((opts) => {
+    process.exitCode = gfxFindCommand(opts);
+  });
+gfx
+  .command('blit-linear')
+  .argument('<addr>', 'linear bitmap start address')
+  .requiredOption('--out <png>', 'PNG output path')
+  .requiredOption('--x <n>', 'screen x coordinate, byte-aligned')
+  .requiredOption('--y <n>', 'screen y coordinate')
+  .requiredOption('--width-bytes <n>', 'bytes per row')
+  .requiredOption('--height <n>', 'rows')
+  .option('--stride <n>', 'bytes between rows')
+  .option('--xor', 'XOR source bytes with screen bytes', false)
+  .option('--scale <n>', 'nearest-neighbor scale', '2')
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((addr: string, opts) => {
+    process.exitCode = gfxBlitLinearCommand(addr, opts);
+  });
+
+program
+  .command('scan')
+  .description('Search memory for opcodes or immediate address ranges')
+  .option('--opcode <bytes>', 'byte sequence, e.g. "ED B0"')
+  .option('--imm-range <from-to>', 'little-endian 16-bit values in a range')
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((opts) => {
+    process.exitCode = scanCommand(opts);
+  });
+
+program
+  .command('xref')
+  .description('Find static disassembly references to an address')
+  .argument('<addr>', 'target address')
+  .option(...stateOpt)
+  .option(...z80Opt)
+  .option(...snaOpt)
+  .option(...binOpt)
+  .option(...orgOpt)
+  .option(...jsonOpt)
+  .action((addr: string, opts) => {
+    process.exitCode = xrefCommand(addr, opts);
   });
 
 program
@@ -346,9 +600,24 @@ program
   .option('--port <n>', 'local preview port', '5173')
   .option('--strict-port', 'fail if --port is already in use instead of trying later ports', false)
   .option('--watch', 'rebuild the preview snapshot and reload the page on source changes', false)
+  .option('--list', 'list the tracked preview server', false)
+  .option('--stop', 'stop the tracked preview server', false)
+  .option('--detach', 'start preview in the background and return', false)
+  .option('--detached-child', 'internal detached preview worker', false)
   .option(...jsonOpt)
   .action(async (opts) => {
     process.exitCode = await previewCommand(opts);
+  });
+
+program
+  .command('play')
+  .description('Open a .z80/.sna snapshot or .tap/.tzx tape in the browser player')
+  .argument('<file>', 'snapshot or tape file')
+  .option('--port <n>', 'local player port', '5173')
+  .option('--strict-port', 'fail if --port is already in use instead of trying later ports', false)
+  .option(...jsonOpt)
+  .action(async (file: string, opts) => {
+    process.exitCode = await playCommand(file, opts);
   });
 
 program

@@ -72,6 +72,9 @@ pnpm --filter create-zx-vibes run check:assets
 
 ## Recent area notes
 
+- 2026-06-15: T-20260615-01 updated starter/template playbooks for `zxs doctor`,
+  `preview --json`/detach/list/stop, read-only inspection, and reverse
+  engineering docs; relaxed the game smoke test `cellsNonBlank` upper bound.
 - 2026-06-14: T-20260614-02 updated starter/template playbooks to route agents
   through `docs/agents/skills/INDEX.md` and both generators now copy
   `docs/agents/skills` into generated projects.

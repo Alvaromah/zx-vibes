@@ -49,6 +49,21 @@ export interface AudioActivity {
   beeperLevel: number;
   /** Last value written to port 0xFE. */
   lastPortFE: number;
+  /** Timed beeper edge data, relative to the start of the last observed run. */
+  edgeTimeline: AudioEdge[];
+}
+
+export interface AudioEdge {
+  tstate: number;
+  frame: number;
+  level: number;
+}
+
+export interface AudioToneSegment {
+  startTstate: number;
+  endTstate: number;
+  edges: number;
+  hz: number;
 }
 
 /**
@@ -73,8 +88,10 @@ export class Machine {
     beeperEdges: 0,
     beeperLevel: 0,
     lastPortFE: 0,
+    edgeTimeline: [],
   };
   private beeperLevel = 0;
+  private audioStartCycles = 0;
 
   private constructor() {
     this.memory = new SpectrumMemory();
@@ -124,16 +141,18 @@ export class Machine {
   /** Clears per-run audio counters while preserving the current speaker baseline. */
   resetAudioActivity(): void {
     this.beeperLevel = this.ula.speakerBit & 0x01;
+    this.audioStartCycles = this.cpu.cycles;
     this.audioActivity = {
       portFEWrites: 0,
       beeperEdges: 0,
       beeperLevel: this.beeperLevel,
       lastPortFE: this.ula.lastPortFE & 0xff,
+      edgeTimeline: [],
     };
   }
 
   getAudioActivity(): AudioActivity {
-    return { ...this.audioActivity };
+    return { ...this.audioActivity, edgeTimeline: [...this.audioActivity.edgeTimeline] };
   }
 
   private recordPortFEWrite(value: number): void {
@@ -143,6 +162,11 @@ export class Machine {
     if (level !== this.beeperLevel) {
       this.audioActivity.beeperEdges++;
       this.beeperLevel = level;
+      this.audioActivity.edgeTimeline.push({
+        tstate: Math.max(0, this.cpu.cycles - this.audioStartCycles),
+        frame: this.frameCount,
+        level,
+      });
     }
     this.audioActivity.beeperLevel = level;
     this.audioActivity.lastPortFE = portValue;

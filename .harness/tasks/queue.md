@@ -1,6 +1,6 @@
 # Task Queue
 
-Last updated: 2026-06-14
+Last updated: 2026-06-15
 
 ## Policy
 
@@ -12,7 +12,7 @@ Last updated: 2026-06-14
 
 ## Next
 
-No tasks queued.
+No queued tasks.
 
 <!-- Example:
 1. `T-YYYYMMDD-01` - Short title
@@ -21,7 +21,7 @@ No tasks queued.
 
 ## Pending
 
-No tasks pending.
+No other tasks pending.
 
 ## Blocked
 
@@ -29,6 +29,8 @@ None.
 
 ## Done recently
 
+- `T-20260615-01` - Feedback-driven toolkit improvements backlog
+  File: `done/T-20260615-01-feedback-driven-toolkit-improvements.md`
 - `T-20260614-02` - Project-local agent skills documentation
   File: `done/T-20260614-02-agent-skills-docs.md`
 - `T-20260614-01` - P1-1 runnable `zxs new` projects

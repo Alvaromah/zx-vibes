@@ -1,8 +1,8 @@
 import { writeFileSync } from 'node:fs';
 import { screenshotPNG } from '../../core/screen.js';
 import { screenText } from '../../core/screen-text.js';
-import { EXIT, emit, ensureParentDir, userError } from '../output.js';
-import { loadSessionMachine } from '../session.js';
+import { loadMachineFromSource, type MachineSourceOptions } from '../machine-source.js';
+import { EXIT, emit, ensureParentDir } from '../output.js';
 
 export interface ScreenCommandOptions {
   png?: string;
@@ -13,11 +13,9 @@ export interface ScreenCommandOptions {
 }
 
 /** Observe the current session's screen without running anything. */
-export function screenCommand(opts: ScreenCommandOptions): number {
-  const m = loadSessionMachine(opts.state);
-  if (!m) {
-    throw userError('No session state found (.zxs/state.zxstate). Run `zxs run` first.', 'screen');
-  }
+export function screenCommand(opts: ScreenCommandOptions & MachineSourceOptions): number {
+  const loaded = loadMachineFromSource(opts, 'screen');
+  const m = loaded.machine;
 
   let pngPath: string | undefined;
   if (opts.png) {
@@ -35,6 +33,7 @@ export function screenCommand(opts: ScreenCommandOptions): number {
     rows: text.rows,
     ...(opts.attrs ? { attrs: text.attrs } : {}),
     ...(pngPath !== undefined ? { png: pngPath } : {}),
+    source: loaded.source,
   };
 
   emit(result, opts.json, () => {
