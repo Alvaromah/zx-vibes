@@ -5,6 +5,120 @@ Keep 5-10 useful entries, or roughly the last 30 days.
 Older details should live in task files under `tasks/done/` or
 `tasks/archive/`, or in git history.
 
+## 2026-06-15 - Feedback-driven toolkit improvements implemented
+
+Areas: toolkit, assembler, emulator, scaffolding, reference-docs, distribution
+
+Summary:
+Implemented `T-20260615-01` across the toolkit feedback backlog: normalized
+boot semantics for `verify`/preview against the cached ROM-ready baseline,
+hardened session writes and read-only workflows, added stateless snapshot/bin
+inspection sources, first-class snapshot/memory export, `zxs gfx`, scan/xref
+helpers, structured disassembly JSON, run-attached watchpoints, audio edge
+timelines/WAV export, preview process tracking, and `zxs play`.
+
+Docs and generated-project assets were updated with sound, assertion, and
+reverse-engineering references, a reverse-engineering skill, ROM clobber/string
+caveats, playbook nudges for `doctor`/`preview --json`, and looser generated
+smoke tests for additional sprites.
+
+Files touched:
+
+- `packages/toolkit/src/cli/**`
+- `packages/toolkit/src/core/**`
+- `packages/toolkit/tests/cli/e2e.test.ts`
+- `docs/reference/{sound,testing-assertions,reverse-engineering}.md`
+- `docs/agents/skills/zx-reverse-engineering/SKILL.md`
+- synced docs/assets under `packages/toolkit/` and `packages/create-zx-vibes/`
+- starter/template playbooks and generated smoke tests
+- `.changeset/feedback-toolkit-improvements.md`
+
+Validation:
+
+- `pnpm --filter @zx-vibes/toolkit typecheck`
+- `pnpm --filter @zx-vibes/toolkit test`
+- `pnpm --filter @zx-vibes/toolkit run check:docs`
+- `pnpm --filter create-zx-vibes run check:assets`
+- `pnpm --filter create-zx-vibes typecheck`
+- `pnpm --filter create-zx-vibes test`
+- `pnpm --filter @zx-vibes/toolkit lint` (exit 0; existing warnings only)
+- `pnpm --filter create-zx-vibes lint` (exit 0; existing warnings only)
+- `pnpm --filter @zx-vibes/asm typecheck`
+- `pnpm --filter @zx-vibes/asm test`
+- `pnpm run verify`
+
+Follow-ups:
+
+- Future focused tasks may extend saved input schedules, debugger scripting,
+  multi-hit watch logging, 128K/.z80 v2/v3 snapshot page export, and stricter
+  preview build/watch locking.
+
+Task file:
+`.harness/tasks/done/T-20260615-01-feedback-driven-toolkit-improvements.md`
+
+## 2026-06-15 - Human-readable feedback report added
+
+Areas: reference-docs, distribution
+
+Summary:
+Created a Spanish HTML + Tailwind report that explains the feedback-driven
+toolkit improvement backlog for human readers. The report maps each identified
+improvement to the corresponding work package in `T-20260615-01`, explaining
+why the improvement exists, what problem it solves, the proposed solution, and
+the expected acceptance/validation angle.
+
+Files touched:
+
+- `feedback/human.html`
+- `.harness/recent.md`
+- `.harness/handoff.md`
+
+Validation:
+
+- Static file inspected.
+- `git diff --check`
+
+Follow-ups:
+
+- None.
+
+Task file:
+None; this was a local documentation fast path for the existing backlog task.
+
+## 2026-06-15 - Feedback consolidated into improvement backlog
+
+Areas: toolkit, assembler, emulator, scaffolding, reference-docs, distribution
+
+Summary:
+Analyzed `.feedback/feedback-0.md` through `.feedback/feedback-3.md`, using
+parallel subagent review plus local inspection, and converted the agent
+dogfooding notes into a pending English task file. The backlog de-duplicates
+already completed items, calls out current codebase signals, and orders the
+remaining work around boot determinism, state/read-only workflows,
+frame/input semantics, snapshot/memory I/O, graphics extraction,
+disassembly/xref support, docs, preview lifecycle, and audio introspection.
+
+Files touched:
+
+- `.harness/tasks/pending/T-20260615-01-feedback-driven-toolkit-improvements.md`
+- `.harness/tasks/queue.md`
+- `.harness/tasks/index.md`
+- `.harness/recent.md`
+- `.harness/handoff.md`
+
+Validation:
+
+- Markdown and harness references inspected.
+- `git diff --check`
+
+Follow-ups:
+
+- Execute `T-20260615-01` as focused branches/PRs. Start with boot/state
+  determinism before broad feature additions.
+
+Task file:
+`.harness/tasks/pending/T-20260615-01-feedback-driven-toolkit-improvements.md`
+
 ## 2026-06-14 - Project-local agent skills docs added
 
 Areas: toolkit, assembler, emulator, scaffolding, reference-docs, distribution

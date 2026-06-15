@@ -1,4 +1,6 @@
-import { EXIT, emit, hex, parseAddress, parseCount, parseInteger, userError } from '../output.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { loadMachineFromSource, type MachineSourceOptions } from '../machine-source.js';
+import { EXIT, emit, ensureParentDir, hex, parseAddress, parseCount, parseInteger, userError } from '../output.js';
 import { loadSessionMachine, saveSessionMachine } from '../session.js';
 
 function requireSession(state?: string) {
@@ -11,10 +13,10 @@ function requireSession(state?: string) {
 
 export function memReadCommand(
   addr: string,
-  opts: { len: string; state?: string; json: boolean }
+  opts: { len: string; state?: string; json: boolean } & MachineSourceOptions
 ): number {
-  const m = requireSession(opts.state);
-  if (!m) return EXIT.USER_ERROR;
+  const loaded = loadMachineFromSource(opts, 'mem');
+  const m = loaded.machine;
   const start = parseAddress(addr);
   const len = parseCount(opts.len, 'length', 0x10000);
   const data = m.readMemory(start, len);
@@ -37,9 +39,51 @@ export function memReadCommand(
       len,
       hex: Buffer.from(data).toString('hex'),
       dump: lines,
+      source: loaded.source,
     },
     opts.json,
     () => lines.join('\n')
+  );
+  return EXIT.OK;
+}
+
+export function memDumpCommand(opts: {
+  range: string;
+  out: string;
+  json: boolean;
+} & MachineSourceOptions): number {
+  const loaded = loadMachineFromSource(opts, 'mem');
+  const { from, to } = parseRange(opts.range);
+  const data = loaded.machine.readMemory(from, to - from + 1);
+  ensureParentDir(opts.out);
+  writeFileSync(opts.out, data);
+  emit(
+    {
+      ok: true,
+      stage: 'mem',
+      dumped: opts.out,
+      range: { from: hex(from), to: hex(to), len: data.length },
+      source: loaded.source,
+    },
+    opts.json,
+    () => `dumped ${data.length} bytes from ${hex(from)}-${hex(to)} to ${opts.out}`
+  );
+  return EXIT.OK;
+}
+
+export function memLoadCommand(
+  addr: string,
+  opts: { bin: string; state?: string; json: boolean }
+): number {
+  const m = requireSession(opts.state);
+  const start = parseAddress(addr);
+  const data = new Uint8Array(readFileSync(opts.bin));
+  m.writeMemory(start, data);
+  const statePath = saveSessionMachine(m, opts.state);
+  emit(
+    { ok: true, stage: 'mem', loaded: opts.bin, addr: hex(start), wrote: data.length, statePath },
+    opts.json,
+    () => `loaded ${data.length} bytes from ${opts.bin} at ${hex(start)}`
   );
   return EXIT.OK;
 }
@@ -71,9 +115,9 @@ export function memWriteCommand(
 const REG16 = new Set(['AF', 'BC', 'DE', 'HL', 'SP', 'IX', 'IY']);
 const REG8 = new Set(['A', 'F', 'B', 'C', 'D', 'E', 'H', 'L', 'I', 'R']);
 
-export function regsCommand(opts: { state?: string; json: boolean }): number {
-  const m = requireSession(opts.state);
-  if (!m) return EXIT.USER_ERROR;
+export function regsCommand(opts: { state?: string; json: boolean } & MachineSourceOptions): number {
+  const loaded = loadMachineFromSource(opts, 'regs');
+  const m = loaded.machine;
   const r = m.getRegisters();
   const flags = decodeFlags(r.af & 0xff);
 
@@ -99,6 +143,7 @@ export function regsCommand(opts: { state?: string; json: boolean }): number {
       iff1: r.iff1,
       halted: r.halted,
       flags,
+      source: loaded.source,
     },
     opts.json,
     () =>
@@ -110,6 +155,14 @@ export function regsCommand(opts: { state?: string; json: boolean }): number {
       ].join('\n')
   );
   return EXIT.OK;
+}
+
+function parseRange(range: string): { from: number; to: number } {
+  const parts = range.split('-');
+  const from = parseAddress(parts[0]!);
+  const to = parts.length > 1 ? parseAddress(parts[1]!) : from;
+  if (to < from) throw userError(`Invalid range: ${range}`, 'mem');
+  return { from, to };
 }
 
 export function regsSetCommand(

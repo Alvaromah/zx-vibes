@@ -2,10 +2,10 @@ import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { build } from '../../build/sjasmplus.js';
 import { Watchdog } from '../../core/detect.js';
-import { Machine } from '../../core/machine.js';
 import { screenshotPNG } from '../../core/screen.js';
 import { screenText } from '../../core/screen-text.js';
 import { EXIT, emit, parseAddress, userError } from '../output.js';
+import { bootCachedMachine, BOOT_FRAMES } from '../session.js';
 import {
   configuredAssembler,
   configuredEntry,
@@ -40,7 +40,7 @@ export async function verifyCommand(opts: VerifyCommandOptions): Promise<number>
   let screenshotPath: string | undefined;
 
   if (buildResult.ok && buildResult.outputs.bin) {
-    const machine = Machine.boot();
+    const machine = bootCachedMachine();
     machine.loadBinary(new Uint8Array(readFileSync(buildResult.outputs.bin)), parseAddress(configuredOrg(undefined, loaded.config)));
     const wd = new Watchdog();
     wd.attach(machine);
@@ -55,6 +55,7 @@ export async function verifyCommand(opts: VerifyCommandOptions): Promise<number>
     runReport = {
       ok: !outcome.hang,
       status: outcome.hang ? 'hang' : 'ok',
+      boot: { mode: 'fresh-rom-cache', frames: BOOT_FRAMES },
       framesRun: outcome.framesRun,
       haltSynced: wd.haltSynced(outcome.framesRun),
       screen: { nonBlankCells: text.nonBlankCells, png: screenshotPath },

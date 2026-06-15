@@ -22,6 +22,8 @@ tests over external sources.
   `zx-rom-routines/SKILL.md`
 - Hangs, crashes, bad PC, stack drift, watchdog reports, or debugging:
   `zx-debug-triage/SKILL.md`
+- Snapshot triage, asset ripping, disassembly, scan/xref, or display writes:
+  `zx-reverse-engineering/SKILL.md`
 - Dirty redraw, XOR sprites, masked sprites, or double-buffer tradeoffs:
   `zx-rendering-patterns/SKILL.md`
 - Platformers, gravity, jump/collision, hazards, or room platform games:

@@ -85,6 +85,10 @@ integration.
 
 ## Recent area notes
 
+- 2026-06-15: T-20260615-01 added read-only machine sources, snapshot/mem/gfx
+  commands, scan/xref, structured disassembly JSON, run-attached watchpoints,
+  audio timelines/WAV, preview lifecycle tracking, `zxs play`, assertion
+  listing, and normalized verify/preview boot semantics.
 - 2026-06-14: T-20260614-02 added toolkit docs sync/check for
   `docs/reference` and `docs/agents/skills`, packages `docs/agents`, and
   extends `zxs new` scaffold tests for the skills router.

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -103,6 +103,40 @@ describe('zxs e2e (session + exit codes)', () => {
     });
   });
 
+  it('run --no-save/--read-only does not create session state and can emit WAV audio', () => {
+    const ro = mkdtempSync(join(tmpdir(), 'zxs-readonly-'));
+    const binPath = join(ro, 'beeper.bin');
+    const wavPath = join(ro, 'sound.wav');
+    writeFileSync(
+      binPath,
+      Buffer.from([0x3e, 0x10, 0xd3, 0xfe, 0xaf, 0xd3, 0xfe, 0x18, 0xfe])
+    );
+    const res = zxs(
+      ro,
+      'run',
+      '--bin',
+      binPath,
+      '--org',
+      '0x8000',
+      '--frames',
+      '2',
+      '--no-detect-hangs',
+      '--read-only',
+      '--wav',
+      wavPath,
+      '--json'
+    );
+
+    expect(res.status).toBe(0);
+    expect(existsSync(join(ro, '.zxs', 'state.zxstate'))).toBe(false);
+    expect(existsSync(wavPath)).toBe(true);
+    expect(readFileSync(wavPath).subarray(0, 4).toString()).toBe('RIFF');
+    const audio = res.json!['audio'] as Record<string, unknown>;
+    expect(audio['beeperEdges']).toBe(2);
+    expect(Array.isArray(audio['edgeTimeline'])).toBe(true);
+    expect(audio['wav']).toBe(wavPath);
+  });
+
   it('the tight-loop verdict suggests --keys for input waits', () => {
     const binPath = join(cwd, 'loop.bin');
     writeFileSync(binPath, Buffer.from([0x18, 0xfe])); // JR $
@@ -119,6 +153,52 @@ describe('zxs e2e (session + exit codes)', () => {
     const res = zxs(cwd, 'state', 'export', '--z80', out, '--json');
     expect(res.status).toBe(0);
     expect(res.json).toMatchObject({ exported: out, format: 'z80v1' });
+
+    const info = zxs(cwd, 'snapshot', 'info', out, '--json');
+    expect(info.status).toBe(0);
+    expect(info.json).toMatchObject({ ok: true, format: 'z80', version: '1', supported: true });
+
+    const ram = join(cwd, 'ram.bin');
+    const ramRes = zxs(cwd, 'snapshot', 'ram', out, '--out', ram, '--json');
+    expect(ramRes.status).toBe(0);
+    expect(readFileSync(ram).length).toBe(49152);
+
+    const mem = zxs(cwd, 'snapshot', 'mem', out, '0x8000', '--len', '4', '--json');
+    expect(mem.status).toBe(0);
+    expect(mem.json).toMatchObject({ addr: '0x8000', len: 4 });
+
+    const dump = join(cwd, 'screen.bin');
+    const dumpRes = zxs(cwd, 'mem', 'dump', '--z80', out, '--range', '0x4000-0x5aff', '--out', dump, '--json');
+    expect(dumpRes.status).toBe(0);
+    expect(readFileSync(dump).length).toBe(0x1b00);
+
+    const png = join(cwd, 'screen.png');
+    const gfx = zxs(cwd, 'gfx', 'screen', '--z80', out, '--out', png, '--json');
+    expect(gfx.status).toBe(0);
+    expect(readFileSync(png).subarray(1, 4).toString()).toBe('PNG');
+  });
+
+  it('test --list-assertions exposes the assertion vocabulary', () => {
+    const res = zxs(cwd, 'test', '--list-assertions', '--json');
+    expect(res.status).toBe(0);
+    const assertions = res.json!['assertions'] as { type: string }[];
+    expect(assertions.map((a) => a.type)).toContain('attrNonBlank');
+    expect(assertions.map((a) => a.type)).toContain('beeperEdges');
+  });
+
+  it('scan and xref work directly from a read-only binary source', () => {
+    const binPath = join(cwd, 'static.bin');
+    writeFileSync(binPath, Buffer.from([0xcd, 0x10, 0x00, 0xed, 0xb0, 0x18, 0xfe]));
+
+    const scan = zxs(cwd, 'scan', '--bin', binPath, '--org', '0x8000', '--opcode', 'ED B0', '--json');
+    expect(scan.status).toBe(0);
+    const scanHits = scan.json!['hits'] as { addr: string }[];
+    expect(scanHits.some((h) => h.addr === '0x8003')).toBe(true);
+
+    const xref = zxs(cwd, 'xref', '0x0010', '--bin', binPath, '--org', '0x8000', '--json');
+    expect(xref.status).toBe(0);
+    const xrefHits = xref.json!['hits'] as { text: string }[];
+    expect(xrefHits.some((h) => h.text === 'CALL 0x0010')).toBe(true);
   });
 
   it('JSON mode reports command failures as one parseable document', () => {

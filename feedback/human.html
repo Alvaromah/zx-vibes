@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mejoras identificadas para zx-vibes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: '#111827',
+            paper: '#f8fafc',
+            spectrumBlue: '#1d4ed8',
+            spectrumCyan: '#0891b2',
+            spectrumGreen: '#047857',
+            spectrumAmber: '#b45309',
+            spectrumRed: '#b91c1c'
+          },
+          boxShadow: {
+            panel: '0 16px 40px rgba(15, 23, 42, 0.08)'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background:
+        linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.98)),
+        repeating-linear-gradient(90deg, rgba(15, 23, 42, 0.04) 0 1px, transparent 1px 32px);
+    }
+
+    .spectrum-strip span {
+      display: block;
+      height: 8px;
+    }
+
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white; }
+      article { box-shadow: none !important; border-color: #cbd5e1 !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-900 antialiased">
+  <div class="spectrum-strip grid grid-cols-7">
+    <span class="bg-black"></span>
+    <span class="bg-blue-700"></span>
+    <span class="bg-red-700"></span>
+    <span class="bg-fuchsia-700"></span>
+    <span class="bg-green-700"></span>
+    <span class="bg-cyan-600"></span>
+    <span class="bg-yellow-400"></span>
+  </div>
+
+  <main class="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-5 py-8 lg:grid-cols-[280px_minmax(0,1fr)] lg:px-8">
+    <aside class="no-print lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-panel">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Documento humano</p>
+        <h1 class="mt-2 text-xl font-bold leading-tight text-ink">Mejoras de zx-vibes</h1>
+        <p class="mt-3 text-sm leading-6 text-slate-600">
+          Explicacion practica de las mejoras extraidas del feedback de agentes
+          de codigo y del backlog <code class="rounded bg-slate-100 px-1 py-0.5">T-20260615-01</code>.
+        </p>
+
+        <nav class="mt-5 space-y-1 text-sm">
+          <a class="block rounded px-3 py-2 font-medium text-slate-700 hover:bg-slate-100" href="#resumen">Resumen</a>
+          <a class="block rounded px-3 py-2 font-medium text-slate-700 hover:bg-slate-100" href="#ya-resuelto">Ya resuelto</a>
+          <a class="block rounded px-3 py-2 font-medium text-slate-700 hover:bg-slate-100" href="#mejoras">Mejoras</a>
+          <a class="block rounded px-3 py-2 font-medium text-slate-700 hover:bg-slate-100" href="#polish">Ajustes menores</a>
+          <a class="block rounded px-3 py-2 font-medium text-slate-700 hover:bg-slate-100" href="#validacion">Validacion</a>
+        </nav>
+
+        <div class="mt-6 rounded border border-slate-200 bg-slate-50 p-3">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Fuente</p>
+          <p class="mt-1 text-sm text-slate-700">
+            <code>.feedback/feedback-0.md</code> a <code>.feedback/feedback-3.md</code>
+            y <code>.harness/tasks/pending/T-20260615-01-...</code>.
+          </p>
+        </div>
+      </div>
+    </aside>
+
+    <article class="rounded-lg border border-slate-200 bg-white shadow-panel">
+      <header class="border-b border-slate-200 p-6 md:p-8">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="rounded bg-blue-50 px-2.5 py-1 text-xs font-semibold text-spectrumBlue">zx-vibes</span>
+          <span class="rounded bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-spectrumGreen">Feedback de agentes</span>
+          <span class="rounded bg-amber-50 px-2.5 py-1 text-xs font-semibold text-spectrumAmber">Backlog implementable</span>
+        </div>
+        <h2 class="mt-5 text-3xl font-bold tracking-normal text-ink md:text-4xl">
+          Mejoras identificadas y tarea correspondiente
+        </h2>
+        <p class="mt-4 max-w-3xl text-base leading-7 text-slate-700">
+          Este documento traduce el feedback tecnico de varios agentes de codigo a una
+          explicacion clara para decidir que construir, por que importa y como validar
+          cada mejora. La tarea madre es
+          <strong>T-20260615-01, Feedback-driven toolkit improvements backlog</strong>.
+        </p>
+      </header>
+
+      <section id="resumen" class="border-b border-slate-200 p-6 md:p-8">
+        <h2 class="text-2xl font-bold text-ink">Resumen ejecutivo</h2>
+        <div class="mt-5 grid gap-4 md:grid-cols-3">
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-sm font-semibold text-spectrumBlue">Problema central</p>
+            <p class="mt-2 text-sm leading-6 text-slate-700">
+              El toolkit ya permite compilar, ejecutar, inspeccionar y depurar, pero
+              algunos limites aparecen justo donde los agentes necesitan automatizar:
+              estado persistente, snapshots, trazas, graficos, audio y documentacion.
+            </p>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-sm font-semibold text-spectrumGreen">Direccion propuesta</p>
+            <p class="mt-2 text-sm leading-6 text-slate-700">
+              Convertir los flujos repetidos por agentes en comandos estables, JSON
+              parseable, recetas cortas y validaciones que reduzcan scripts temporales.
+            </p>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-sm font-semibold text-spectrumAmber">Forma de ejecucion</p>
+            <p class="mt-2 text-sm leading-6 text-slate-700">
+              No es una unica mega-tarea. Cada mejora debe implementarse como rama o PR
+              pequeño, verificando primero que el feedback sigue siendo cierto en el codigo.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-5">
+          <h3 class="text-base font-semibold text-ink">Mapa de tareas</h3>
+          <ol class="mt-3 grid gap-2 text-sm leading-6 text-slate-700 md:grid-cols-2">
+            <li><strong>1.</strong> Unificar arranque en <code>run</code>, <code>test</code> y <code>verify</code>.</li>
+            <li><strong>2.</strong> Hacer seguro el estado y permitir modo solo lectura.</li>
+            <li><strong>3.</strong> Aclarar frames y mejorar scripting de entrada.</li>
+            <li><strong>4.</strong> Añadir I/O de snapshots y memoria.</li>
+            <li><strong>5.</strong> Hacer comandos investigativos stateless y scriptables.</li>
+            <li><strong>6.</strong> Añadir primitivas de graficos y extraccion de assets.</li>
+            <li><strong>7.</strong> Mejorar disassembly, xrefs y scans.</li>
+            <li><strong>8.</strong> Completar docs, assertions y skills.</li>
+            <li><strong>9.</strong> Mejorar preview, player y ciclo de vida del servidor.</li>
+            <li><strong>10.</strong> Añadir introspeccion y renderizado de audio.</li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="ya-resuelto" class="border-b border-slate-200 p-6 md:p-8">
+        <h2 class="text-2xl font-bold text-ink">Trabajo ya resuelto que no debe duplicarse</h2>
+        <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-700">
+          El feedback mezcla problemas pendientes con contexto historico. Estos puntos
+          deben comprobarse si hay dudas, pero no conviene reimplementarlos sin evidencia
+          de regresion.
+        </p>
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <h3 class="font-semibold text-emerald-950">Proyectos nuevos ejecutables</h3>
+            <p class="mt-2 text-sm leading-6 text-emerald-900">
+              El bloqueo inicial de <code>zxs new</code> ya se trato en
+              <code>T-20260614-01</code>: los proyectos generados deben poder ejecutar
+              <code>npm run build</code> y <code>npm test</code> sin buscar bins globales.
+            </p>
+          </div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <h3 class="font-semibold text-emerald-950">Skills locales de agentes</h3>
+            <p class="mt-2 text-sm leading-6 text-emerald-900">
+              La documentacion de skills de agentes y su copia a proyectos generados ya
+              se completo en <code>T-20260614-02</code>. Las nuevas mejoras deben ampliarla,
+              no rehacerla.
+            </p>
+          </div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <h3 class="font-semibold text-emerald-950">Audio ya enviado</h3>
+            <p class="mt-2 text-sm leading-6 text-emerald-900">
+              El feedback marca como ya enviados el audio beeper con resampling, los
+              arreglos de teclas pegadas y el sonido de carga de cinta. Solo tocar si el
+              codigo actual contradice ese estado.
+            </p>
+          </div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <h3 class="font-semibold text-emerald-950">Receta 09 beeper</h3>
+            <p class="mt-2 text-sm leading-6 text-emerald-900">
+              <code>packages/toolkit/recipes/09-beeper-fx/</code> existe. La mejora real
+              es documentar sonido y referencias, no recrear la receta.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="mejoras" class="p-6 md:p-8">
+        <h2 class="text-2xl font-bold text-ink">Mejoras detalladas</h2>
+        <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-700">
+          Cada bloque corresponde a un paquete de trabajo dentro de
+          <code>T-20260615-01</code>. Las areas indican donde probablemente habra que mirar
+          primero, no una lista cerrada de ficheros.
+        </p>
+
+        <div class="mt-6 space-y-6">
+          <section id="task-1" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumRed">Paquete 1</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Unificar el arranque en run, test y verify</h3>
+              </div>
+              <span class="rounded bg-red-50 px-2.5 py-1 text-xs font-semibold text-spectrumRed">Prioridad alta</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Un agente observo que el mismo binario podia pasar en <code>run</code> o
+                  <code>test</code>, pero fallar en <code>verify</code>. La sospecha es que
+                  cada ruta prepara la maquina con un estado inicial diferente.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Evita falsos positivos y falsos negativos en juegos que dependen del
+                  arranque ROM, <code>IY</code>, sysvars, interrupciones o RAM inicial.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Auditar <code>run.ts</code>, <code>test-cmd.ts</code>, <code>verify.ts</code>
+                  y los helpers de sesion. O bien unificar el boot, o bien mostrar un
+                  diagnostico claro cuando una ruta use un modo distinto de forma intencionada.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Un fixture dependiente de ROM debe comportarse igual en <code>run</code>,
+                  <code>test</code> y <code>verify</code>. La ayuda debe explicar cualquier
+                  diferencia deliberada.
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> toolkit, emulator.</p>
+          </section>
+
+          <section id="task-2" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumRed">Paquete 2</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Estado seguro y modo solo lectura</h3>
+              </div>
+              <span class="rounded bg-red-50 px-2.5 py-1 text-xs font-semibold text-spectrumRed">Prioridad alta</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Los comandos persistentes modifican <code>.zxs/state.zxstate</code>. En
+                  Windows y entornos gestionados se reportaron fallos <code>EPERM</code> al
+                  renombrar el temporal de estado.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Permite que las pruebas de propiedades y los flujos de investigacion no
+                  contaminen su estado base ni fallen por operaciones de fichero evitables.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Reintentos o estrategia de reemplazo mas robusta en <code>session.ts</code>,
+                  modo global o por comando para no guardar estado, soporte de baseline
+                  <code>state save/load</code> y posible <code>ZXS_STATE_DIR</code>.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Un comando read-only no escribe <code>.zxs/state.zxstate</code>. La
+                  documentacion muestra el patron "inyectar estado, ejecutar, comprobar,
+                  restaurar baseline".
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> toolkit, emulator, reference-docs.</p>
+          </section>
+
+          <section id="task-3" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumAmber">Paquete 3</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Semantica de frames y scripting de entrada</h3>
+              </div>
+              <span class="rounded bg-amber-50 px-2.5 py-1 text-xs font-semibold text-spectrumAmber">Prioridad media-alta</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  <code>--frames N</code> para en frontera de frame y <code>--keys</code>
+                  usa un contador global. Si el juego cambia estado justo despues de
+                  <code>HALT</code>, una comprobacion corta puede parecer fallar.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Reduce pruebas fragiles y evita que el agente tenga que contar a mano
+                  frames de boot, menu y gameplay para pulsar una tecla en el momento exacto.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Documentar que incluye un frame, promover watchpoints para comprobar
+                  escrituras y añadir entrada relativa al inicio del run. Opcionalmente,
+                  <code>--until-write</code>, <code>--until-change</code> y estado de teclas
+                  por frame en JSON.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  La ayuda y docs incluyen un ejemplo de bucle con <code>HALT</code>. Un
+                  agente puede programar entrada relativa sin contar frames historicos.
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> toolkit, reference-docs.</p>
+          </section>
+
+          <section id="task-4" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumRed">Paquete 4</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Snapshots y volcado de memoria como ciudadanos de primera</h3>
+              </div>
+              <span class="rounded bg-red-50 px-2.5 py-1 text-xs font-semibold text-spectrumRed">Prioridad alta</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Para extraer graficos de un juego existente, los agentes tuvieron que
+                  parsear snapshots y convertir salidas hex a binario. Es trabajo generico
+                  que se repite en reverse engineering.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Permite inspeccionar registros, RAM, compresion, hardware y layout de
+                  paginas sin escribir scripts temporales.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Añadir <code>zxs snapshot info</code>, <code>snapshot ram</code>,
+                  <code>snapshot mem</code>, <code>mem dump --out</code> y
+                  <code>mem load --bin</code>, empezando por formatos ya soportados y
+                  dejando camino a <code>.z80</code> v2/v3 y 128K.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Desde un snapshot se puede exportar RAM de pantalla y rangos arbitrarios
+                  como binarios. El JSON es estable y parseable.
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> toolkit, emulator.</p>
+          </section>
+
+          <section id="task-5" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumAmber">Paquete 5</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Comandos investigativos stateless y scriptables</h3>
+              </div>
+              <span class="rounded bg-amber-50 px-2.5 py-1 text-xs font-semibold text-spectrumAmber">Prioridad media-alta</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  El flujo actual favorece sesiones persistentes: cargar, poner watchpoint,
+                  ejecutar, leer registros, desensamblar. Para agentes eso implica muchos
+                  procesos y mutaciones de estado.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Hace viable una investigacion read-only desde un snapshot o estado
+                  explicito, con menos latencia y menos riesgo de ensuciar la sesion.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Permitir <code>--z80</code>, <code>--sna</code>, <code>--bin --org</code>
+                  o <code>--state</code> en <code>regs</code>, <code>mem</code>,
+                  <code>disasm</code>, <code>trace</code>, <code>watch</code> y
+                  <code>screen</code>. Añadir watchpoints acoplados a <code>run</code>.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Un comando puede cargar un snapshot, ejecutar hasta watchpoint y devolver
+                  PC, instruccion, direccion tocada, valor, registros y ventana de disasm en JSON.
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> toolkit, emulator, assembler.</p>
+          </section>
+
+          <section id="task-6" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumRed">Paquete 6</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Primitivas de graficos y extraccion de assets</h3>
+              </div>
+              <span class="rounded bg-red-50 px-2.5 py-1 text-xs font-semibold text-spectrumRed">Prioridad alta</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Los agentes reimplementaron decodificacion de pantalla Spectrum,
+                  renderizado 1bpp, atributos, mapas de entropia y deteccion de stride.
+                  Todo eso es reutilizable.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Evita scripts desechables para ver sprites, fuentes, SCREEN$, UDGs o
+                  bloques graficos. Mejora desarrollo nuevo y extraccion de juegos existentes.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Crear familia <code>zxs gfx</code>: <code>screen</code>,
+                  <code>linear</code>, <code>sheet</code>, <code>attrs</code>,
+                  <code>font</code>, <code>find</code> y <code>blit-linear</code>.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Un snapshot o sesion genera PNGs de pantalla, sprites y atributos.
+                  <code>gfx find --json</code> devuelve candidatos deterministas para agentes.
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> toolkit, emulator, reference-docs.</p>
+          </section>
+
+          <section id="task-7" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumAmber">Paquete 7</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Disassembly, referencias cruzadas y busquedas estaticas</h3>
+              </div>
+              <span class="rounded bg-amber-50 px-2.5 py-1 text-xs font-semibold text-spectrumAmber">Prioridad media</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  El desensamblador ayuda, pero el agente necesita seguir llamadas,
+                  saltos, inmediatos y rutinas que tocan memoria de pantalla sin leer texto
+                  manualmente.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Reduce el tiempo de localizar blitters, tablas, llamadas ROM y sitios
+                  <code>LDIR</code>/<code>LDDR</code>. El output estructurado permite decidir
+                  el siguiente comando automaticamente.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Añadir rangos a <code>disasm</code>, JSON con operandos y targets,
+                  simbolos ROM/SLD, <code>zxs scan --opcode</code>,
+                  <code>--imm-range</code> y <code>zxs xref --addr</code>.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Las salidas no requieren scraping. Entradas ROM como <code>RST 0x10</code>,
+                  <code>CLS</code> y <code>BEEPER</code> aparecen anotadas.
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> toolkit, assembler, reference-docs.</p>
+          </section>
+
+          <section id="task-8" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumAmber">Paquete 8</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Docs, assertions, clobbers y skill de reverse engineering</h3>
+              </div>
+              <span class="rounded bg-amber-50 px-2.5 py-1 text-xs font-semibold text-spectrumAmber">Prioridad media</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  La informacion existe parcialmente, pero esta dispersa: sonido, vocabulario
+                  de assertions, clobbers de ROM, hazards de IX/IY y flujos de asset ripping.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Evita que los agentes aprendan por grep o por fallos en ejecucion. Tambien
+                  reduce bugs reales por registros clobbered o strings ROM terminadas en cero.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Crear <code>docs/reference/sound.md</code>, referencia de assertions o
+                  <code>test --list-assertions</code>, tabla de clobbers ROM, aviso sobre
+                  helpers de impresion y skill/receta de reverse engineering.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Docs root, toolkit docs y create-package docs quedan sincronizados. Los
+                  playbooks generados enrutan a las nuevas referencias.
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> reference-docs, toolkit, scaffolding.</p>
+          </section>
+
+          <section id="task-9" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumAmber">Paquete 9</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Preview, player y ciclo de vida del servidor</h3>
+              </div>
+              <span class="rounded bg-amber-50 px-2.5 py-1 text-xs font-semibold text-spectrumAmber">Prioridad media</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  <code>preview --watch</code> bloquea, puede competir con builds, caer a
+                  otro puerto o dejar servidores huerfanos. Tambien falta abrir directamente
+                  snapshots o cintas arbitrarias en un player.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Da a los agentes una forma fiable de lanzar, listar, parar y entregar al
+                  usuario una URL correcta, sin limpiar puertos con comandos del sistema.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Añadir aviso visible de port fallback, <code>preview --list</code>,
+                  <code>--stop</code>, <code>--detach</code>, lock de build/watch y
+                  <code>zxs play &lt;file&gt;</code> o <code>preview --load</code>.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  El agente puede gestionar previews sin herramientas externas. Un build
+                  obsoleto se avisa. Un snapshot o TAP se abre en navegador con sonido.
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> toolkit, emulator, gallery.</p>
+          </section>
+
+          <section id="task-10" class="rounded-lg border border-slate-200 p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-spectrumCyan">Paquete 10</p>
+                <h3 class="mt-1 text-xl font-bold text-ink">Introspeccion y renderizado de audio</h3>
+              </div>
+              <span class="rounded bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-spectrumCyan">Prioridad media</span>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h4 class="font-semibold text-slate-900">Por que surge</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  El JSON actual puede demostrar que hubo actividad beeper, pero no permite
+                  escuchar el resultado ni comprobar tono, melodia o segmentos de frecuencia.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Problema que resuelve</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Hace testeable el sonido de forma objetiva: no solo "ocurrio audio", sino
+                  "la nota aproximada y su duracion son correctas".
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Solucion propuesta</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Capturar edges con T-states o ciclos, añadir <code>zxs run --wav</code>,
+                  exponer <code>edgeTimeline</code>, <code>toneSegments</code> o
+                  <code>dominantHz</code>, y revisar fallback de audio.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-semibold text-slate-900">Aceptacion</h4>
+                <p class="mt-2 text-sm leading-6 text-slate-700">
+                  Un run headless genera WAV reproducible y metadatos suficientes para
+                  afirmar pitch o secuencia de notas en tests.
+                </p>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-slate-600"><strong>Areas:</strong> toolkit, emulator, reference-docs.</p>
+          </section>
+        </div>
+      </section>
+
+      <section id="polish" class="border-t border-slate-200 p-6 md:p-8">
+        <h2 class="text-2xl font-bold text-ink">Ajustes menores agrupables</h2>
+        <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-700">
+          Estos puntos pueden entrar como mejoras pequeñas dentro de los paquetes anteriores
+          o como PRs de baja friccion.
+        </p>
+        <div class="mt-5 grid gap-3 md:grid-cols-2">
+          <div class="rounded border border-slate-200 p-4 text-sm leading-6 text-slate-700">
+            Relajar smoke tests generados para que un segundo sprite no rompa
+            <code>cellsNonBlank max 1</code>.
+          </div>
+          <div class="rounded border border-slate-200 p-4 text-sm leading-6 text-slate-700">
+            Añadir nudges de <code>zxs doctor</code>, <code>preview --json</code> y entrega de URL al playbook.
+          </div>
+          <div class="rounded border border-slate-200 p-4 text-sm leading-6 text-slate-700">
+            Crear alias <code>watch clear</code> para borrar todos los watchpoints.
+          </div>
+          <div class="rounded border border-slate-200 p-4 text-sm leading-6 text-slate-700">
+            Documentar que <code>--bin</code> arranca fresco y que para reanudar tras pokes no debe usarse.
+          </div>
+          <div class="rounded border border-slate-200 p-4 text-sm leading-6 text-slate-700">
+            Añadir caveat de <code>screen --text</code> para juegos bitmap o fuentes personalizadas.
+          </div>
+          <div class="rounded border border-slate-200 p-4 text-sm leading-6 text-slate-700">
+            Añadir <code>attrNonBlank</code>, <code>coloredCells</code> o documentar alternativas para pantallas solo de atributos.
+          </div>
+        </div>
+      </section>
+
+      <section id="validacion" class="border-t border-slate-200 p-6 md:p-8">
+        <h2 class="text-2xl font-bold text-ink">Validacion esperada</h2>
+        <div class="mt-5 overflow-hidden rounded-lg border border-slate-200">
+          <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-4 py-3">Tipo de cambio</th>
+                <th class="px-4 py-3">Validacion recomendada</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 bg-white">
+              <tr>
+                <td class="px-4 py-3 font-medium text-slate-900">Comandos toolkit</td>
+                <td class="px-4 py-3 text-slate-700"><code>pnpm --filter @zx-vibes/toolkit typecheck</code>, <code>lint</code> y tests Vitest enfocados.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium text-slate-900">Snapshots, CPU, memoria o audio</td>
+                <td class="px-4 py-3 text-slate-700">Tests relevantes de emulator mas integracion de toolkit.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium text-slate-900">Docs, skills o assets copiados</td>
+                <td class="px-4 py-3 text-slate-700"><code>pnpm --filter @zx-vibes/toolkit run check:docs</code> y <code>pnpm --filter create-zx-vibes run check:assets</code>.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium text-slate-900">Contratos entre paquetes</td>
+                <td class="px-4 py-3 text-slate-700"><code>pnpm run verify</code> desde la raiz.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-5">
+          <h3 class="font-semibold text-blue-950">Criterio de decision</h3>
+          <p class="mt-2 text-sm leading-6 text-blue-900">
+            Si una mejora toca comportamiento observable del CLI, JSON publico, snapshots,
+            docs generadas o plantillas, debe validarse tambien desde el punto de vista de
+            un agente: salida estructurada, errores accionables, rutas reproducibles y pocos
+            pasos manuales.
+          </p>
+        </div>
+      </section>
+    </article>
+  </main>
+</body>
+</html>

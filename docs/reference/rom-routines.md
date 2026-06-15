@@ -8,6 +8,8 @@ entry points worth calling. Everything else: write your own.
 
 - `IY = 0x5C3A` (the ROM addresses sysvars relative to IY). True after boot;
   if you clobber IY, restore it before calling.
+- `IX` is also not sacred around ROM calls. Some ROM paths use indexed
+  addressing internally; preserve IX/IY yourself when your game depends on them.
 - Interrupts enabled (some routines assume the ISR keeps sysvars fresh).
 - They clobber registers freely — assume AF/BC/DE/HL die unless noted.
 
@@ -26,7 +28,10 @@ Control codes through RST 0x10 (print them like characters):
 `19,n` = BRIGHT n · `13` = newline. Codes 32-127 are ASCII (`£` at 0x60,
 `©` at 0x7F). Codes 0x90-0xA4 are UDGs.
 
-A zero-terminated string printer: recipes/02-print-rom.
+A zero-terminated string printer: recipes/02-print-rom. Do not feed it strings
+that intentionally contain `0x00`; ROM control codes are fine, but a zero byte
+ends the string. For binary text tables or strings that may contain zero, store
+a length byte and loop exactly that many characters through `RST 0x10`.
 
 ## Other keepers
 
@@ -50,6 +55,8 @@ BEEPER example (440Hz for ~0.25s — blocks ~12 frames!):
 
 - Forgetting `CHAN-OPEN` once before the first `RST 0x10` prints to a
   closed channel → error or nothing. One call at startup is enough.
+- Preserve IX/IY around ROM calls if you use them for game state. The ROM uses
+  IY for sysvars and may not preserve your indexed-register conventions.
 - BEEPER **freezes the game** while it plays (it busy-loops with DI). For
   game SFX make your own per-frame blips (recipes/09-beeper-fx, later) and
   keep BEEPER for jingles.

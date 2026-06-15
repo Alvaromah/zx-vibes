@@ -1,5 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { analyzeBeeperTimeline, encodeBeeperWav } from '../../core/audio.js';
 import { Watchdog } from '../../core/detect.js';
+import { disassemble, disassembleOne } from '../../core/disasm.js';
 import { KeyPlanRunner, parseKeysSpec } from '../../core/input.js';
 import { Machine } from '../../core/machine.js';
 import { screenshotPNG } from '../../core/screen.js';
@@ -24,12 +26,19 @@ export interface RunCommandOptions {
   frames: string;
   untilPc?: string;
   untilBreak: boolean;
+  untilWatch?: boolean;
+  untilWrite?: string;
+  untilChange?: string;
+  watchRead?: string;
+  watchWrite?: string;
   keys?: string;
   fresh: boolean;
   save: boolean; // commander --no-save
+  readOnly?: boolean;
   detectHangs: boolean; // commander --no-detect-hangs
   state?: string;
   screenshot?: string;
+  wav?: string;
   text: boolean;
   json: boolean;
 }
@@ -74,21 +83,32 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
     loaded = `${opts.tap} (tape loaded+playing — drive the ROM loader with --keys / zxs key J, zxs type '""')`;
   }
 
-  const runner = new KeyPlanRunner(opts.keys ? parseKeysSpec(opts.keys) : [], m);
+  const keyEvents = opts.keys ? parseKeysSpec(opts.keys) : [];
+  const runner = new KeyPlanRunner(keyEvents, m);
   runner.applyDue(0);
 
   const meta = loadSessionMeta(opts.state);
   const symbols = loadSymbols(meta);
   const breakpoints =
     meta.breakpoints.length > 0 ? new Set(meta.breakpoints.map((b) => b.addr)) : undefined;
+  const ephemeralWatchpoints = [
+    ...(opts.watchRead ? [{ id: -1, type: 'read' as const, ...parseRange(opts.watchRead) }] : []),
+    ...(opts.watchWrite ? [{ id: -2, type: 'write' as const, ...parseRange(opts.watchWrite) }] : []),
+    ...(opts.untilWrite ? [{ id: -3, type: 'write' as const, ...parseRange(opts.untilWrite) }] : []),
+    ...(opts.untilChange ? [{ id: -4, type: 'write' as const, ...parseRange(opts.untilChange) }] : []),
+  ];
+  const watchpoints = [...meta.watchpoints, ...ephemeralWatchpoints];
   const monitor =
-    meta.watchpoints.length > 0 ? new WatchpointMonitor(meta.watchpoints) : undefined;
+    watchpoints.length > 0 ? new WatchpointMonitor(watchpoints) : undefined;
 
   const wd = opts.detectHangs ? new Watchdog() : undefined;
   wd?.attach(m);
   monitor?.attach(m); // after watchdog: wraps its patch, detached in reverse
 
-  const frameBudget = opts.untilBreak ? Math.max(frames, 3000) : frames;
+  const frameBudget =
+    opts.untilBreak || opts.untilWatch || opts.untilWrite || opts.untilChange
+      ? Math.max(frames, 3000)
+      : frames;
   const started = performance.now();
   m.resetAudioActivity();
   const outcome = m.run({
@@ -103,6 +123,7 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
   });
   const wallTimeMs = Math.round(performance.now() - started);
   const audio = m.getAudioActivity();
+  const audioAnalysis = analyzeBeeperTimeline(audio.edgeTimeline);
   monitor?.detach();
   wd?.detach();
 
@@ -113,8 +134,16 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
     screenshotPath = opts.screenshot;
   }
 
+  let wavPath: string | undefined;
+  if (opts.wav) {
+    ensureParentDir(opts.wav);
+    writeFileSync(opts.wav, encodeBeeperWav(audio.edgeTimeline, outcome.tstatesRun));
+    wavPath = opts.wav;
+  }
+
   let statePath: string | undefined;
-  if (opts.save && !m.tape.playing) {
+  const saveState = opts.save && !opts.readOnly && !m.tape.playing;
+  if (saveState) {
     statePath = saveSessionMachine(m, opts.state);
   }
 
@@ -152,6 +181,9 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
           ...outcome.watchpointHit,
           addr: hex(outcome.watchpointHit.addr),
           ...(outcome.watchpointHit.pc !== undefined ? { pc: sym(outcome.watchpointHit.pc) } : {}),
+          ...(outcome.watchpointHit.pc !== undefined
+            ? watchHitContext(m, outcome.watchpointHit.pc, symbols)
+            : {}),
         }
       : undefined;
 
@@ -161,6 +193,10 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
     status,
     ...(loaded !== undefined ? { loaded } : {}),
     ...(resumed ? { resumedSession: true } : {}),
+    boot: {
+      mode: opts.fresh || loadRequested ? 'fresh-rom-cache' : resumed ? 'resumed-session' : 'fresh-rom-cache',
+      frames: opts.fresh || loadRequested || !resumed ? 250 : 0,
+    },
     exit: { reason: outcome.reason, pc: sym(outcome.pc) },
     ...(hang ? { hang: { ...hang, pc: sym(hang.pc) } } : {}),
     ...(breakpointInfo ? { breakpoint: breakpointInfo } : {}),
@@ -174,6 +210,10 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
       portFEWrites: audio.portFEWrites,
       beeperLevel: audio.beeperLevel,
       lastPortFE: hex(audio.lastPortFE, 2),
+      edgeTimeline: audioAnalysis.edgeTimeline,
+      toneSegments: audioAnalysis.toneSegments,
+      ...(audioAnalysis.dominantHz !== undefined ? { dominantHz: audioAnalysis.dominantHz } : {}),
+      ...(wavPath !== undefined ? { wav: wavPath } : {}),
     },
     registers: {
       pc: hex(regs.pc),
@@ -194,6 +234,12 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
       ...(opts.text ? { rows: text.rows } : {}),
       ...(screenshotPath !== undefined ? { png: screenshotPath } : {}),
     },
+    input: {
+      schedule: keyEvents,
+      relativeTo: 'run-start-frame',
+      planFrames: runner.planFrames,
+    },
+    readOnly: !saveState,
     ...(statePath !== undefined ? { statePath } : {}),
     next,
   };
@@ -228,9 +274,35 @@ export async function runCommand(opts: RunCommandOptions): Promise<number> {
         (screenshotPath ? `, saved ${screenshotPath}` : '')
     );
     lines.push(`audio: ${audio.beeperEdges} beeper edges from ${audio.portFEWrites} port writes`);
+    if (wavPath) lines.push(`audio wav: ${wavPath}`);
+    if (!saveState) lines.push('state: not saved');
     if (opts.text) lines.push('┌' + '─'.repeat(32) + '┐', ...text.rows.map((r) => `│${r}│`), '└' + '─'.repeat(32) + '┘');
     return lines.join('\n');
   });
 
   return hang ? EXIT.HANG : EXIT.OK;
+}
+
+function parseRange(range: string): { from: number; to: number } {
+  const parts = range.split('-');
+  const from = parseAddress(parts[0]!);
+  const to = parts.length > 1 ? parseAddress(parts[1]!) : from;
+  if (to < from) throw new Error(`Invalid range: ${range}`);
+  return { from, to };
+}
+
+function watchHitContext(
+  m: Machine,
+  pc: number,
+  symbols: ReturnType<typeof loadSymbols>
+): { instruction: string; disasm: { addr: string; bytes: string; text: string }[] } {
+  const read = (a: number) => m.memory.read(a);
+  return {
+    instruction: disassembleOne(read, pc).text,
+    disasm: disassemble(read, pc, 4).map((line) => ({
+      addr: symbols ? symbols.symbolicate(line.addr) : hex(line.addr),
+      bytes: line.bytes.map((b) => b.toString(16).padStart(2, '0')).join(' '),
+      text: line.text,
+    })),
+  };
 }

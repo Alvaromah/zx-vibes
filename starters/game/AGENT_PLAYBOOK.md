@@ -7,6 +7,7 @@ emulator runs headless and FAST (130× real hardware) — run it constantly.
 
 This project expects the local `zx-vibes` devDependency. If `zxs` is not found,
 run `npm install`; then use `npm run build`, `npm test`, or `npx zxs <cmd>`.
+If the toolchain looks wrong, start with `zxs doctor --json`.
 
 Before loading a domain skill, read `docs/agents/skills/INDEX.md`. It routes
 assembler, screen/rendering, keyboard, timing, ROM, colour, sound, and debug
@@ -30,8 +31,10 @@ without having run and looked.** Exit codes: 0 ok · 1 build error ·
 Test input by scheduling keys: `zxs run --bin ... --keys "10:P*30,50:SPACE*5"`.
 If the change includes sound, check `audio.beeperEdges` in `zxs run --json`
 and add `{ "type": "beeperEdges", "min": 1 }` to a test.
-For browser playback, use `zxs preview --watch`; the page shows the current
-build hash. Without `--watch`, restart preview after source changes.
+For browser playback, use `zxs preview --watch --json`; hand the user the
+reported URL. Use `zxs preview --detach --watch` for a background server,
+`zxs preview --list` to recover the URL, and `zxs preview --stop` when done.
+Without `--watch`, restart preview after source changes.
 
 ## When stuck
 
@@ -44,6 +47,8 @@ build hash. Without `--watch`, restart preview after source changes.
 | Works then crashes | `zxs regs` after longer runs: SP drifting? docs/reference/common-bugs.md#stack-drift |
 | Need to see inside | `zxs break add <label>` → `zxs run --until-break` → `zxs regs`, `zxs step`, `zxs disasm PC` |
 | Where is the time going | `zxs trace --frames 5` |
+| Need read-only investigation | `zxs run --no-save` or `zxs screen --z80 game.z80 --png s.png` |
+| Need to inspect assets | docs/reference/reverse-engineering.md, `zxs gfx find --json` |
 
 ## Conventions
 
