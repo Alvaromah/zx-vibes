@@ -10,3 +10,7 @@ coverage/
 tmp/
 temp/
 .feedback/
+
+# Local agent instructions and operational harness
+/AGENTS.md
+/.harness/
