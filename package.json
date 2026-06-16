@@ -17,7 +17,7 @@
     "typecheck": "pnpm -r --sort run typecheck",
     "test": "pnpm -r --sort run test",
     "lint": "pnpm -r --sort run lint",
-    "pack": "pnpm -r --filter ./packages/* --workspace-concurrency=1 pack --pack-destination .packs",
+    "pack": "pnpm -r --filter \"./packages/*\" --workspace-concurrency=1 pack --pack-destination .packs",
     "verify": "pnpm run check:drift && pnpm run build && pnpm run typecheck && pnpm run lint && pnpm run test"
   },
   "devDependencies": {
