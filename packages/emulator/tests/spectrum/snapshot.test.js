@@ -17,6 +17,33 @@ function makeSnapshot(headerOverrides = {}) {
     return data;
 }
 
+function makeExtendedSnapshot({ extraLength = 54, pc = 0x8890, hardwareMode = 0, blocks = [] } = {}) {
+    const headerLength = 32 + extraLength;
+    const size = headerLength + blocks.reduce((sum, block) => sum + 3 + block.payload.length, 0);
+    const data = new Uint8Array(size);
+    data[30] = extraLength & 0xff;
+    data[31] = extraLength >> 8;
+    data[32] = pc & 0xff;
+    data[33] = pc >> 8;
+    data[34] = hardwareMode;
+
+    let offset = headerLength;
+    for (const block of blocks) {
+        const length = block.compressed ? block.payload.length : 0xffff;
+        data[offset] = length & 0xff;
+        data[offset + 1] = length >> 8;
+        data[offset + 2] = block.page;
+        data.set(block.payload, offset + 3);
+        offset += 3 + block.payload.length;
+    }
+
+    return data;
+}
+
+function uncompressedPage(fill = 0) {
+    return new Uint8Array(0x4000).fill(fill);
+}
+
 describe('Z80SnapshotLoader', () => {
     let memory;
     let cpu;
@@ -102,8 +129,63 @@ describe('Z80SnapshotLoader', () => {
     });
 
     describe('extended .z80 snapshots', () => {
-        it('rejects v2/v3 extended headers explicitly', () => {
-            expect(() => loader.load(makeSnapshot({ 6: 0x00, 7: 0x00 }))).toThrow(/v2\/v3/);
+        it('loads v3 48K page blocks into the 48K memory map', () => {
+            const page8 = uncompressedPage();
+            page8[0] = 0x18;
+            const page4 = uncompressedPage();
+            page4[0] = 0x42;
+            const page5 = uncompressedPage();
+            page5[0x3fff] = 0x99;
+
+            loader.load(
+                makeExtendedSnapshot({
+                    pc: 0x8890,
+                    blocks: [
+                        { page: 4, compressed: false, payload: page4 },
+                        { page: 5, compressed: false, payload: page5 },
+                        { page: 8, compressed: false, payload: page8 },
+                    ],
+                })
+            );
+
+            expect(cpu.registers.get16('PC')).toBe(0x8890);
+            expect(memory.read(0x4000)).toBe(0x18);
+            expect(memory.read(0x8000)).toBe(0x42);
+            expect(memory.read(0xffff)).toBe(0x99);
+        });
+
+        it('loads compressed v3 48K page blocks without requiring a v1 end marker', () => {
+            loader.load(
+                makeExtendedSnapshot({
+                    blocks: [
+                        { page: 8, compressed: true, payload: new Uint8Array([0xed, 0xed, 0x02, 0x11]) },
+                        { page: 4, compressed: true, payload: new Uint8Array([0xed, 0xed, 0x03, 0x22, 0x33]) },
+                        { page: 5, compressed: true, payload: new Uint8Array([0x44]) },
+                    ],
+                })
+            );
+
+            expect(memory.read(0x4000)).toBe(0x11);
+            expect(memory.read(0x4001)).toBe(0x11);
+            expect(memory.read(0x8000)).toBe(0x22);
+            expect(memory.read(0x8002)).toBe(0x22);
+            expect(memory.read(0x8003)).toBe(0x33);
+            expect(memory.read(0xc000)).toBe(0x44);
+        });
+
+        it('rejects extended snapshots that are not 48K-compatible', () => {
+            expect(() =>
+                loader.load(
+                    makeExtendedSnapshot({
+                        hardwareMode: 4,
+                        blocks: [
+                            { page: 4, compressed: false, payload: uncompressedPage() },
+                            { page: 5, compressed: false, payload: uncompressedPage() },
+                            { page: 8, compressed: false, payload: uncompressedPage() },
+                        ],
+                    })
+                )
+            ).toThrow(/hardware mode/);
         });
     });
 });

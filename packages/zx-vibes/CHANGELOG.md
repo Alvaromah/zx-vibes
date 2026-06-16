@@ -1,5 +1,18 @@
 # zx-vibes
 
+## 0.1.3
+
+### Patch Changes
+
+- a606951: Make generated projects runnable immediately by having `zxs new` install the
+  local `zx-vibes` dependency by default, adding a `--no-install` escape hatch,
+  and updating starter guidance for project-local `zxs` usage.
+- Updated dependencies [ea0a2b7]
+- Updated dependencies
+- Updated dependencies [7cb76cd]
+- Updated dependencies [a606951]
+  - @zx-vibes/toolkit@0.2.0
+
 ## 0.1.2
 
 ### Patch Changes

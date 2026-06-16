@@ -1,5 +1,12 @@
 # @zx-vibes/emulator
 
+## 0.1.2
+
+### Patch Changes
+
+- Support 48K-compatible `.z80` v2/v3 snapshots in the emulator loader and
+  toolkit snapshot inspection paths, including compressed 16K RAM page blocks.
+
 ## 0.1.1
 
 ### Patch Changes

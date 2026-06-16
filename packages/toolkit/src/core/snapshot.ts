@@ -30,6 +30,18 @@ export interface SnapshotInfo {
   notes: string[];
 }
 
+const Z80_BASE_HEADER_LENGTH = 30;
+const Z80_RAM_LENGTH = 49152;
+const Z80_RAM_PAGE_LENGTH = 0x4000;
+const Z80_EXTENDED_HEADER_LENGTH_OFFSET = 30;
+const Z80_EXTENDED_HEADER_DATA_OFFSET = 32;
+const Z80_48K_PAGE_MAP = new Map([
+  [8, 0x4000],
+  [4, 0x8000],
+  [5, 0xc000],
+]);
+const Z80_REQUIRED_48K_PAGES = [4, 5, 8];
+
 export function detectSnapshotFormat(file: string, data: Uint8Array): SnapshotFormat {
   const ext = extname(file).toLowerCase();
   if (ext === '.sna') return 'sna';
@@ -60,14 +72,15 @@ export function loadSnapshotMachine(file: string, data: Uint8Array): Machine {
 }
 
 function z80Info(file: string, data: Uint8Array): SnapshotInfo {
-  if (data.length < 30) throw new Error(`Not a .z80 snapshot: ${basename(file)} is too small`);
-  const h = data.subarray(0, 30);
+  if (data.length < Z80_BASE_HEADER_LENGTH) throw new Error(`Not a .z80 snapshot: ${basename(file)} is too small`);
+  const h = data.subarray(0, Z80_BASE_HEADER_LENGTH);
   const pc = word(h[6]!, h[7]!);
   const flags1 = h[12] === 0xff ? 1 : h[12]!;
-  const compressed = (flags1 & 0x20) !== 0;
   const version = pc === 0 ? extendedZ80Version(data) : '1';
-  const supported = version === '1';
-  const regs = registersFromZ80Header(h, flags1);
+  const extended = pc === 0 ? extendedZ80Layout(data, version) : undefined;
+  const compressed = extended ? extended.ramPages.some((page) => page.compressed) : (flags1 & 0x20) !== 0;
+  const supported = version === '1' || Boolean(extended?.supported);
+  const regs = registersFromZ80Header(h, flags1, extended?.pc ?? pc);
   return {
     ok: true,
     format: 'z80',
@@ -75,34 +88,39 @@ function z80Info(file: string, data: Uint8Array): SnapshotInfo {
     version,
     supported,
     compression: compressed ? 'rle' : 'none',
-    hardwareMode: supported ? '48K' : 'extended/unknown',
+    hardwareMode: version === '1' ? '48K' : (extended?.hardwareMode ?? 'extended/unknown'),
     registers: regs,
     interrupt: { im: regs.im, iff1: regs.iff1, iff2: regs.iff2 },
     borderColor: (flags1 >> 1) & 0x07,
-    ramPages: [
-      {
-        name: '48k-ram',
-        address: 0x4000,
-        length: 49152,
-        compressed,
-      },
-    ],
+    ramPages:
+      version === '1'
+        ? [
+            {
+              name: '48k-ram',
+              address: 0x4000,
+              length: Z80_RAM_LENGTH,
+              compressed,
+            },
+          ]
+        : (extended?.ramPages ?? []),
     notes: supported
-      ? ['.z80 v1 48K snapshots are supported for load and RAM export']
+      ? [version === '1' ? '.z80 v1 48K snapshots are supported for load and RAM export' : '.z80 v2/v3 48K snapshots are supported for load and RAM export']
       : ['.z80 v2/v3 extended headers are detected but not decoded yet'],
   };
 }
 
 function z80Ram(data: Uint8Array): Uint8Array {
-  if (data.length < 30) throw new Error('Not a .z80 snapshot: file is too small');
-  const h = data.subarray(0, 30);
+  if (data.length < Z80_BASE_HEADER_LENGTH) throw new Error('Not a .z80 snapshot: file is too small');
+  const h = data.subarray(0, Z80_BASE_HEADER_LENGTH);
   const pc = word(h[6]!, h[7]!);
   if (pc === 0) {
-    throw new Error('Unsupported .z80 v2/v3 snapshot: extended page layout is not implemented yet');
+    return extendedZ80Ram(data);
   }
   const flags1 = h[12] === 0xff ? 1 : h[12]!;
   const compressed = (flags1 & 0x20) !== 0;
-  return compressed ? decompressZ80Rle(data.subarray(30)) : copyFixed(data.subarray(30), 49152);
+  return compressed
+    ? decompressZ80Rle(data.subarray(Z80_BASE_HEADER_LENGTH), Z80_RAM_LENGTH, true)
+    : copyFixed(data.subarray(Z80_BASE_HEADER_LENGTH), Z80_RAM_LENGTH);
 }
 
 function snaInfo(file: string, data: Uint8Array): SnapshotInfo {
@@ -156,10 +174,10 @@ function snaRam(data: Uint8Array): Uint8Array {
   return new Uint8Array(data.subarray(27));
 }
 
-function registersFromZ80Header(h: Uint8Array, flags1: number): RegistersFull {
+function registersFromZ80Header(h: Uint8Array, flags1: number, pcOverride?: number): RegistersFull {
   const r = (h[11]! & 0x7f) | ((flags1 & 0x01) << 7);
   return {
-    pc: word(h[6]!, h[7]!),
+    pc: pcOverride ?? word(h[6]!, h[7]!),
     sp: word(h[8]!, h[9]!),
     af: word(h[1]!, h[0]!),
     bc: word(h[2]!, h[3]!),
@@ -188,13 +206,130 @@ function extendedZ80Version(data: Uint8Array): string {
   return `extended(${extraLen})`;
 }
 
-function decompressZ80Rle(data: Uint8Array): Uint8Array {
-  const result = new Uint8Array(49152);
+interface ExtendedZ80Layout {
+  pc: number;
+  supported: boolean;
+  hardwareMode: string;
+  ramPages: SnapshotRamPage[];
+}
+
+interface ExtendedZ80MemoryBlock {
+  page: number;
+  address: number;
+  compressed: boolean;
+  payload: Uint8Array;
+}
+
+function extendedZ80Layout(data: Uint8Array, version: string): ExtendedZ80Layout {
+  const pc = data.length >= 34 ? word(data[32]!, data[33]!) : 0;
+  const hardwareMode = data.length > 34 ? data[34]! : -1;
+  const supportedHardware = is48KCompatibleZ80Hardware(version, hardwareMode);
+  const blocks = supportedHardware ? extendedZ80Blocks(data, version, false) : [];
+  const pages = new Set(blocks.map((block) => block.page));
+  const hasRequiredPages = Z80_REQUIRED_48K_PAGES.every((page) => pages.has(page));
+  return {
+    pc,
+    supported: supportedHardware && hasRequiredPages,
+    hardwareMode: z80HardwareModeName(version, hardwareMode),
+    ramPages: blocks.map((block) => ({
+      name: `page-${block.page}`,
+      address: block.address,
+      length: Z80_RAM_PAGE_LENGTH,
+      compressed: block.compressed,
+    })),
+  };
+}
+
+function extendedZ80Ram(data: Uint8Array): Uint8Array {
+  const version = extendedZ80Version(data);
+  const hardwareMode = data.length > 34 ? data[34]! : -1;
+  if (!is48KCompatibleZ80Hardware(version, hardwareMode)) {
+    throw new Error(`Unsupported .z80 ${version} hardware mode for 48K RAM export: ${hardwareMode}`);
+  }
+
+  const ram = new Uint8Array(Z80_RAM_LENGTH);
+  const blocks = extendedZ80Blocks(data, version, true);
+  const pages = new Set<number>();
+  for (const block of blocks) {
+    const pageData = block.compressed
+      ? decompressZ80Rle(block.payload, Z80_RAM_PAGE_LENGTH, false)
+      : copyFixed(block.payload, Z80_RAM_PAGE_LENGTH);
+    ram.set(pageData, block.address - 0x4000);
+    pages.add(block.page);
+  }
+
+  for (const page of Z80_REQUIRED_48K_PAGES) {
+    if (!pages.has(page)) throw new Error(`Truncated .z80 48K snapshot: missing RAM page ${page}`);
+  }
+
+  return ram;
+}
+
+function extendedZ80Blocks(data: Uint8Array, version: string, strict: boolean): ExtendedZ80MemoryBlock[] {
+  if (version !== '2' && version !== '3') {
+    if (strict) throw new Error(`Unsupported .z80 extended snapshot version: ${version}`);
+    return [];
+  }
+  if (data.length < 32) {
+    if (strict) throw new Error('Unsupported .z80 extended snapshot: missing extended header length');
+    return [];
+  }
+
+  const extraLen = word(data[Z80_EXTENDED_HEADER_LENGTH_OFFSET]!, data[Z80_EXTENDED_HEADER_LENGTH_OFFSET + 1]!);
+  const memoryOffset = Z80_EXTENDED_HEADER_DATA_OFFSET + extraLen;
+  if (data.length < memoryOffset) {
+    if (strict) throw new Error('Truncated .z80 extended snapshot header');
+    return [];
+  }
+
+  const blocks: ExtendedZ80MemoryBlock[] = [];
+  let offset = memoryOffset;
+  while (offset < data.length) {
+    if (offset + 3 > data.length) {
+      if (strict) throw new Error('Truncated .z80 memory block header');
+      break;
+    }
+
+    const encodedLength = word(data[offset]!, data[offset + 1]!);
+    const page = data[offset + 2]!;
+    offset += 3;
+
+    const payloadLength = encodedLength === 0xffff ? Z80_RAM_PAGE_LENGTH : encodedLength;
+    if (offset + payloadLength > data.length) {
+      if (strict) throw new Error('Truncated .z80 memory block data');
+      break;
+    }
+
+    const address = Z80_48K_PAGE_MAP.get(page);
+    const payload = data.subarray(offset, offset + payloadLength);
+    offset += payloadLength;
+
+    if (address === undefined) continue;
+    blocks.push({ page, address, compressed: encodedLength !== 0xffff, payload });
+  }
+
+  return blocks;
+}
+
+function is48KCompatibleZ80Hardware(version: string, hardwareMode: number): boolean {
+  if (hardwareMode === 0 || hardwareMode === 1) return version === '2' || version === '3';
+  return version === '3' && hardwareMode === 3;
+}
+
+function z80HardwareModeName(version: string, hardwareMode: number): string {
+  if (hardwareMode === 0) return '48K';
+  if (hardwareMode === 1) return '48K + Interface 1';
+  if (version === '3' && hardwareMode === 3) return '48K + MGT';
+  return `extended hardware mode ${hardwareMode}`;
+}
+
+function decompressZ80Rle(data: Uint8Array, expectedLength: number, stopAtEndMarker: boolean): Uint8Array {
+  const result = new Uint8Array(expectedLength);
   let ptr = 0;
   let i = 0;
   while (i < data.length && ptr < result.length) {
     const b = data[i++]!;
-    if (b === 0x00 && data[i] === 0xed && data[i + 1] === 0xed && data[i + 2] === 0x00) {
+    if (stopAtEndMarker && b === 0x00 && data[i] === 0xed && data[i + 1] === 0xed && data[i + 2] === 0x00) {
       break;
     }
     if (b === 0xed && i < data.length && data[i] === 0xed) {
