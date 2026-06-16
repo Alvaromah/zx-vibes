@@ -38,7 +38,7 @@ export interface BuildResult {
   ok: boolean;
   errors: Diagnostic[];
   warnings: Diagnostic[];
-  outputs: { bin?: string; sld?: string };
+  outputs: { bin?: string; sld?: string; artifacts?: string[] };
   /** Raw assembler output, for the rare case the parser misses something. */
   rawOutput: string;
   durationMs: number;
@@ -65,7 +65,7 @@ interface SpectralAsmModule {
   writeAssemblyOutputs(
     result: SpectralAsmResult,
     opts: { entry: string; outDir: string }
-  ): { bin?: string; sld?: string };
+  ): { bin?: string; sld?: string; artifacts?: string[] };
 }
 
 export interface ToolchainStatus {

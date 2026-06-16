@@ -11,9 +11,9 @@ zxs snapshot ram game.z80 --out ram.bin
 zxs snapshot mem game.z80 0x4000 --len 6912 --out screen.scr
 ```
 
-Current first-class snapshot support is 48K `.sna` and `.z80` v1. `.z80`
-v2/v3 headers are detected and reported as unsupported for RAM export until
-128K page layout support lands.
+Current first-class snapshot support is 48K `.sna`, `.z80` v1, and
+48K-compatible `.z80` v2/v3 snapshots. 128K `.z80` paging is detected but not
+loaded as a 48K machine.
 
 ## Look at memory
 
@@ -29,8 +29,12 @@ For 1bpp linear sprites or fonts:
 
 ```bash
 zxs gfx linear 0xc000 --z80 game.z80 --width-bytes 2 --height 16 --count 16 --columns 8 --out sprites.png
-zxs gfx font 0x3d00 --fresh --glyphs 96 --out rom-font.png
+zxs gfx font 0xc000 --z80 game.z80 --glyphs 96 --out font.png
 ```
+
+For browser-side inspection, use `zxs play game.z80` for snapshots/tapes or
+`zxs boot` for a clean 48K ROM screen before returning to read-only extraction
+commands.
 
 ## Follow code
 

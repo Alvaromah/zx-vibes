@@ -5,9 +5,10 @@ default. It is a Spectral-oriented Z80 assembler for ZX Spectrum 48K projects,
 not a complete sjasmplus replacement. Unsupported sjasmplus features should
 fail clearly rather than silently misassemble.
 
-For external sjasmplus migration notes, see `sjasmplus-cheatsheet.md`. Treat
-`packages/asm/README.md` and current tests as the implementation source of
-truth.
+For external sjasmplus migration notes, see `sjasmplus-cheatsheet.md`. In a
+repository checkout, treat `packages/asm/README.md` and current tests as the
+implementation source of truth; in generated projects, use this local reference
+and the installed `zxasm` command.
 
 ## File Skeleton
 
@@ -89,7 +90,7 @@ search paths. Angle-bracket includes search include paths only.
 Build/API defines can be supplied by the CLI:
 
 ```bash
-spectral-asm assemble src/main.asm -I lib -DDEBUG=1 --out-dir build
+zxasm assemble src/main.asm -I lib -DDEBUG=1 --out-dir build
 ```
 
 Source defines are order-sensitive:

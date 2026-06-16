@@ -57,7 +57,7 @@ describe('zxs new (scaffold)', () => {
     };
     expect(packageJson.scripts.build).toBe('zxs build');
     expect(packageJson.scripts.test).toBe('zxs test tests');
-    expect(packageJson.devDependencies['zx-vibes']).toBe('^0.1.0');
+    expect(packageJson.devDependencies['zx-vibes']).toBe('^0.1.3');
 
     // The skeleton must build, run HALT-synced, and move under scheduled keys.
     const test = zxs(project, 'test', 'tests', '--json');

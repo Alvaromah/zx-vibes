@@ -37,8 +37,8 @@ attribute clash.
 - `docs/reference/attributes-and-colour.md`
 - `docs/reference/screen-layout.md`
 - `docs/reference/rom-routines.md`
-- `packages/toolkit/recipes/01-clear-screen/recipe.asm`
-- `packages/toolkit/recipes/09-beeper-fx/recipe.asm`
+- In a repository checkout: `packages/toolkit/recipes/01-clear-screen/recipe.asm`
+  and `packages/toolkit/recipes/09-beeper-fx/recipe.asm`.
 
 External cross-checks, when local docs are insufficient: World of Spectrum 48K
 reference and Nocash ZX specs for ULA attribute and border behavior.

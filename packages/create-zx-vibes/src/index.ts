@@ -13,12 +13,13 @@ program
   .description('Create a zx-vibes ZX Spectrum agent project')
   .argument('[name]', 'project directory name')
   .option('--template <name>', 'starter template: game or platformer', 'game')
-  .option('--install', 'run pnpm install after copying files', false)
+  .option('--install', 'run npm install after copying files')
+  .option('--no-install', 'skip npm install after scaffolding')
   .action((name: string | undefined, opts: { template: string; install?: boolean }) => {
     if (!name) {
       throw new Error('project name is required');
     }
-    createProject(name, opts.template, opts.install ?? false);
+    createProject(name, opts.template, opts.install ?? true);
   });
 
 program.parseAsync().catch((err: unknown) => {
@@ -57,6 +58,9 @@ function createProject(name: string, template: string, install: boolean): void {
   const agentPlaybook = readFileSync(join(src, 'AGENT_PLAYBOOK.md'), 'utf8').replaceAll('__NAME__', name);
   writeFileSync(join(dest, 'AGENTS.md'), agentPlaybook);
   writeFileSync(join(dest, 'CLAUDE.md'), agentPlaybook);
+  writeFileSync(join(dest, '.mcp.json'), `${claudeMcpJson()}\n`);
+  mkdirSync(join(dest, 'docs', 'agents'), { recursive: true });
+  writeFileSync(join(dest, 'docs', 'agents', 'codex-mcp.toml'), `${codexToml()}\n`);
 
   const docsSrc = join(root, 'docs', 'reference');
   if (existsSync(docsSrc)) cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
@@ -64,23 +68,19 @@ function createProject(name: string, template: string, install: boolean): void {
   if (existsSync(skillsSrc)) cpSync(skillsSrc, join(dest, 'docs', 'agents', 'skills'), { recursive: true });
 
   if (install) {
-    const command = pnpmInstallCommand();
-    const result = spawnSync(command.bin, command.args, { cwd: dest, stdio: 'inherit' });
-    if (result.error) {
-      console.warn(`warning: could not run pnpm install (${result.error.message}); run pnpm install manually later`);
-    } else if ((result.status ?? 1) !== 0) {
-      console.warn('warning: pnpm install failed; the project was created, run pnpm install manually later');
-    }
+    installDependencies(dest);
   }
 
   console.log(`Created ${name}/ from the ${template} starter.`);
   console.log('');
   console.log(`  cd ${name}`);
-  if (!install) console.log('  pnpm install');
-  console.log('  pnpm exec zxs verify');
+  if (!install) console.log('  npm install');
+  console.log('  npm run build');
+  console.log('  npm test');
+  console.log('  npm run verify');
   if (!install) {
     console.log('');
-    console.log('Pass --install to install dependencies during project creation.');
+    console.log('Dependencies were not installed; run npm install before npm scripts or npx zxs.');
   }
 }
 
@@ -99,9 +99,49 @@ function copyTemplate(src: string, dest: string, name: string): void {
   }
 }
 
-function pnpmInstallCommand(): { bin: string; args: string[] } {
-  if (process.platform === 'win32') {
-    return { bin: 'cmd.exe', args: ['/d', '/s', '/c', 'pnpm install'] };
+function installDependencies(dest: string): void {
+  const command = npmInstallCommand();
+  const result = spawnSync(command.bin, command.args, { cwd: dest, encoding: 'utf8', stdio: 'inherit' });
+  if (result.error) {
+    throw new Error(
+      `Created project but could not run npm install (${result.error.message}). Run npm install inside the project, then npm run build.`
+    );
   }
-  return { bin: 'pnpm', args: ['install'] };
+  if ((result.status ?? 1) !== 0) {
+    throw new Error(
+      `Created project but npm install failed with exit code ${result.status ?? 1}. Run npm install inside the project, then npm run build.`
+    );
+  }
+}
+
+function npmInstallCommand(): { bin: string; args: string[] } {
+  if (process.platform === 'win32') {
+    return { bin: 'cmd.exe', args: ['/d', '/s', '/c', 'npm install'] };
+  }
+  return { bin: 'npm', args: ['install'] };
+}
+
+function codexToml(): string {
+  return [
+    '[mcp_servers.zx_vibes]',
+    'command = "pnpm"',
+    'args = ["exec", "zxs-mcp"]',
+    'startup_timeout_sec = 30',
+    'tool_timeout_sec = 300',
+  ].join('\n');
+}
+
+function claudeMcpJson(): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        zx_vibes: {
+          command: 'pnpm',
+          args: ['exec', 'zxs-mcp'],
+        },
+      },
+    },
+    null,
+    2
+  );
 }

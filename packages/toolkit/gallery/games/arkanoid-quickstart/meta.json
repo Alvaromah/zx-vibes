@@ -14,7 +14,7 @@
     "wallClock": "~20 min"
   },
   "controls": "O = izquierda · P = derecha · SPACE = reiniciar tras game over/victoria",
-  "sourcePath": "examples/arkanoid-quickstart",
+  "sourcePath": "packages/toolkit/examples/arkanoid-quickstart",
   "files": {
     "snapshot": "game.z80",
     "screenshot": "screen.png",

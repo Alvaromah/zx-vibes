@@ -34,18 +34,17 @@ real-time ZX Spectrum game.
 
 ## Load First
 
-- `starters/game/AGENT_PLAYBOOK.md`
-- `starters/game/src/main.asm`
-- `starters/game/tests/smoke.test.json`
-- `starters/game/lib/screen.asm`
-- `starters/game/lib/keys.asm`
-- `packages/toolkit/examples/pong-by-agent/main.asm` for score, ball/paddle,
-  ROM print, and debug-loop patterns.
-- `packages/toolkit/examples/arkanoid-quickstart/src/main.asm` when available
-  for brick/paddle/collision patterns.
+- In generated projects: `AGENT_PLAYBOOK.md`, `src/main.asm`,
+  `tests/smoke.test.json`, `lib/screen.asm`, and `lib/keys.asm`.
+- In a repository checkout: `starters/game/*` has the source starter, and
+  `packages/toolkit/templates/game/*` has the packaged template copy.
+- Repository-only examples: `packages/toolkit/examples/pong-by-agent/main.asm`
+  for score, ball/paddle, ROM print, and debug-loop patterns; and
+  `packages/toolkit/examples/arkanoid-quickstart/src/main.asm` for
+  brick/paddle/collision patterns.
 
-If working in toolkit-packaged templates instead of root starters, use the
-equivalent files under `packages/toolkit/templates/game/`.
+If those repository-only examples are absent in a generated project, use the
+local starter files and reference docs first.
 
 ## Local References And Recipes
 
@@ -57,6 +56,9 @@ equivalent files under `packages/toolkit/templates/game/`.
 - `docs/reference/rom-routines.md` for `RST 0x10`, `CHAN-OPEN`, and ROM call
   constraints.
 - `docs/reference/common-bugs.md` for watchdog triage.
+
+Repository-only recipe references:
+
 - `packages/toolkit/recipes/04-sprite-xor-8x8/recipe.asm`
 - `packages/toolkit/recipes/05-sprite-masked-16x16/recipe.asm`
 - `packages/toolkit/recipes/06-keyboard-qaop/recipe.asm`
@@ -69,9 +71,11 @@ equivalent files under `packages/toolkit/templates/game/`.
 ## Routing
 
 - For generic arcade games, start with the `game` starter, not `platformer`.
-- For breakout/brick games, inspect `packages/toolkit/examples/arkanoid-quickstart/`
-  before designing collision or scoring from scratch.
-- For pong/paddle games, inspect `packages/toolkit/examples/pong-by-agent/`.
+- For breakout/brick games in a repository checkout, inspect
+  `packages/toolkit/examples/arkanoid-quickstart/` before designing collision
+  or scoring from scratch.
+- For pong/paddle games in a repository checkout, inspect
+  `packages/toolkit/examples/pong-by-agent/`.
 - For random waves or enemy movement, load the PRNG recipe and keep seed/state
   test-visible.
 - For audio, prefer the beeper SFX recipe over ROM `BEEPER` during gameplay.

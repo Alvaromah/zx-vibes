@@ -35,11 +35,9 @@ debugs striped, wrapped, or corrupted screen output.
 - `docs/reference/screen-layout.md`
 - `docs/reference/attributes-and-colour.md`
 - `docs/reference/common-bugs.md`
-- `packages/toolkit/recipes/01-clear-screen/recipe.asm`
-- `packages/toolkit/templates/game/lib/screen.asm`
-- `packages/toolkit/templates/platformer/lib/screen.asm`
-- For copied starter projects, compare the same files under
-  `packages/create-zx-vibes/` and root `starters/`.
+- In generated projects: local `lib/screen.asm`, `src/main.asm`, and tests.
+- In a repository checkout: `packages/toolkit/recipes/01-clear-screen/recipe.asm`,
+  `starters/*/lib/screen.asm`, and `packages/toolkit/templates/*/lib/screen.asm`.
 
 External cross-checks, when local docs are insufficient: World of Spectrum 48K
 reference and Nocash ZX specs for screen memory layout.

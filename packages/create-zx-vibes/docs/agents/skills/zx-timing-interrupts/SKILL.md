@@ -47,8 +47,8 @@ triage.
 - `docs/reference/common-bugs.md`
 - `docs/reference/keyboard-input.md`
 - `docs/reference/rom-routines.md`
-- `packages/toolkit/recipes/01-clear-screen/recipe.asm`
-- `packages/toolkit/recipes/09-beeper-fx/recipe.asm`
+- In a repository checkout: `packages/toolkit/recipes/01-clear-screen/recipe.asm`
+  and `packages/toolkit/recipes/09-beeper-fx/recipe.asm`.
 
 External cross-checks, when local docs are insufficient: Nocash ZX specs and
 World of Spectrum 48K reference for timing and interrupt details.

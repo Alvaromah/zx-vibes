@@ -39,10 +39,11 @@ tests over external sources.
   `AGENT_PLAYBOOK.md`. Do not report success after assembly alone.
 - Use the embedded `@zx-vibes/asm` assembler unless the task explicitly needs
   an external sjasmplus-only feature.
-- Prefer tested recipes under `recipes/` or `packages/toolkit/recipes/` before
-  inventing new primitives.
 - For generated projects, local files are the source of truth:
   `docs/reference/`, `docs/agents/skills/`, `src/`, `lib/`, and `tests/`.
+- In a repository checkout, prefer tested recipes under
+  `packages/toolkit/recipes/` before inventing new primitives. Generated
+  projects do not always include that recipe tree.
 - For repository work, the codebase and tests beat stale docs. Update docs
   when implementation truth changes.
 

@@ -14,7 +14,7 @@
     "wallClock": "~11 min"
   },
   "controls": "Q = paddle up · A = paddle down. The right paddle is a ball-tracking AI.",
-  "sourcePath": "examples/pong-by-agent",
+  "sourcePath": "packages/toolkit/examples/pong-by-agent",
   "files": {
     "snapshot": "game.z80",
     "screenshot": "screen.png",

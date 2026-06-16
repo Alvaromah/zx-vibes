@@ -1,7 +1,8 @@
-# ZX Generation
+# @zx-vibes/emulator
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-try%20it%20now-brightgreen)](https://hi-score.dev/)
 
-*ZX Generation* is a modern, JavaScript-powered emulator of the legendary **Sinclair ZX Spectrum** home computer.  
+`@zx-vibes/emulator` is a modern, JavaScript-powered emulator of the
+legendary **Sinclair ZX Spectrum** home computer.
 
 **100 % AI-crafted** — the project was conceived, designed, and developed end-to-end by LLMs (Large Language Models).  
 The codebase was generated, reviewed, and refined primarily with **Anthropic Claude (Claude Code)**.
@@ -24,7 +25,7 @@ The codebase was generated, reviewed, and refined primarily with **Anthropic Cla
 
 ## Table of Contents
 
-- [ZX Generation](#zx-generation)
+- [@zx-vibes/emulator](#zx-vibesemulator)
   - [Why this matters](#why-this-matters)
   - [Limitations \& future work](#limitations--future-work)
   - [Live demo](#live-demo)
@@ -35,7 +36,7 @@ The codebase was generated, reviewed, and refined primarily with **Anthropic Cla
     - [Basic usage](#basic-usage)
     - [Loading programs](#loading-programs)
   - [Examples](#examples)
-  - [Projects using ZX Generation](#projects-using-zx-generation)
+  - [Projects using @zx-vibes/emulator](#projects-using-zx-vibesemulator)
   - [Browser Support](#browser-support)
   - [API Reference](#api-reference)
   - [src file structure](#src-file-structure)
@@ -50,9 +51,11 @@ The codebase was generated, reviewed, and refined primarily with **Anthropic Cla
 - **Full 48 K Spectrum support**  
 - **Pixel-perfect video output** (256 × 192) with border and colour-clash effects  
 - **Authentic audio** via the Web Audio API - **needs improvements**
-- **Tape loading** for `.TAP` and  `.TZX` files and **snapshot** loading/saving for `.Z80` files  
+- **Tape loading** for `.TAP` and `.TZX` files and **snapshot** loading for
+  `.Z80` v1 plus 48K-compatible `.Z80` v2/v3 files.
 - **On-screen touch keyboard** for mobile devices  
-- **Turbo mode** to run the CPU faster than real-time  
+- **Turbo mode flag** retained for compatibility; browser pacing remains
+  frame-driven.
 - **Zero dependencies** — pure ES 2023 JavaScript modules  
 - **Responsive layout** for phones and tablets  
 
@@ -97,7 +100,7 @@ The codebase was generated, reviewed, and refined primarily with **Anthropic Cla
 <body>
     <canvas id="screen"></canvas>
     <script type="module">
-        import { ZXSpectrum } from 'https://cdn.jsdelivr.net/npm/zx-generation@latest/dist/zxgeneration.esm.js';
+        import { ZXSpectrum } from 'https://cdn.jsdelivr.net/npm/@zx-vibes/emulator@latest/dist/zxgeneration.esm.js';
         new ZXSpectrum('#screen');
     </script>
 </body>
@@ -109,7 +112,7 @@ The codebase was generated, reviewed, and refined primarily with **Anthropic Cla
 ```javascript
 // Load a TAP file
 const tap = await fetch('game.tap').then(r => r.arrayBuffer());
-spectrum.loadTape(new Uint8Array(tap));
+spectrum.loadTape(new Uint8Array(tap), 'game.tap');
 
 // Type the LOAD "" command
 spectrum.typeText('J""\n');
@@ -130,15 +133,15 @@ spectrum.playTape();
 
 ---
 
-## Projects using ZX Generation
+## Projects using @zx-vibes/emulator
 
-- **[Spectral](https://github.com/Alvaromah/spectral)** (`@zx-vibes/toolkit`) —
+- **[zx-vibes](https://github.com/Alvaromah/zx-vibes)** (`@zx-vibes/toolkit`) —
   an AI-agent toolchain that lets coding agents such as **Claude Code** write
-  ZX Spectrum 48K games autonomously. It drives ZX Generation as a headless,
+  ZX Spectrum 48K games autonomously. It drives `@zx-vibes/emulator` as a headless,
   in-process emulator to close the loop: *assemble → run → observe → debug →
   iterate*. An LLM-written emulator, running LLM-written games.
 
-> Building something with ZX Generation? Open a PR to add it here.
+> Building something with `@zx-vibes/emulator`? Open a PR to add it here.
 
 ---
 
@@ -173,7 +176,7 @@ class ZXSpectrum {
   destroy(): void;
 
   // Tape Operations
-  loadTape(data: ArrayBuffer | Uint8Array, filename?: string): void;
+  loadTape(data: ArrayBuffer | Uint8Array, filename: string): void;
   loadTapeFromURL(url: string): Promise<void>;
   playTape(): void;
   pauseTape(): void;
@@ -209,7 +212,7 @@ class ZXSpectrum {
 }
 
 interface Options {
-  rom?: string | Uint8Array;        // ROM data or URL (default: CDN URL)
+  rom?: string | Uint8Array;        // ROM data or URL
   autoStart?: boolean;              // Start automatically (default: true)
   sound?: boolean;                  // Enable sound (default: true)
   useAudioWorklet?: boolean;        // Use AudioWorklet API (default: true)
@@ -286,8 +289,8 @@ src/
 1. **Clone the repository**
    
    ```bash
-   git clone https://github.com/alvaromah/zx-generation
-   cd zx-generation
+   git clone https://github.com/Alvaromah/zx-vibes
+   cd zx-vibes/packages/emulator
    ```
 
 2. **Serve the files**

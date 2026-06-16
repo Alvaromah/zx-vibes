@@ -81,6 +81,7 @@ export async function buildCommand(entryArg: string | undefined, opts: BuildComm
     if (result.ok) {
       const lines = [`OK  ${rel(result.outputs.bin)} (${result.durationMs}ms)`];
       if (result.outputs.sld) lines.push(`    symbols: ${rel(result.outputs.sld)}`);
+      for (const artifact of result.outputs.artifacts ?? []) lines.push(`    artifact: ${rel(artifact)}`);
       for (const w of result.warnings) {
         lines.push(`warning ${w.file}:${w.line}: ${w.message}`);
       }
