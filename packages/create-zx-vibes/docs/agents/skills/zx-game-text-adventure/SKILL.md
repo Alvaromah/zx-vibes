@@ -39,14 +39,15 @@ game, menu-driven story, or a mostly text ZX Spectrum 48K game.
 - `docs/reference/memory-map.md`
 - `docs/reference/keyboard-input.md`
 - `docs/reference/common-bugs.md`
-- `packages/toolkit/recipes/02-print-rom/recipe.asm`
-- `packages/toolkit/recipes/10-score-bcd/recipe.asm` if the adventure tracks
-  score or turns as decimal text.
+- In a repository checkout: `packages/toolkit/recipes/02-print-rom/recipe.asm`
+  and `packages/toolkit/recipes/10-score-bcd/recipe.asm` if the adventure
+  tracks score or turns as decimal text.
 
 There is no local text-adventure starter yet. For project structure, use
-`starters/game/AGENT_PLAYBOOK.md` for the `zxs` loop and generated-project
-conventions, then replace the real-time loop with a command/read/evaluate/print
-turn loop.
+the generated project's `AGENT_PLAYBOOK.md` and `game` starter layout for the
+`zxs` loop and conventions. In a repository checkout, the source equivalent is
+`starters/game/AGENT_PLAYBOOK.md`. Replace the real-time loop with a
+command/read/evaluate/print turn loop.
 
 ## External Context
 

@@ -39,7 +39,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node bin/zx-vibes.js --version",
+    "prepack": "pnpm run build",
+    "test": "node scripts/smoke-test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src bin"
   },
@@ -48,6 +49,7 @@
     "@zx-vibes/toolkit": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^22.15.0",
     "typescript": "^5.8.0"
   }
 }

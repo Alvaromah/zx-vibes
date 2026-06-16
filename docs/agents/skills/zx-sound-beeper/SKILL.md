@@ -34,8 +34,8 @@ border writes that touch port `0xFE`, or tests that assert audio activity.
 - `docs/reference/sound.md`
 - `docs/reference/attributes-and-colour.md`
 - `docs/reference/interrupts-and-timing.md`
-- `packages/toolkit/recipes/09-beeper-fx/recipe.asm`
-- `packages/toolkit/recipes/09-beeper-fx/test.json`
+- In a repository checkout: `packages/toolkit/recipes/09-beeper-fx/recipe.asm`
+  and `packages/toolkit/recipes/09-beeper-fx/test.json`.
 
 External cross-checks, when local docs are insufficient: ZX BASIC manual
 chapter 24 for BASIC/ROM beeper behavior and SkoolKid ROM routine notes for

@@ -1,16 +1,16 @@
 # @zx-vibes/asm
 
-Spectral-oriented Z80 assembler/disassembler for ZX Spectrum 48K projects.
+zx-vibes Z80 assembler/disassembler for ZX Spectrum 48K projects.
 
 This is an MVP package intended to remove the hard dependency on an external
-assembler for the Spectral starter-game workflow. It deliberately targets the
-current Spectral recipes/templates/examples before broader sjasmplus
+assembler for the zx-vibes starter-game workflow. It deliberately targets the
+current zx-vibes recipes/templates/examples before broader sjasmplus
 compatibility.
 
 ## MVP Surface
 
 - Z80 raw binary assembly.
-- SLD-compatible label and source-line output for Spectral debugging.
+- SLD-compatible label and source-line output for zx-vibes debugging.
 - `DEVICE ZXSPECTRUM48`, `ORG`, `EQU`, `INCLUDE`, `DB`, `DW`, `DS/BLOCK`,
   `ALIGN`, `ASSERT`, `DISPLAY`, `INCBIN`, `INSERT`, `BINARY`, and `SAVEBIN`.
 - Optional fill operands for `DS`/`DEFS`/`BLOCK` and `ALIGN`, such as
@@ -44,11 +44,13 @@ compatibility.
   `HX`/`LX`/`HY`/`LY`, with illegal `H`/`L` and memory mixes rejected.
 - Square-bracket memory operands such as `LD A,[HL]`, `LD [0x4000],A`,
   and `SET 3,[IX+4],A`.
-- Table-driven disassembly compatible with Spectral's current debugger output.
+- Table-driven disassembly compatible with zx-vibes debugger output.
 
 ```bash
-spectral-asm assemble src/main.asm -I lib -DDEBUG=1 --out-dir build
+zxasm assemble src/main.asm -I lib -DDEBUG=1 --out-dir build
 ```
+
+`spectral-asm` remains a compatibility bin alias for older projects.
 
 Unsupported sjasmplus features should fail clearly instead of silently
 misassembling code.

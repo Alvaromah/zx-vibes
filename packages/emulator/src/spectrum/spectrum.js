@@ -26,7 +26,7 @@ export class ZXSpectrum {
    * @constructor
    * @param {string|HTMLCanvasElement} canvasOrSelector - Canvas element or CSS selector
    * @param {Object} [options={}] - Configuration options
-   * @param {string|Uint8Array} [options.rom='https://cdn.jsdelivr.net/npm/zx-generation@latest/rom/48k.rom'] - ROM data or URL
+   * @param {string|Uint8Array} [options.rom='https://cdn.jsdelivr.net/npm/@zx-vibes/emulator@latest/rom/48k.rom'] - ROM data or URL
    * @param {boolean} [options.autoStart=true] - Start emulation automatically after ROM loads
    * @param {boolean} [options.sound=true] - Enable sound emulation
    * @param {boolean} [options.useAudioWorklet=true] - Use AudioWorklet for better sound
@@ -40,7 +40,7 @@ export class ZXSpectrum {
   constructor(canvasOrSelector, options = {}) {
     // Initialize options with defaults
     this.options = {
-      rom: 'https://cdn.jsdelivr.net/npm/zx-generation@latest/rom/48k.rom',
+      rom: 'https://cdn.jsdelivr.net/npm/@zx-vibes/emulator@latest/rom/48k.rom',
       autoStart: true,
       sound: true,
       useAudioWorklet: true,
@@ -918,10 +918,10 @@ export class ZXSpectrum {
   }
 
   /**
-   * Load a TAP file for tape emulation
+   * Load a TAP or TZX file for tape emulation
    *
-   * @param {ArrayBuffer|Uint8Array} buffer - TAP file data
-   * @param {string} [filename] - Optional filename for display
+   * @param {ArrayBuffer|Uint8Array} buffer - Tape file data
+   * @param {string} filename - Filename used to determine format (.tap or .tzx)
    */
   loadTape(buffer, filename) {
     this.tape.load(buffer, filename);

@@ -2,11 +2,19 @@ import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { assembleFile, disassemble, writeAssemblyOutputs } from './index.js';
 
+interface PackageMetadata {
+  version: string;
+}
+
+const packageMetadata = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+) as PackageMetadata;
+
 const program = new Command();
 program.exitOverride();
 program.configureOutput({ writeErr: () => undefined });
 
-program.name('spectral-asm').description('Spectral Z80 assembler/disassembler').version('0.1.0');
+program.name('zxasm').description('zx-vibes Z80 assembler/disassembler').version(packageMetadata.version);
 
 program
   .command('assemble')
@@ -70,7 +78,7 @@ program
   .option('--json', 'machine-readable JSON output', false)
   .action((opts: { json: boolean }) => {
     const ok = true;
-    const doc = { ok, assembler: '@zx-vibes/asm', version: '0.1.0' };
+    const doc = { ok, assembler: '@zx-vibes/asm', version: packageMetadata.version };
     if (opts.json) console.log(JSON.stringify(doc, null, 2));
     else console.log(`OK ${doc.assembler} ${doc.version}`);
   });

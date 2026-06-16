@@ -11,8 +11,9 @@ backend.
 
 ## Key Rules
 
-- Treat `packages/asm/README.md` and the current assembler tests as the source
-  of truth.
+- In generated projects, treat `docs/reference/assembler-syntax.md` and the
+  installed `zxasm` command as local truth. In a repository checkout, also
+  check `packages/asm/README.md` and the current assembler tests.
 - Target the embedded assembler first. Do not assume full sjasmplus
   compatibility.
 - Use `DEVICE ZXSPECTRUM48` and `ORG` in normal Spectrum 48K programs.
@@ -26,11 +27,11 @@ backend.
 
 ## Load Before Acting
 
-- `packages/asm/README.md` for the supported assembler surface.
 - `docs/reference/assembler-syntax.md` for syntax details and limitations.
 - `docs/reference/sjasmplus-cheatsheet.md` only when migrating external
   sjasmplus material or explaining sjasmplus-specific behavior.
-- Relevant files under `packages/asm/tests/` when behavior is unclear.
+- In a repository checkout: `packages/asm/README.md` and relevant files under
+  `packages/asm/tests/` when behavior is unclear.
 
 ## Validation
 

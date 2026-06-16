@@ -42,10 +42,10 @@ keys.
 
 - `docs/reference/keyboard-input.md`
 - `docs/reference/common-bugs.md`
-- `packages/toolkit/recipes/06-keyboard-qaop/recipe.asm`
-- `packages/toolkit/recipes/06-keyboard-qaop/test.json`
-- `packages/toolkit/templates/game/lib/keys.asm`
-- `packages/toolkit/templates/platformer/lib/keys.asm`
+- In generated projects: local `lib/keys.asm`, `src/main.asm`, and tests.
+- In a repository checkout: `packages/toolkit/recipes/06-keyboard-qaop/recipe.asm`,
+  `packages/toolkit/recipes/06-keyboard-qaop/test.json`, and
+  `packages/toolkit/templates/*/lib/keys.asm`.
 
 External cross-checks, when local docs are insufficient: Sinclair Wiki keyboard
 matrix notes and ZX BASIC manual chapter 24 for keyboard behavior.

@@ -1,6 +1,6 @@
 /**
  * ZXGeneration - ZX Spectrum Emulator
- * @version 1.0.1
+ * @version 0.1.2
  * @license MIT
  */
 /**
@@ -391,9 +391,8 @@ class Flags {
   setFlag(fRegister, flagMask, value) {
     if (value) {
       return fRegister | flagMask;
-    } else {
-      return fRegister & ~flagMask;
     }
+    return fRegister & ~flagMask;
   }
 
   /**
@@ -1474,12 +1473,12 @@ class BitInstructions {
    * @param {number} bit - The bit position to test (0-7)
    * @param {number} value - The value to test
    * @param {boolean} isMemory - Whether this is a memory operation (HL)
-   * @returns {number} Cycles: 4 for register, 8 for (HL) (not including CB prefix)
+   * @returns {number} Total cycles: 8 for register, 12 for (HL)
    */
   bitTest(bit, value, isMemory = false) {
     const newF = this.flags.updateBitTestFlags(this.registers.get('F'), bit, value);
     this.registers.set('F', newF);
-    return isMemory ? 8 : 4;
+    return isMemory ? 12 : 8;
   }
 
   /**
@@ -1842,6 +1841,7 @@ class MiscInstructions {
     if (cpu) {
       cpu.iff1 = false;
       cpu.iff2 = false;
+      cpu.eiDelay = 0;
     }
     return 4; // cycles
   }
@@ -1851,8 +1851,7 @@ class MiscInstructions {
    */
   ei(cpu) {
     if (cpu) {
-      cpu.iff1 = true;
-      cpu.iff2 = true;
+      cpu.eiDelay = 2;
     }
     return 4; // cycles
   }
@@ -2310,11 +2309,10 @@ class ExtendedInstructions {
       this.registers.set('F', f);
       this.registers.setPC(this.registers.getPC() - 2 & 0xffff);
       return 21;
-    } else {
-      // P/V = 0 on final iteration
-      this.registers.set('F', this._applyInOutFlags(false));
-      return 16;
     }
+    // P/V = 0 on final iteration
+    this.registers.set('F', this._applyInOutFlags(false));
+    return 16;
   }
   indr() {
     const value = this.io.readPort(this.registers.getBC());
@@ -2328,11 +2326,10 @@ class ExtendedInstructions {
       this.registers.set('F', f);
       this.registers.setPC(this.registers.getPC() - 2 & 0xffff);
       return 21;
-    } else {
-      // P/V = 0 on final iteration
-      this.registers.set('F', this._applyInOutFlags(false));
-      return 16;
     }
+    // P/V = 0 on final iteration
+    this.registers.set('F', this._applyInOutFlags(false));
+    return 16;
   }
   otir() {
     // B is decremented BEFORE the I/O operation
@@ -2347,11 +2344,10 @@ class ExtendedInstructions {
       this.registers.set('F', f);
       this.registers.setPC(this.registers.getPC() - 2 & 0xffff);
       return 21;
-    } else {
-      // P/V = 0 on final iteration
-      this.registers.set('F', this._applyInOutFlags(false));
-      return 16;
     }
+    // P/V = 0 on final iteration
+    this.registers.set('F', this._applyInOutFlags(false));
+    return 16;
   }
   otdr() {
     // B is decremented BEFORE the I/O operation
@@ -2366,11 +2362,10 @@ class ExtendedInstructions {
       this.registers.set('F', f);
       this.registers.setPC(this.registers.getPC() - 2 & 0xffff);
       return 21;
-    } else {
-      // P/V = 0 on final iteration
-      this.registers.set('F', this._applyInOutFlags(false));
-      return 16;
     }
+    // P/V = 0 on final iteration
+    this.registers.set('F', this._applyInOutFlags(false));
+    return 16;
   }
 }
 
@@ -2657,49 +2652,50 @@ class IndexedInstructions {
       // BIT operations (0x40-0x7F)
       const bit = cbOpcode >> 3 & 0x07;
       return this.processIndexedBitOp(indexReg, displacement, 'BIT', bit);
-    } else if ((cbOpcode & 0xc0) === 0x80) {
+    }
+    if ((cbOpcode & 0xc0) === 0x80) {
       // RES operations (0x80-0xBF)
       const bit = cbOpcode >> 3 & 0x07;
       return this.processIndexedBitOp(indexReg, displacement, 'RES', bit, targetReg);
-    } else if ((cbOpcode & 0xc0) === 0xc0) {
+    }
+    if ((cbOpcode & 0xc0) === 0xc0) {
       // SET operations (0xC0-0xFF)
       const bit = cbOpcode >> 3 & 0x07;
       return this.processIndexedBitOp(indexReg, displacement, 'SET', bit, targetReg);
-    } else {
-      // Rotate/Shift operations (0x00-0x3F)
-      const operation = cbOpcode & 0xf8;
-      let opName;
-      switch (operation) {
-        case 0x00:
-          opName = 'RLC';
-          break;
-        case 0x08:
-          opName = 'RRC';
-          break;
-        case 0x10:
-          opName = 'RL';
-          break;
-        case 0x18:
-          opName = 'RR';
-          break;
-        case 0x20:
-          opName = 'SLA';
-          break;
-        case 0x28:
-          opName = 'SRA';
-          break;
-        case 0x30:
-          opName = 'SLL';
-          break;
-        case 0x38:
-          opName = 'SRL';
-          break;
-        default:
-          return 23;
-        // Unknown operation
-      }
-      return this.processIndexedBitOp(indexReg, displacement, opName, 0, targetReg);
     }
+    // Rotate/Shift operations (0x00-0x3F)
+    const operation = cbOpcode & 0xf8;
+    let opName;
+    switch (operation) {
+      case 0x00:
+        opName = 'RLC';
+        break;
+      case 0x08:
+        opName = 'RRC';
+        break;
+      case 0x10:
+        opName = 'RL';
+        break;
+      case 0x18:
+        opName = 'RR';
+        break;
+      case 0x20:
+        opName = 'SLA';
+        break;
+      case 0x28:
+        opName = 'SRA';
+        break;
+      case 0x30:
+        opName = 'SLL';
+        break;
+      case 0x38:
+        opName = 'SRL';
+        break;
+      default:
+        return 23;
+      // Unknown operation
+    }
+    return this.processIndexedBitOp(indexReg, displacement, opName, 0, targetReg);
   }
 }
 
@@ -3082,13 +3078,9 @@ class InstructionDecoder {
         // BIT operations (0x40-0x7F)
         const bitNum = opcode >> 3 & 0x07;
         if (isHL) {
-          this.cbTable[opcode] = () => {
-            return bit.bitTest(bitNum, this.memory.readByte(this.registers.getHL()), true);
-          };
+          this.cbTable[opcode] = () => bit.bitTest(bitNum, this.memory.readByte(this.registers.getHL()), true);
         } else {
-          this.cbTable[opcode] = () => {
-            return bit.bitTest(bitNum, this.registers.get(reg), false);
-          };
+          this.cbTable[opcode] = () => bit.bitTest(bitNum, this.registers.get(reg), false);
         }
       } else if ((opcode & 0xc0) === 0x80) {
         // RES operations (0x80-0xBF)
@@ -3293,10 +3285,9 @@ class InstructionDecoder {
     // Add all undocumented opcodes as NOPs (they don't modify state)
     undocumentedOpcodes.forEach(opcode => {
       if (!this.edTable[opcode]) {
-        this.edTable[opcode] = _cpu => {
-          // Undocumented ED instruction - acts as 2-byte NOP
-          return 8; // Standard ED instruction timing
-        };
+        this.edTable[opcode] = _cpu =>
+        // Undocumented ED instruction - acts as 2-byte NOP
+        8; // Standard ED instruction timing
       }
     });
   }
@@ -3403,10 +3394,9 @@ class InstructionDecoder {
     const handler = this.mainTable[opcode];
     if (handler) {
       return handler(cpu);
-    } else {
-      console.warn(`Unimplemented opcode: 0x${opcode.toString(16).padStart(2, '0')} at PC: 0x${(this.registers.getPC() - 1).toString(16).padStart(4, '0')}`);
-      return 4; // Default cycles
     }
+    console.warn(`Unimplemented opcode: 0x${opcode.toString(16).padStart(2, '0')} at PC: 0x${(this.registers.getPC() - 1).toString(16).padStart(4, '0')}`);
+    return 4; // Default cycles
   }
 
   // Prefixed instruction handlers
@@ -3415,206 +3405,203 @@ class InstructionDecoder {
     const cbOpcode = this.memory.fetchByte(this.registers);
     const handler = this.cbTable[cbOpcode];
     if (handler) {
-      return 4 + handler(); // 4 cycles for CB prefix + instruction cycles
-    } else {
-      console.warn(`Unimplemented CB opcode: 0x${cbOpcode.toString(16).padStart(2, '0')}`);
-      return 8;
+      return handler();
     }
+    console.warn(`Unimplemented CB opcode: 0x${cbOpcode.toString(16).padStart(2, '0')}`);
+    return 8;
   }
   executeEDInstruction(cpu) {
     this.registers.incrementR();
     const edOpcode = this.memory.fetchByte(this.registers);
     const handler = this.edTable[edOpcode];
     if (handler) {
-      return 4 + handler(cpu); // 4 cycles for ED prefix + instruction cycles
-    } else {
-      // Many ED opcodes act as NOPs
-      return 8;
+      return handler(cpu);
     }
+    // Many ED opcodes act as NOPs
+    return 8;
   }
   executeDDInstruction(cpu) {
     const ddOpcode = this.memory.fetchByte(this.registers);
     const handler = this.ddTable[ddOpcode];
     if (handler) {
       this.registers.incrementR(); // Only increment R if we handle the instruction
-      return 4 + handler(cpu); // 4 cycles for DD prefix + instruction cycles
-    } else {
-      // Handle undocumented IXH/IXL opcodes
-      switch (ddOpcode) {
-        // LD reg,IXH
-        case 0x44:
-          this.registers.set('B', this.registers.getIXH());
-          return 8;
-        case 0x4C:
-          this.registers.set('C', this.registers.getIXH());
-          return 8;
-        case 0x54:
-          this.registers.set('D', this.registers.getIXH());
-          return 8;
-        case 0x5C:
-          this.registers.set('E', this.registers.getIXH());
-          return 8;
-        case 0x7C:
-          this.registers.set('A', this.registers.getIXH());
-          return 8;
+      return handler(cpu);
+    }
+    // Handle undocumented IXH/IXL opcodes
+    switch (ddOpcode) {
+      // LD reg,IXH
+      case 0x44:
+        this.registers.set('B', this.registers.getIXH());
+        return 8;
+      case 0x4c:
+        this.registers.set('C', this.registers.getIXH());
+        return 8;
+      case 0x54:
+        this.registers.set('D', this.registers.getIXH());
+        return 8;
+      case 0x5c:
+        this.registers.set('E', this.registers.getIXH());
+        return 8;
+      case 0x7c:
+        this.registers.set('A', this.registers.getIXH());
+        return 8;
 
-        // LD reg,IXL
-        case 0x45:
-          this.registers.set('B', this.registers.getIXL());
-          return 8;
-        case 0x4D:
-          this.registers.set('C', this.registers.getIXL());
-          return 8;
-        case 0x55:
-          this.registers.set('D', this.registers.getIXL());
-          return 8;
-        case 0x5D:
-          this.registers.set('E', this.registers.getIXL());
-          return 8;
-        case 0x7D:
-          this.registers.set('A', this.registers.getIXL());
-          return 8;
+      // LD reg,IXL
+      case 0x45:
+        this.registers.set('B', this.registers.getIXL());
+        return 8;
+      case 0x4d:
+        this.registers.set('C', this.registers.getIXL());
+        return 8;
+      case 0x55:
+        this.registers.set('D', this.registers.getIXL());
+        return 8;
+      case 0x5d:
+        this.registers.set('E', this.registers.getIXL());
+        return 8;
+      case 0x7d:
+        this.registers.set('A', this.registers.getIXL());
+        return 8;
 
-        // LD IXH,reg
-        case 0x60:
-          this.registers.setIXH(this.registers.get('B'));
-          return 8;
-        case 0x61:
-          this.registers.setIXH(this.registers.get('C'));
-          return 8;
-        case 0x62:
-          this.registers.setIXH(this.registers.get('D'));
-          return 8;
-        case 0x63:
-          this.registers.setIXH(this.registers.get('E'));
-          return 8;
-        case 0x67:
-          this.registers.setIXH(this.registers.get('A'));
-          return 8;
+      // LD IXH,reg
+      case 0x60:
+        this.registers.setIXH(this.registers.get('B'));
+        return 8;
+      case 0x61:
+        this.registers.setIXH(this.registers.get('C'));
+        return 8;
+      case 0x62:
+        this.registers.setIXH(this.registers.get('D'));
+        return 8;
+      case 0x63:
+        this.registers.setIXH(this.registers.get('E'));
+        return 8;
+      case 0x67:
+        this.registers.setIXH(this.registers.get('A'));
+        return 8;
 
-        // LD IXL,reg
-        case 0x68:
-          this.registers.setIXL(this.registers.get('B'));
-          return 8;
-        case 0x69:
-          this.registers.setIXL(this.registers.get('C'));
-          return 8;
-        case 0x6A:
-          this.registers.setIXL(this.registers.get('D'));
-          return 8;
-        case 0x6B:
-          this.registers.setIXL(this.registers.get('E'));
-          return 8;
-        case 0x6F:
-          this.registers.setIXL(this.registers.get('A'));
-          return 8;
+      // LD IXL,reg
+      case 0x68:
+        this.registers.setIXL(this.registers.get('B'));
+        return 8;
+      case 0x69:
+        this.registers.setIXL(this.registers.get('C'));
+        return 8;
+      case 0x6a:
+        this.registers.setIXL(this.registers.get('D'));
+        return 8;
+      case 0x6b:
+        this.registers.setIXL(this.registers.get('E'));
+        return 8;
+      case 0x6f:
+        this.registers.setIXL(this.registers.get('A'));
+        return 8;
 
-        // LD IXH,IXH / LD IXL,IXL (NOPs effectively)
-        case 0x64:
-          return 8;
-        // LD IXH,IXH
-        case 0x6D:
-          return 8;
-        // LD IXL,IXL
+      // LD IXH,IXH / LD IXL,IXL (NOPs effectively)
+      case 0x64:
+        return 8;
+      // LD IXH,IXH
+      case 0x6d:
+        return 8;
+      // LD IXL,IXL
 
-        // LD IXH,IXL / LD IXL,IXH
-        case 0x65:
-          this.registers.setIXH(this.registers.getIXL());
-          return 8;
-        case 0x6C:
-          this.registers.setIXL(this.registers.getIXH());
-          return 8;
+      // LD IXH,IXL / LD IXL,IXH
+      case 0x65:
+        this.registers.setIXH(this.registers.getIXL());
+        return 8;
+      case 0x6c:
+        this.registers.setIXL(this.registers.getIXH());
+        return 8;
 
-        // Arithmetic with IXH
-        case 0x84:
-          this.instructions.arithmetic.addA(this.registers.getIXH());
-          return 8;
-        case 0x85:
-          this.instructions.arithmetic.addA(this.registers.getIXL());
-          return 8;
-        case 0x8C:
-          this.instructions.arithmetic.adcA(this.registers.getIXH());
-          return 8;
-        case 0x8D:
-          this.instructions.arithmetic.adcA(this.registers.getIXL());
-          return 8;
-        case 0x94:
-          this.instructions.arithmetic.subA(this.registers.getIXH());
-          return 8;
-        case 0x95:
-          this.instructions.arithmetic.subA(this.registers.getIXL());
-          return 8;
-        case 0x9C:
-          this.instructions.arithmetic.sbcA(this.registers.getIXH());
-          return 8;
-        case 0x9D:
-          this.instructions.arithmetic.sbcA(this.registers.getIXL());
-          return 8;
+      // Arithmetic with IXH
+      case 0x84:
+        this.instructions.arithmetic.addA(this.registers.getIXH());
+        return 8;
+      case 0x85:
+        this.instructions.arithmetic.addA(this.registers.getIXL());
+        return 8;
+      case 0x8c:
+        this.instructions.arithmetic.adcA(this.registers.getIXH());
+        return 8;
+      case 0x8d:
+        this.instructions.arithmetic.adcA(this.registers.getIXL());
+        return 8;
+      case 0x94:
+        this.instructions.arithmetic.subA(this.registers.getIXH());
+        return 8;
+      case 0x95:
+        this.instructions.arithmetic.subA(this.registers.getIXL());
+        return 8;
+      case 0x9c:
+        this.instructions.arithmetic.sbcA(this.registers.getIXH());
+        return 8;
+      case 0x9d:
+        this.instructions.arithmetic.sbcA(this.registers.getIXL());
+        return 8;
 
-        // Logical with IXH/IXL
-        case 0xA4:
-          this.instructions.logical.andA(this.registers.getIXH());
-          return 8;
-        case 0xA5:
-          this.instructions.logical.andA(this.registers.getIXL());
-          return 8;
-        case 0xAC:
-          this.instructions.logical.xorA(this.registers.getIXH());
-          return 8;
-        case 0xAD:
-          this.instructions.logical.xorA(this.registers.getIXL());
-          return 8;
-        case 0xB4:
-          this.instructions.logical.orA(this.registers.getIXH());
-          return 8;
-        case 0xB5:
-          this.instructions.logical.orA(this.registers.getIXL());
-          return 8;
-        case 0xBC:
-          this.instructions.arithmetic.cpA(this.registers.getIXH());
-          return 8;
-        case 0xBD:
-          this.instructions.arithmetic.cpA(this.registers.getIXL());
-          return 8;
+      // Logical with IXH/IXL
+      case 0xa4:
+        this.instructions.logical.andA(this.registers.getIXH());
+        return 8;
+      case 0xa5:
+        this.instructions.logical.andA(this.registers.getIXL());
+        return 8;
+      case 0xac:
+        this.instructions.logical.xorA(this.registers.getIXH());
+        return 8;
+      case 0xad:
+        this.instructions.logical.xorA(this.registers.getIXL());
+        return 8;
+      case 0xb4:
+        this.instructions.logical.orA(this.registers.getIXH());
+        return 8;
+      case 0xb5:
+        this.instructions.logical.orA(this.registers.getIXL());
+        return 8;
+      case 0xbc:
+        this.instructions.arithmetic.cpA(this.registers.getIXH());
+        return 8;
+      case 0xbd:
+        this.instructions.arithmetic.cpA(this.registers.getIXL());
+        return 8;
 
-        // INC/DEC IXH/IXL
-        case 0x24:
-          {
-            const result = this.instructions.arithmetic.inc8(this.registers.getIXH());
-            this.registers.setIXH(result);
-            return 8;
-          }
-        case 0x25:
-          {
-            const result = this.instructions.arithmetic.dec8(this.registers.getIXH());
-            this.registers.setIXH(result);
-            return 8;
-          }
-        case 0x2C:
-          {
-            const result = this.instructions.arithmetic.inc8(this.registers.getIXL());
-            this.registers.setIXL(result);
-            return 8;
-          }
-        case 0x2D:
-          {
-            const result = this.instructions.arithmetic.dec8(this.registers.getIXL());
-            this.registers.setIXL(result);
-            return 8;
-          }
+      // INC/DEC IXH/IXL
+      case 0x24:
+        {
+          const result = this.instructions.arithmetic.inc8(this.registers.getIXH());
+          this.registers.setIXH(result);
+          return 8;
+        }
+      case 0x25:
+        {
+          const result = this.instructions.arithmetic.dec8(this.registers.getIXH());
+          this.registers.setIXH(result);
+          return 8;
+        }
+      case 0x2c:
+        {
+          const result = this.instructions.arithmetic.inc8(this.registers.getIXL());
+          this.registers.setIXL(result);
+          return 8;
+        }
+      case 0x2d:
+        {
+          const result = this.instructions.arithmetic.dec8(this.registers.getIXL());
+          this.registers.setIXL(result);
+          return 8;
+        }
 
-        // LD IXH/IXL,n
-        case 0x26:
-          this.registers.setIXH(this.memory.fetchByte(this.registers));
-          return 11;
-        case 0x2E:
-          this.registers.setIXL(this.memory.fetchByte(this.registers));
-          return 11;
-        default:
-          // If no DD handler, execute as normal instruction WITHOUT the prefix
-          // Don't increment R again since main execute will do it
-          return this.execute(ddOpcode, cpu);
-      }
+      // LD IXH/IXL,n
+      case 0x26:
+        this.registers.setIXH(this.memory.fetchByte(this.registers));
+        return 11;
+      case 0x2e:
+        this.registers.setIXL(this.memory.fetchByte(this.registers));
+        return 11;
+      default:
+        // If no DD handler, execute as normal instruction WITHOUT the prefix
+        // Don't increment R again since main execute will do it
+        return this.execute(ddOpcode, cpu);
     }
   }
   executeFDInstruction(cpu) {
@@ -3622,204 +3609,203 @@ class InstructionDecoder {
     const handler = this.fdTable[fdOpcode];
     if (handler) {
       this.registers.incrementR(); // Only increment R if we handle the instruction
-      return 4 + handler(cpu); // 4 cycles for FD prefix + instruction cycles
-    } else {
-      // Handle undocumented IYH/IYL opcodes
-      switch (fdOpcode) {
-        // LD reg,IYH
-        case 0x44:
-          this.registers.set('B', this.registers.getIYH());
-          return 8;
-        case 0x4C:
-          this.registers.set('C', this.registers.getIYH());
-          return 8;
-        case 0x54:
-          this.registers.set('D', this.registers.getIYH());
-          return 8;
-        case 0x5C:
-          this.registers.set('E', this.registers.getIYH());
-          return 8;
-        case 0x7C:
-          this.registers.set('A', this.registers.getIYH());
-          return 8;
+      return handler(cpu);
+    }
+    // Handle undocumented IYH/IYL opcodes
+    switch (fdOpcode) {
+      // LD reg,IYH
+      case 0x44:
+        this.registers.set('B', this.registers.getIYH());
+        return 8;
+      case 0x4c:
+        this.registers.set('C', this.registers.getIYH());
+        return 8;
+      case 0x54:
+        this.registers.set('D', this.registers.getIYH());
+        return 8;
+      case 0x5c:
+        this.registers.set('E', this.registers.getIYH());
+        return 8;
+      case 0x7c:
+        this.registers.set('A', this.registers.getIYH());
+        return 8;
 
-        // LD reg,IYL
-        case 0x45:
-          this.registers.set('B', this.registers.getIYL());
-          return 8;
-        case 0x4D:
-          this.registers.set('C', this.registers.getIYL());
-          return 8;
-        case 0x55:
-          this.registers.set('D', this.registers.getIYL());
-          return 8;
-        case 0x5D:
-          this.registers.set('E', this.registers.getIYL());
-          return 8;
-        case 0x7D:
-          this.registers.set('A', this.registers.getIYL());
-          return 8;
+      // LD reg,IYL
+      case 0x45:
+        this.registers.set('B', this.registers.getIYL());
+        return 8;
+      case 0x4d:
+        this.registers.set('C', this.registers.getIYL());
+        return 8;
+      case 0x55:
+        this.registers.set('D', this.registers.getIYL());
+        return 8;
+      case 0x5d:
+        this.registers.set('E', this.registers.getIYL());
+        return 8;
+      case 0x7d:
+        this.registers.set('A', this.registers.getIYL());
+        return 8;
 
-        // LD IYH,reg
-        case 0x60:
-          this.registers.setIYH(this.registers.get('B'));
-          return 8;
-        case 0x61:
-          this.registers.setIYH(this.registers.get('C'));
-          return 8;
-        case 0x62:
-          this.registers.setIYH(this.registers.get('D'));
-          return 8;
-        case 0x63:
-          this.registers.setIYH(this.registers.get('E'));
-          return 8;
-        case 0x67:
-          this.registers.setIYH(this.registers.get('A'));
-          return 8;
+      // LD IYH,reg
+      case 0x60:
+        this.registers.setIYH(this.registers.get('B'));
+        return 8;
+      case 0x61:
+        this.registers.setIYH(this.registers.get('C'));
+        return 8;
+      case 0x62:
+        this.registers.setIYH(this.registers.get('D'));
+        return 8;
+      case 0x63:
+        this.registers.setIYH(this.registers.get('E'));
+        return 8;
+      case 0x67:
+        this.registers.setIYH(this.registers.get('A'));
+        return 8;
 
-        // LD IYL,reg
-        case 0x68:
-          this.registers.setIYL(this.registers.get('B'));
-          return 8;
-        case 0x69:
-          this.registers.setIYL(this.registers.get('C'));
-          return 8;
-        case 0x6A:
-          this.registers.setIYL(this.registers.get('D'));
-          return 8;
-        case 0x6B:
-          this.registers.setIYL(this.registers.get('E'));
-          return 8;
-        case 0x6F:
-          this.registers.setIYL(this.registers.get('A'));
-          return 8;
+      // LD IYL,reg
+      case 0x68:
+        this.registers.setIYL(this.registers.get('B'));
+        return 8;
+      case 0x69:
+        this.registers.setIYL(this.registers.get('C'));
+        return 8;
+      case 0x6a:
+        this.registers.setIYL(this.registers.get('D'));
+        return 8;
+      case 0x6b:
+        this.registers.setIYL(this.registers.get('E'));
+        return 8;
+      case 0x6f:
+        this.registers.setIYL(this.registers.get('A'));
+        return 8;
 
-        // LD IYH,IYH / LD IYL,IYL (NOPs effectively)
-        case 0x64:
-          return 8;
-        // LD IYH,IYH
-        case 0x6D:
-          return 8;
-        // LD IYL,IYL
+      // LD IYH,IYH / LD IYL,IYL (NOPs effectively)
+      case 0x64:
+        return 8;
+      // LD IYH,IYH
+      case 0x6d:
+        return 8;
+      // LD IYL,IYL
 
-        // LD IYH,IYL / LD IYL,IYH
-        case 0x65:
-          this.registers.setIYH(this.registers.getIYL());
-          return 8;
-        case 0x6C:
-          this.registers.setIYL(this.registers.getIYH());
-          return 8;
+      // LD IYH,IYL / LD IYL,IYH
+      case 0x65:
+        this.registers.setIYH(this.registers.getIYL());
+        return 8;
+      case 0x6c:
+        this.registers.setIYL(this.registers.getIYH());
+        return 8;
 
-        // Arithmetic with IYH
-        case 0x84:
-          this.instructions.arithmetic.addA(this.registers.getIYH());
-          return 8;
-        case 0x85:
-          this.instructions.arithmetic.addA(this.registers.getIYL());
-          return 8;
-        case 0x8C:
-          this.instructions.arithmetic.adcA(this.registers.getIYH());
-          return 8;
-        case 0x8D:
-          this.instructions.arithmetic.adcA(this.registers.getIYL());
-          return 8;
-        case 0x94:
-          this.instructions.arithmetic.subA(this.registers.getIYH());
-          return 8;
-        case 0x95:
-          this.instructions.arithmetic.subA(this.registers.getIYL());
-          return 8;
-        case 0x9C:
-          this.instructions.arithmetic.sbcA(this.registers.getIYH());
-          return 8;
-        case 0x9D:
-          this.instructions.arithmetic.sbcA(this.registers.getIYL());
-          return 8;
+      // Arithmetic with IYH
+      case 0x84:
+        this.instructions.arithmetic.addA(this.registers.getIYH());
+        return 8;
+      case 0x85:
+        this.instructions.arithmetic.addA(this.registers.getIYL());
+        return 8;
+      case 0x8c:
+        this.instructions.arithmetic.adcA(this.registers.getIYH());
+        return 8;
+      case 0x8d:
+        this.instructions.arithmetic.adcA(this.registers.getIYL());
+        return 8;
+      case 0x94:
+        this.instructions.arithmetic.subA(this.registers.getIYH());
+        return 8;
+      case 0x95:
+        this.instructions.arithmetic.subA(this.registers.getIYL());
+        return 8;
+      case 0x9c:
+        this.instructions.arithmetic.sbcA(this.registers.getIYH());
+        return 8;
+      case 0x9d:
+        this.instructions.arithmetic.sbcA(this.registers.getIYL());
+        return 8;
 
-        // Logical with IYH/IYL
-        case 0xA4:
-          this.instructions.logical.andA(this.registers.getIYH());
-          return 8;
-        case 0xA5:
-          this.instructions.logical.andA(this.registers.getIYL());
-          return 8;
-        case 0xAC:
-          this.instructions.logical.xorA(this.registers.getIYH());
-          return 8;
-        case 0xAD:
-          this.instructions.logical.xorA(this.registers.getIYL());
-          return 8;
-        case 0xB4:
-          this.instructions.logical.orA(this.registers.getIYH());
-          return 8;
-        case 0xB5:
-          this.instructions.logical.orA(this.registers.getIYL());
-          return 8;
-        case 0xBC:
-          this.instructions.arithmetic.cpA(this.registers.getIYH());
-          return 8;
-        case 0xBD:
-          this.instructions.arithmetic.cpA(this.registers.getIYL());
-          return 8;
+      // Logical with IYH/IYL
+      case 0xa4:
+        this.instructions.logical.andA(this.registers.getIYH());
+        return 8;
+      case 0xa5:
+        this.instructions.logical.andA(this.registers.getIYL());
+        return 8;
+      case 0xac:
+        this.instructions.logical.xorA(this.registers.getIYH());
+        return 8;
+      case 0xad:
+        this.instructions.logical.xorA(this.registers.getIYL());
+        return 8;
+      case 0xb4:
+        this.instructions.logical.orA(this.registers.getIYH());
+        return 8;
+      case 0xb5:
+        this.instructions.logical.orA(this.registers.getIYL());
+        return 8;
+      case 0xbc:
+        this.instructions.arithmetic.cpA(this.registers.getIYH());
+        return 8;
+      case 0xbd:
+        this.instructions.arithmetic.cpA(this.registers.getIYL());
+        return 8;
 
-        // INC/DEC IYH/IYL
-        case 0x24:
-          {
-            const result = this.instructions.arithmetic.inc8(this.registers.getIYH());
-            this.registers.setIYH(result);
-            return 8;
-          }
-        case 0x25:
-          {
-            const result = this.instructions.arithmetic.dec8(this.registers.getIYH());
-            this.registers.setIYH(result);
-            return 8;
-          }
-        case 0x2C:
-          {
-            const result = this.instructions.arithmetic.inc8(this.registers.getIYL());
-            this.registers.setIYL(result);
-            return 8;
-          }
-        case 0x2D:
-          {
-            const result = this.instructions.arithmetic.dec8(this.registers.getIYL());
-            this.registers.setIYL(result);
-            return 8;
-          }
+      // INC/DEC IYH/IYL
+      case 0x24:
+        {
+          const result = this.instructions.arithmetic.inc8(this.registers.getIYH());
+          this.registers.setIYH(result);
+          return 8;
+        }
+      case 0x25:
+        {
+          const result = this.instructions.arithmetic.dec8(this.registers.getIYH());
+          this.registers.setIYH(result);
+          return 8;
+        }
+      case 0x2c:
+        {
+          const result = this.instructions.arithmetic.inc8(this.registers.getIYL());
+          this.registers.setIYL(result);
+          return 8;
+        }
+      case 0x2d:
+        {
+          const result = this.instructions.arithmetic.dec8(this.registers.getIYL());
+          this.registers.setIYL(result);
+          return 8;
+        }
 
-        // LD IYH/IYL,n
-        case 0x26:
-          this.registers.setIYH(this.memory.fetchByte(this.registers));
-          return 11;
-        case 0x2E:
-          this.registers.setIYL(this.memory.fetchByte(this.registers));
-          return 11;
-        default:
-          // If no FD handler, execute as normal instruction WITHOUT the prefix
-          // Don't increment R again since main execute will do it
-          return this.execute(fdOpcode, cpu);
-      }
+      // LD IYH/IYL,n
+      case 0x26:
+        this.registers.setIYH(this.memory.fetchByte(this.registers));
+        return 11;
+      case 0x2e:
+        this.registers.setIYL(this.memory.fetchByte(this.registers));
+        return 11;
+      default:
+        // If no FD handler, execute as normal instruction WITHOUT the prefix
+        // Don't increment R again since main execute will do it
+        return this.execute(fdOpcode, cpu);
     }
   }
   executeIndexedCBInstruction(_cpu, indexReg) {
     this.registers.incrementR();
     const displacement = this.memory.fetchByte(this.registers);
     const cbOpcode = this.memory.fetchByte(this.registers);
-    return 4 + this.instructions.indexed.processIndexedCB(indexReg, displacement, cbOpcode);
+    return this.instructions.indexed.processIndexedCB(indexReg, displacement, cbOpcode);
   }
 }
 
 /**
  * Z80 CPU Emulator
  * Complete and accurate Z80 processor emulation with full instruction set support
- * 
+ *
  * @class Z80
  */
 class Z80 {
   /**
    * Create a Z80 CPU instance
-   * 
+   *
    * @constructor
    * @param {Object} memory - Memory interface for RAM/ROM access
    * @param {Object} ula - ULA interface for I/O operations
@@ -3862,22 +3848,22 @@ class Z80 {
 
   /**
    * Reset the CPU to initial state
-   * 
+   *
    * @returns {void}
    */
   reset() {
     this.registers.reset();
     this.halted = false;
-    this.interruptMode = 1;
+    this.interruptMode = 0;
     this.cycles = 0;
-    this.iff1 = true; // Interrupt flip-flop 1
-    this.iff2 = true; // Interrupt flip-flop 2
-    this.instructionCount = 0; // For debugging
+    this.iff1 = false;
+    this.iff2 = false;
+    this.eiDelay = 0;
   }
 
   /**
    * Execute a single instruction
-   * 
+   *
    * @returns {void}
    */
   execute() {
@@ -3888,32 +3874,35 @@ class Z80 {
       this.registers.incrementR();
       return 4;
     }
-
-    // Log first few instructions for debugging
-    // if (this.instructionCount < 10) {
-    //     const pc = this.registers.getPC();
-    //     const opcode = this.memory.readByte ? this.memory.readByte(pc) : this.memory.read(pc);
-    //     console.log(`Instruction ${this.instructionCount}: PC=0x${pc.toString(16).padStart(4, '0')}, opcode=0x${opcode.toString(16).padStart(2, '0')}`);
-    //     this.instructionCount++;
-    // }
-
     const opcode = this.memory.fetchByte(this.registers);
     this.registers.incrementR();
     const instructionCycles = this.decoder.execute(opcode, this);
     this.cycles += instructionCycles;
+    this.updateInterruptEnableDelay();
     return instructionCycles;
+  }
+  updateInterruptEnableDelay() {
+    if (this.eiDelay > 0) {
+      this.eiDelay--;
+      if (this.eiDelay === 0) {
+        this.iff1 = true;
+        this.iff2 = true;
+      }
+    }
   }
 
   /**
    * Trigger a maskable interrupt
-   * 
+   *
    * @returns {void}
    */
   interrupt() {
-    if (this.iff1 || this.halted) {
+    if (this.iff1) {
       this.halted = false;
+      this.eiDelay = 0;
       this.iff1 = false;
       this.iff2 = false;
+      this.registers.incrementR();
 
       // Handle different interrupt modes
       switch (this.interruptMode) {
@@ -3987,11 +3976,12 @@ class Z80 {
       });
     }
     if (state.cpu) {
-      this.halted = state.cpu.halted || false;
-      this.interruptMode = state.cpu.interruptMode || 1;
-      this.cycles = state.cpu.cycles || 0;
-      this.iff1 = state.cpu.iff1 || false;
-      this.iff2 = state.cpu.iff2 || false;
+      this.halted = state.cpu.halted !== undefined ? state.cpu.halted : false;
+      this.interruptMode = state.cpu.interruptMode !== undefined ? state.cpu.interruptMode : 0;
+      this.cycles = state.cpu.cycles !== undefined ? state.cpu.cycles : 0;
+      this.iff1 = state.cpu.iff1 !== undefined ? state.cpu.iff1 : false;
+      this.iff2 = state.cpu.iff2 !== undefined ? state.cpu.iff2 : false;
+      this.eiDelay = 0;
     }
   }
 
@@ -4034,7 +4024,7 @@ class Z80 {
   /**
    * Get complete CPU state in flat structure
    * Used for snapshots and state management
-   * 
+   *
    * @returns {Object} CPU state with all registers and flags
    * @returns {number} .pc - Program counter
    * @returns {number} .sp - Stack pointer
@@ -4055,7 +4045,7 @@ class Z80 {
    * @returns {boolean} .iff2 - Interrupt flip-flop 2
    * @returns {boolean} .halted - HALT state
    * @returns {number} .cycles - Total cycles executed
-   * 
+   *
    * @example
    * const state = cpu.getState();
    * console.log(`PC: ${state.pc.toString(16)}`);
@@ -4075,6 +4065,15 @@ class Z80 {
       e: this.registers.get('E'),
       h: this.registers.get('H'),
       l: this.registers.get('L'),
+      // Shadow register set (EX AF,AF' / EXX)
+      a_: this.registers.get('A_'),
+      f_: this.registers.get('F_'),
+      b_: this.registers.get('B_'),
+      c_: this.registers.get('C_'),
+      d_: this.registers.get('D_'),
+      e_: this.registers.get('E_'),
+      h_: this.registers.get('H_'),
+      l_: this.registers.get('L_'),
       // 16-bit index registers
       ix: this.registers.get16('IX'),
       iy: this.registers.get16('IY'),
@@ -4083,18 +4082,16 @@ class Z80 {
       r: this.registers.get('R'),
       // CPU state
       im: this.interruptMode,
-      // Fixed: was this.im
       iff1: this.iff1,
       iff2: this.iff2,
       halted: this.halted,
-      // Added missing property
       cycles: this.cycles
     };
   }
 
   /**
    * Set CPU state from flat structure
-   * 
+   *
    * @param {Object} state - CPU state to restore
    * @param {number} [state.pc] - Program counter
    * @param {number} [state.sp] - Stack pointer
@@ -4106,6 +4103,14 @@ class Z80 {
    * @param {number} [state.e] - E register
    * @param {number} [state.h] - H register
    * @param {number} [state.l] - L register
+   * @param {number} [state.a_] - Shadow accumulator (A')
+   * @param {number} [state.f_] - Shadow flags (F')
+   * @param {number} [state.b_] - Shadow B register (B')
+   * @param {number} [state.c_] - Shadow C register (C')
+   * @param {number} [state.d_] - Shadow D register (D')
+   * @param {number} [state.e_] - Shadow E register (E')
+   * @param {number} [state.h_] - Shadow H register (H')
+   * @param {number} [state.l_] - Shadow L register (L')
    * @param {number} [state.ix] - IX index register
    * @param {number} [state.iy] - IY index register
    * @param {number} [state.i] - Interrupt vector register
@@ -4116,7 +4121,7 @@ class Z80 {
    * @param {boolean} [state.halted] - HALT state
    * @param {number} [state.cycles] - Total cycles executed
    * @returns {void}
-   * 
+   *
    * @example
    * cpu.setState({
    *     pc: 0x8000,
@@ -4126,39 +4131,104 @@ class Z80 {
    */
   setState(state) {
     // 16-bit registers
-    if (state.pc !== undefined) this.registers.setPC(state.pc);
-    if (state.sp !== undefined) this.registers.set16('SP', state.sp);
+    if (state.pc !== undefined) {
+      this.registers.setPC(state.pc);
+    }
+    if (state.sp !== undefined) {
+      this.registers.set16('SP', state.sp);
+    }
 
     // 8-bit registers
-    if (state.a !== undefined) this.registers.set('A', state.a);
-    if (state.f !== undefined) this.registers.set('F', state.f);
-    if (state.b !== undefined) this.registers.set('B', state.b);
-    if (state.c !== undefined) this.registers.set('C', state.c);
-    if (state.d !== undefined) this.registers.set('D', state.d);
-    if (state.e !== undefined) this.registers.set('E', state.e);
-    if (state.h !== undefined) this.registers.set('H', state.h);
-    if (state.l !== undefined) this.registers.set('L', state.l);
+    if (state.a !== undefined) {
+      this.registers.set('A', state.a);
+    }
+    if (state.f !== undefined) {
+      this.registers.set('F', state.f);
+    }
+    if (state.b !== undefined) {
+      this.registers.set('B', state.b);
+    }
+    if (state.c !== undefined) {
+      this.registers.set('C', state.c);
+    }
+    if (state.d !== undefined) {
+      this.registers.set('D', state.d);
+    }
+    if (state.e !== undefined) {
+      this.registers.set('E', state.e);
+    }
+    if (state.h !== undefined) {
+      this.registers.set('H', state.h);
+    }
+    if (state.l !== undefined) {
+      this.registers.set('L', state.l);
+    }
+
+    // Shadow register set
+    if (state.a_ !== undefined) {
+      this.registers.set('A_', state.a_);
+    }
+    if (state.f_ !== undefined) {
+      this.registers.set('F_', state.f_);
+    }
+    if (state.b_ !== undefined) {
+      this.registers.set('B_', state.b_);
+    }
+    if (state.c_ !== undefined) {
+      this.registers.set('C_', state.c_);
+    }
+    if (state.d_ !== undefined) {
+      this.registers.set('D_', state.d_);
+    }
+    if (state.e_ !== undefined) {
+      this.registers.set('E_', state.e_);
+    }
+    if (state.h_ !== undefined) {
+      this.registers.set('H_', state.h_);
+    }
+    if (state.l_ !== undefined) {
+      this.registers.set('L_', state.l_);
+    }
 
     // 16-bit index registers
-    if (state.ix !== undefined) this.registers.set16('IX', state.ix);
-    if (state.iy !== undefined) this.registers.set16('IY', state.iy);
+    if (state.ix !== undefined) {
+      this.registers.set16('IX', state.ix);
+    }
+    if (state.iy !== undefined) {
+      this.registers.set16('IY', state.iy);
+    }
 
     // Special registers
-    if (state.i !== undefined) this.registers.set('I', state.i);
-    if (state.r !== undefined) this.registers.set('R', state.r);
+    if (state.i !== undefined) {
+      this.registers.set('I', state.i);
+    }
+    if (state.r !== undefined) {
+      this.registers.set('R', state.r);
+    }
 
     // CPU state
-    if (state.im !== undefined) this.interruptMode = state.im;
-    if (state.iff1 !== undefined) this.iff1 = state.iff1;
-    if (state.iff2 !== undefined) this.iff2 = state.iff2;
-    if (state.halted !== undefined) this.halted = state.halted;
-    if (state.cycles !== undefined) this.cycles = state.cycles;
+    if (state.im !== undefined) {
+      this.interruptMode = state.im;
+    }
+    if (state.iff1 !== undefined) {
+      this.iff1 = state.iff1;
+    }
+    if (state.iff2 !== undefined) {
+      this.iff2 = state.iff2;
+    }
+    if (state.halted !== undefined) {
+      this.halted = state.halted;
+    }
+    if (state.cycles !== undefined) {
+      this.cycles = state.cycles;
+    }
+    this.eiDelay = 0;
   }
 }
 
 /**
  * ZX Spectrum Memory Implementation
- * 
+ *
  * Memory Map:
  * 0x0000 - 0x3FFF: ROM (16KB)
  * 0x4000 - 0x57FF: Screen memory (6KB)
@@ -4173,7 +4243,7 @@ class Z80 {
  * @class SpectrumMemory
  * @description Implements the ZX Spectrum 48K memory model with 16KB ROM and 48KB RAM.
  * Handles memory-mapped screen display and attributes.
- * 
+ *
  * @example
  * const memory = new SpectrumMemory();
  * memory.loadROM(romData);
@@ -4183,7 +4253,7 @@ class Z80 {
 class SpectrumMemory {
   /**
    * Creates a new SpectrumMemory instance
-   * 
+   *
    * @constructor
    */
   constructor() {
@@ -4208,53 +4278,53 @@ class SpectrumMemory {
 
   /**
    * Read a byte from memory
-   * 
+   *
    * @param {number} address - Memory address (0x0000-0xFFFF)
    * @returns {number} Byte value (0-255)
-   * 
+   *
    * @example
    * const screenByte = memory.read(0x4000); // Read first screen byte
    * const romByte = memory.read(0x0000);    // Read first ROM byte
    */
   read(address) {
-    address &= 0xFFFF;
-    if (address < 0x4000 && this.romEnabled) {
-      return this.rom[address];
-    } else if (address >= 0x4000) {
-      return this.ram[address - 0x4000];
+    const addr = address & 0xffff;
+    if (addr < 0x4000 && this.romEnabled) {
+      return this.rom[addr];
     }
-    return 0xFF;
+    if (addr >= 0x4000) {
+      return this.ram[addr - 0x4000];
+    }
+    return 0xff;
   }
 
   /**
    * Write a byte to memory
    * ROM area (0x0000-0x3FFF) is read-only and writes are ignored
-   * 
+   *
    * @param {number} address - Memory address (0x0000-0xFFFF)
    * @param {number} value - Byte value to write (0-255)
    * @returns {void}
-   * 
+   *
    * @example
    * memory.write(0x4000, 0xFF); // Write to screen memory
    * memory.write(0x5800, 0x47); // Write white on black attribute
    */
   write(address, value) {
-    address &= 0xFFFF;
-    value &= 0xFF;
+    const addr = address & 0xffff;
 
     // ROM area is read-only
-    if (address >= 0x4000) {
-      this.ram[address - 0x4000] = value;
+    if (addr >= 0x4000) {
+      this.ram[addr - 0x4000] = value & 0xff;
     }
   }
 
   /**
    * Load ROM data into memory
-   * 
+   *
    * @param {Uint8Array} data - ROM data to load
    * @throws {Error} If ROM data exceeds 16384 bytes
    * @returns {void}
-   * 
+   *
    * @example
    * const response = await fetch('48k.rom');
    * const romData = new Uint8Array(await response.arrayBuffer());
@@ -4270,9 +4340,9 @@ class SpectrumMemory {
   /**
    * Get screen pixel memory for rendering
    * Returns a view of the 6KB screen memory area (0x4000-0x57FF)
-   * 
+   *
    * @returns {Uint8Array} View of screen pixel memory (6144 bytes)
-   * 
+   *
    * @example
    * const screenMem = memory.getScreenMemory();
    * // Each byte contains 8 pixels (1 bit per pixel)
@@ -4284,30 +4354,30 @@ class SpectrumMemory {
   /**
    * Get screen attribute memory for rendering
    * Returns a view of the 768-byte attribute area (0x5800-0x5AFF)
-   * 
+   *
    * Each attribute byte controls an 8x8 pixel cell:
    * - Bits 0-2: INK color (0-7)
    * - Bits 3-5: PAPER color (0-7)
    * - Bit 6: BRIGHT flag
    * - Bit 7: FLASH flag
-   * 
+   *
    * @returns {Uint8Array} View of attribute memory (768 bytes)
-   * 
+   *
    * @example
    * const attrs = memory.getAttributeMemory();
    * attrs[0] = 0x47; // White ink on black paper
    * attrs[0] = 0xC7; // Bright white ink on black paper with flash
    */
   getAttributeMemory() {
-    return this.ram.subarray(0x1800, 0x1B00); // 768 bytes of attributes
+    return this.ram.subarray(0x1800, 0x1b00); // 768 bytes of attributes
   }
 
   /**
    * Clear all RAM to zero
    * Typically called during system reset
-   * 
+   *
    * @returns {void}
-   * 
+   *
    * @example
    * memory.clearRAM(); // Clear all 48KB of RAM
    */
@@ -4327,7 +4397,7 @@ class SpectrumULA {
     this.micBit = 0;
 
     // Keyboard matrix (8x5)
-    this.keyboardMatrix = new Uint8Array(8).fill(0xFF);
+    this.keyboardMatrix = new Uint8Array(8).fill(0xff);
 
     // Port FE is the main ULA port
     this.lastPortFE = 0;
@@ -4357,10 +4427,10 @@ class SpectrumULA {
   readPort(port) {
     // Port 0xFE - Keyboard and tape input
     if ((port & 0x01) === 0) {
-      let result = 0xBF; // Initial value with bit 6 set (no tape input)
+      let result = 0xbf; // Initial value with bit 6 set (no tape input)
 
       // Check keyboard rows based on high byte of port address
-      const highByte = port >> 8 & 0xFF;
+      const highByte = port >> 8 & 0xff;
       for (let row = 0; row < 8; row++) {
         // Check if this row is selected (bit is 0)
         if ((highByte & 1 << row) === 0) {
@@ -4377,19 +4447,19 @@ class SpectrumULA {
       }
       return result;
     }
-    return 0xFF;
+    return 0xff;
   }
   writePort(port, value) {
-    port &= 0xFF;
-    value &= 0xFF;
+    const portByte = port & 0xff;
+    const val = value & 0xff;
 
     // Port 0xFE - Border color and speaker
-    if ((port & 0x01) === 0) {
+    if ((portByte & 0x01) === 0) {
       this.lastPortFE;
-      this.lastPortFE = value;
-      const newBorderColor = value & 0x07; // Bits 0-2: border color
-      const newSpeakerBit = (value & 0x10) >> 4; // Bit 4: speaker
-      this.micBit = (value & 0x08) >> 3; // Bit 3: mic
+      this.lastPortFE = val;
+      const newBorderColor = val & 0x07; // Bits 0-2: border color
+      const newSpeakerBit = (val & 0x10) >> 4; // Bit 4: speaker
+      this.micBit = (val & 0x08) >> 3; // Bit 3: mic
 
       // Update border color and track change
       if (newBorderColor !== this.borderColor) {
@@ -4400,7 +4470,7 @@ class SpectrumULA {
 
       // Notify about port write with the value (for accurate beeper tracking)
       if (this.onPortWrite) {
-        this.onPortWrite(value);
+        this.onPortWrite(val);
       }
 
       // Legacy speaker change notification (kept for compatibility)
@@ -4432,7 +4502,7 @@ class SpectrumULA {
 
   // Clear all keys
   clearKeys() {
-    this.keyboardMatrix.fill(0xFF);
+    this.keyboardMatrix.fill(0xff);
   }
 
   // Get current border color
@@ -4468,7 +4538,7 @@ class SpectrumULA {
 
   /**
    * Get per-scanline border colors for multicolor effects
-   * 
+   *
    * @returns {Uint8Array} Array of 312 border colors (one per scanline)
    */
   getScanlineBorderColors() {
@@ -4477,7 +4547,7 @@ class SpectrumULA {
 
   /**
    * Check if border color changed during this frame
-   * 
+   *
    * @returns {boolean} True if border color changed
    */
   isBorderColorChanged() {
@@ -4486,7 +4556,7 @@ class SpectrumULA {
 
   /**
    * Reset border changed flag for new frame
-   * 
+   *
    * @returns {void}
    */
   resetBorderChanged() {
@@ -4496,7 +4566,7 @@ class SpectrumULA {
   /**
    * Check if interrupt should be generated
    * Interrupts occur at the start of the vertical retrace period
-   * 
+   *
    * @returns {boolean} True if interrupt should be generated
    */
   shouldGenerateInterrupt() {
@@ -4509,7 +4579,7 @@ class SpectrumULA {
 
   /**
    * Set border color directly (used for snapshot loading)
-   * 
+   *
    * @param {number} color - Border color index (0-7)
    * @returns {void}
    */
@@ -4522,7 +4592,7 @@ class SpectrumULA {
 
   /**
    * Set tape input bit (EAR)
-   * 
+   *
    * @param {number} bit - Tape input state (0 or 1)
    * @returns {void}
    */
@@ -4597,44 +4667,44 @@ const SPECTRUM_KEYS = {
     col: 4
   },
   // Row 3 (1, 2, 3, 4, 5)
-  '1': {
+  1: {
     row: 3,
     col: 0
   },
-  '2': {
+  2: {
     row: 3,
     col: 1
   },
-  '3': {
+  3: {
     row: 3,
     col: 2
   },
-  '4': {
+  4: {
     row: 3,
     col: 3
   },
-  '5': {
+  5: {
     row: 3,
     col: 4
   },
   // Row 4 (0, 9, 8, 7, 6)
-  '0': {
+  0: {
     row: 4,
     col: 0
   },
-  '9': {
+  9: {
     row: 4,
     col: 1
   },
-  '8': {
+  8: {
     row: 4,
     col: 2
   },
-  '7': {
+  7: {
     row: 4,
     col: 3
   },
-  '6': {
+  6: {
     row: 4,
     col: 4
   },
@@ -4706,30 +4776,30 @@ const SPECTRUM_KEYS = {
 // PC to Spectrum key mappings with modifiers
 const PC_KEY_MAP = {
   // Direct mappings
-  'Enter': 'ENTER',
+  Enter: 'ENTER',
   ' ': 'SPACE',
-  'Shift': 'CAPS_SHIFT',
-  'Control': 'SYMBOL_SHIFT',
-  'Alt': 'SYMBOL_SHIFT',
-  'Meta': 'SYMBOL_SHIFT',
+  Shift: 'CAPS_SHIFT',
+  Control: 'SYMBOL_SHIFT',
+  Alt: 'SYMBOL_SHIFT',
+  Meta: 'SYMBOL_SHIFT',
   // Mac Command key
-  'AltGraph': 'SYMBOL_SHIFT',
+  AltGraph: 'SYMBOL_SHIFT',
   // Right Alt on some keyboards
 
   // Arrow keys using Spectrum cursor keys (Caps Shift + 5,6,7,8)
-  'ArrowLeft': {
+  ArrowLeft: {
     keys: ['CAPS_SHIFT', '5']
   },
   // Caps Shift + 5
-  'ArrowDown': {
+  ArrowDown: {
     keys: ['CAPS_SHIFT', '6']
   },
   // Caps Shift + 6
-  'ArrowUp': {
+  ArrowUp: {
     keys: ['CAPS_SHIFT', '7']
   },
   // Caps Shift + 7
-  'ArrowRight': {
+  ArrowRight: {
     keys: ['CAPS_SHIFT', '8']
   },
   // Caps Shift + 8
@@ -4744,7 +4814,7 @@ const PC_KEY_MAP = {
   '#': {
     keys: ['SYMBOL_SHIFT', '3']
   },
-  '$': {
+  $: {
     keys: ['SYMBOL_SHIFT', '4']
   },
   '%': {
@@ -4762,7 +4832,7 @@ const PC_KEY_MAP = {
   ')': {
     keys: ['SYMBOL_SHIFT', '9']
   },
-  '_': {
+  _: {
     keys: ['SYMBOL_SHIFT', '0']
   },
   // Other symbols
@@ -4806,18 +4876,18 @@ const PC_KEY_MAP = {
     keys: ['SYMBOL_SHIFT', 'B']
   },
   // Special keys
-  'Backspace': {
+  Backspace: {
     keys: ['CAPS_SHIFT', '0']
   },
   // DELETE key on Spectrum
-  'Delete': {
+  Delete: {
     keys: ['CAPS_SHIFT', '0']
   },
-  'Escape': {
+  Escape: {
     keys: ['CAPS_SHIFT', 'SPACE']
   },
   // BREAK
-  'Tab': {
+  Tab: {
     keys: ['CAPS_SHIFT', 'SYMBOL_SHIFT']
   } // EXTENDED MODE
 };
@@ -4826,16 +4896,15 @@ const PC_KEY_MAP = {
  * ZX Spectrum Display Renderer
  * Converts screen memory to pixels
  */
-/* global ImageData */
 
 /**
  * @class SpectrumDisplay
  * @description Handles rendering of the ZX Spectrum display including the main screen area
  * (256x192 pixels) and border. Implements authentic attribute handling with BRIGHT and FLASH.
- * 
+ *
  * The display uses the original ZX Spectrum color palette and handles the complex
  * screen memory layout where pixels are stored in a non-linear format.
- * 
+ *
  * @example
  * const display = new SpectrumDisplay();
  * const imageData = display.render(screenMem, attrMem, borderColor);
@@ -4844,7 +4913,7 @@ const PC_KEY_MAP = {
 class SpectrumDisplay {
   /**
    * Creates a new SpectrumDisplay instance
-   * 
+   *
    * @constructor
    */
   constructor() {
@@ -4918,7 +4987,7 @@ class SpectrumDisplay {
      * @property {number} FLASH_FRAMES - Frames between flash toggles
      * @private
      */
-    this.FLASH_FRAMES = 32; // Flash every 32 frames (about 0.64 seconds at 50Hz)
+    this.FLASH_FRAMES = 16; // Toggle every 16 emulated frames (full cycle is 32 frames)
 
     // Pre-compute attribute cache for performance
     this.initAttributeCache();
@@ -4927,45 +4996,45 @@ class SpectrumDisplay {
      * @property {Array<Array<number>>} palette - ZX Spectrum color palette in RGBA format
      * @private
      */
-    this.palette = [[0x00, 0x00, 0x00, 0xFF],
+    this.palette = [[0x00, 0x00, 0x00, 0xff],
     // 0: Black
-    [0x00, 0x00, 0xD7, 0xFF],
+    [0x00, 0x00, 0xd7, 0xff],
     // 1: Blue
-    [0xD7, 0x00, 0x00, 0xFF],
+    [0xd7, 0x00, 0x00, 0xff],
     // 2: Red
-    [0xD7, 0x00, 0xD7, 0xFF],
+    [0xd7, 0x00, 0xd7, 0xff],
     // 3: Magenta
-    [0x00, 0xD7, 0x00, 0xFF],
+    [0x00, 0xd7, 0x00, 0xff],
     // 4: Green
-    [0x00, 0xD7, 0xD7, 0xFF],
+    [0x00, 0xd7, 0xd7, 0xff],
     // 5: Cyan
-    [0xD7, 0xD7, 0x00, 0xFF],
+    [0xd7, 0xd7, 0x00, 0xff],
     // 6: Yellow
-    [0xD7, 0xD7, 0xD7, 0xFF],
+    [0xd7, 0xd7, 0xd7, 0xff],
     // 7: White
     // Bright colors
-    [0x00, 0x00, 0x00, 0xFF],
+    [0x00, 0x00, 0x00, 0xff],
     // 8: Black (bright)
-    [0x00, 0x00, 0xFF, 0xFF],
+    [0x00, 0x00, 0xff, 0xff],
     // 9: Blue (bright)
-    [0xFF, 0x00, 0x00, 0xFF],
+    [0xff, 0x00, 0x00, 0xff],
     // 10: Red (bright)
-    [0xFF, 0x00, 0xFF, 0xFF],
+    [0xff, 0x00, 0xff, 0xff],
     // 11: Magenta (bright)
-    [0x00, 0xFF, 0x00, 0xFF],
+    [0x00, 0xff, 0x00, 0xff],
     // 12: Green (bright)
-    [0x00, 0xFF, 0xFF, 0xFF],
+    [0x00, 0xff, 0xff, 0xff],
     // 13: Cyan (bright)
-    [0xFF, 0xFF, 0x00, 0xFF],
+    [0xff, 0xff, 0x00, 0xff],
     // 14: Yellow (bright)
-    [0xFF, 0xFF, 0xFF, 0xFF] // 15: White (bright)
+    [0xff, 0xff, 0xff, 0xff] // 15: White (bright)
     ];
   }
 
   /**
    * Initialize attribute cache for fast rendering
    * Pre-computes color values for all possible attribute combinations
-   * 
+   *
    * @private
    * @returns {void}
    */
@@ -4986,24 +5055,24 @@ class SpectrumDisplay {
 
   /**
    * Render the display from screen and attribute memory
-   * 
+   *
    * @param {Uint8Array} screenMemory - 6KB of screen pixel data
    * @param {Uint8Array} attributeMemory - 768 bytes of attribute data
    * @param {number} borderColor - Border color index (0-7)
    * @param {Uint8Array} [scanlineBorderColors=null] - Per-scanline border colors for effects
    * @returns {Uint8Array} RGBA pixel data for the entire display
-   * 
+   *
    * @example
    * const pixels = display.render(screenMem, attrMem, 1); // Blue border
    */
-  render(screenMemory, attributeMemory, borderColor, scanlineBorderColors = null) {
-    // Update flash phase
+  advanceFrame() {
     this.flashCounter++;
     if (this.flashCounter >= this.FLASH_FRAMES) {
       this.flashPhase = !this.flashPhase;
       this.flashCounter = 0;
     }
-
+  }
+  render(screenMemory, attributeMemory, borderColor, scanlineBorderColors = null) {
     // Fill border - use scanline colors if available for stripe effects
     if (scanlineBorderColors) {
       this.fillBorderWithScanlines(scanlineBorderColors);
@@ -5060,17 +5129,17 @@ class SpectrumDisplay {
   /**
    * Calculate screen memory address for given coordinates
    * Implements the ZX Spectrum's non-linear screen memory layout
-   * 
+   *
    * The address calculation splits the Y coordinate into sections:
    * - Y7,Y6 determine the third of the screen
    * - Y5,Y4,Y3 determine the character row within the third
    * - Y2,Y1,Y0 determine the pixel row within the character
-   * 
+   *
    * @private
    * @param {number} x - Character column (0-31)
    * @param {number} y - Pixel row (0-191)
    * @returns {number} Memory offset within screen area (0-6143)
-   * 
+   *
    * @example
    * const addr = this.getScreenAddress(0, 0);   // Returns 0
    * const addr = this.getScreenAddress(0, 8);   // Returns 256
@@ -5093,7 +5162,7 @@ class SpectrumDisplay {
 
   /**
    * Fill the border with the specified color
-   * 
+   *
    * @private
    * @param {number} borderColor - Color index (0-7)
    * @returns {void}
@@ -5148,7 +5217,7 @@ class SpectrumDisplay {
   /**
    * Fill border with per-scanline colors for multicolor effects
    * Used for demos and games that change border color mid-frame
-   * 
+   *
    * @private
    * @param {Uint8Array} scanlineBorderColors - Array of 312 color values (one per scanline)
    * @returns {void}
@@ -5220,7 +5289,7 @@ class SpectrumDisplay {
 
   /**
    * Get display dimensions including border
-   * 
+   *
    * @returns {Object} Display dimensions
    * @returns {number} .width - Total width including border (352)
    * @returns {number} .height - Total height including border (296)
@@ -5230,7 +5299,7 @@ class SpectrumDisplay {
    * @returns {number} .borderBottom - Bottom border size (56)
    * @returns {number} .borderLeft - Left border size (48)
    * @returns {number} .borderRight - Right border size (48)
-   * 
+   *
    * @example
    * const size = display.getDisplaySize();
    * canvas.width = size.width;
@@ -5252,24 +5321,26 @@ class SpectrumDisplay {
   /**
    * Get ImageData object for canvas rendering
    * Creates a new ImageData from the current display buffer
-   * 
+   *
    * @returns {ImageData} ImageData object ready for canvas putImageData
-   * 
+   *
    * @example
    * const imageData = display.getImageData();
    * ctx.putImageData(imageData, 0, 0);
    */
   getImageData() {
+    if (typeof ImageData === 'undefined') {
+      throw new Error('ImageData is not available in this environment (Node). ' + 'Read the raw RGBA pixels from display.displayBuffer instead.');
+    }
     // Create ImageData object with the display buffer
     return new ImageData(new Uint8ClampedArray(this.displayBuffer), this.totalWidth, this.totalHeight);
   }
 }
 
-/* global window */
 /**
  * ZX Spectrum Sound (Beeper) Emulation - Fallback Implementation
  * Uses ScriptProcessorNode for browsers that don't support AudioWorklet
- * 
+ *
  * Note: ScriptProcessorNode is deprecated but still widely supported
  * This serves as a fallback when AudioWorklet is not available
  */
@@ -5359,7 +5430,7 @@ class SpectrumSound {
         await this.audioContext.resume();
       }
       this.enabled = true;
-      console.log('Basic sound (ScriptProcessor) initialized at', this.sampleRate, 'Hz');
+      console.log('Basic sound (ScriptProcessor) initialized at', this.sampleRate, 'Hz'); // eslint-disable-line no-console
       return true;
     } catch (error) {
       console.error('Failed to initialize audio:', error);
@@ -5439,6 +5510,7 @@ class SpectrumSound {
       });
       this.currentBeeperState = newState;
       if (this.debugMode && this.edgeCount < 100) {
+        // eslint-disable-next-line no-console
         console.log(`[Basic] Edge ${this.edgeCount++}: ${this.lastBeeperState} -> ${newState} at T-state ${absoluteTState}`);
       }
       this.lastBeeperState = newState;
@@ -5466,6 +5538,7 @@ class SpectrumSound {
     // This avoids timing issues with the main thread
 
     if (this.debugMode && this.beeperChanges.length > 0) {
+      // eslint-disable-next-line no-console
       console.log(`[Basic] Frame ended: ${this.beeperChanges.length} edges pending`);
     }
   }
@@ -5579,7 +5652,125 @@ class SpectrumSound {
   }
 }
 
-/* global window, AudioWorkletNode */
+/**
+ * Band-limited beeper resampler (pure DSP, no Web Audio / DOM).
+ *
+ * The ZX beeper is a 1-bit speaker: tones are square waves whose edges fall on
+ * arbitrary T-states, not on the audio sample grid. Point-sampling the level at
+ * each output sample (the previous approach) snaps every edge to the nearest
+ * sample, jittering the square wave's duty cycle and folding high harmonics back
+ * into the audible band — the "dirty"/rough beeper.
+ *
+ * This resampler integrates the speaker level over each output sample's exact
+ * time window using the edge T-states (time-weighted average) — a box-filter
+ * anti-aliaser that captures sub-sample edge positions, so pitch and duty cycle
+ * are accurate and aliasing is suppressed. A gentle one-pole low-pass softens the
+ * very top end and a DC blocker removes clicks/offset.
+ *
+ * It is driven per emulation frame with frame-relative edges and the frame's
+ * exact T-state length, and emits a VARIABLE number of samples per frame so the
+ * output clock never drifts from real time (a frame is 69888 T-states =
+ * 19.968 ms, not exactly 20 ms). Partial-sample state carries across frames.
+ *
+ * Self-contained on purpose: the AudioWorklet processor is injected as source
+ * text, so this class is embedded there via `toString()`. Keep it dependency-free.
+ */
+class BeeperResampler {
+  /**
+   * @param {number} sampleRate  output sample rate (Hz)
+   * @param {number} cpuFreq     CPU T-states per second (real Spectrum = 3.5 MHz)
+   * @param {number} lpCutoff    one-pole low-pass cutoff (Hz)
+   */
+  constructor(sampleRate, cpuFreq = 3500000, lpCutoff = 7000) {
+    this.tps = cpuFreq / sampleRate; // T-states per output sample
+    this.level = 0; // carried speaker level (0..~1.2 with mic mix)
+    this.windowFilled = 0; // T-states already integrated into the in-progress sample
+    this.accCarry = 0; // area (level·T-states) accumulated for the in-progress sample
+    this.lpAlpha = 1 - Math.exp(-2 * Math.PI * lpCutoff / sampleRate);
+    this.lp = 0;
+    this.dcCoeff = 0.9995;
+    this.dcPrevIn = 0;
+    this.dcPrevOut = 0;
+  }
+
+  /**
+   * Render one emulation frame. Emits as many whole samples as fit the frame's
+   * real duration and carries the partial sample to the next frame, so the
+   * sample clock stays locked to emulation time.
+   *
+   * @param {Float64Array} edges    flat [tState, level] pairs, frame-relative, ascending
+   * @param {number} count          number of edge pairs
+   * @param {number} frameTStates   exact T-state length of this frame
+   * @param {Float32Array} out      destination (>= ~tps^-1·frameTStates + 1 samples)
+   * @returns {number}              samples written to `out`
+   */
+  renderFrame(edges, count, frameTStates, out) {
+    const tps = this.tps;
+    let eix = 0;
+    let cur = 0; // integration cursor within this frame
+    let level = this.level;
+    let written = 0;
+    for (;;) {
+      const need = tps - this.windowFilled; // T-states left to finish current sample
+      const end = cur + need;
+      if (end <= frameTStates) {
+        // sample completes inside this frame: integrate [cur, end)
+        let area = 0;
+        while (eix < count && edges[eix * 2] < end) {
+          const et = edges[eix * 2];
+          if (et > cur) {
+            area += level * (et - cur);
+            cur = et;
+          }
+          level = edges[eix * 2 + 1];
+          ++eix;
+        }
+        area += level * (end - cur);
+        cur = end;
+        const avg = (this.accCarry + area) / tps;
+        this.accCarry = 0;
+        this.windowFilled = 0;
+        out[written++] = this._shape(avg);
+      } else {
+        // frame ends mid-sample: integrate [cur, frameTStates) and carry the partial
+        let area = 0;
+        while (eix < count && edges[eix * 2] < frameTStates) {
+          const et = edges[eix * 2];
+          if (et > cur) {
+            area += level * (et - cur);
+            cur = et;
+          }
+          level = edges[eix * 2 + 1];
+          ++eix;
+        }
+        area += level * (frameTStates - cur);
+        this.accCarry += area;
+        this.windowFilled += frameTStates - cur;
+        break;
+      }
+    }
+    this.level = level;
+    return written;
+  }
+
+  /** one-pole low-pass + bipolar + DC blocker + output trim */
+  _shape(avg) {
+    this.lp += this.lpAlpha * (avg - this.lp);
+    const bipolar = (this.lp - 0.5) * 2;
+    const out0 = bipolar - this.dcPrevIn + this.dcCoeff * this.dcPrevOut;
+    this.dcPrevIn = bipolar;
+    this.dcPrevOut = out0;
+    return out0 * 0.6;
+  }
+  reset() {
+    this.level = 0;
+    this.windowFilled = 0;
+    this.accCarry = 0;
+    this.lp = 0;
+    this.dcPrevIn = 0;
+    this.dcPrevOut = 0;
+  }
+}
 
 class SpectrumAudioWorklet {
   /* -------------------------- ZX constants --------------------------- */
@@ -5619,26 +5810,28 @@ class SpectrumAudioWorklet {
 
   /* ============================ INIT ================================= */
   async init() {
-    if (this.audioContext) return this.enabled;
+    if (this.audioContext) {
+      return this.enabled;
+    }
     try {
       /* ---------- 1. Create AudioContext ------------------------- */
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-        latencyHint: "interactive",
+        latencyHint: 'interactive',
         sampleRate: 48_000 // polite request; browser may ignore
       });
-      this.audioContext.addEventListener("statechange", () => this.#updateResumeBtn());
+      this.audioContext.addEventListener('statechange', () => this.#updateResumeBtn());
       const SR = this.audioContext.sampleRate; // actual rate granted
 
       /* ---------- 2. Inject AudioWorklet processor --------------- */
       const processorSrc = this.#buildProcessorSource(SR);
       const blobURL = URL.createObjectURL(new Blob([processorSrc], {
-        type: "application/javascript"
+        type: 'application/javascript'
       }));
       await this.audioContext.audioWorklet.addModule(blobURL);
       URL.revokeObjectURL(blobURL);
 
       /* ---------- 3. Create nodes & graph ------------------------ */
-      this.workletNode = new AudioWorkletNode(this.audioContext, "zx-beeper");
+      this.workletNode = new AudioWorkletNode(this.audioContext, 'zx-beeper');
       this.workletNode.port.onmessage = e => {
         if (e.data?.returnBuffer instanceof ArrayBuffer) {
           // Buffer returned from the worklet, reuse it.
@@ -5651,7 +5844,7 @@ class SpectrumAudioWorklet {
       this.compressor.knee.value = 2;
       this.compressor.ratio.value = 2;
       this.compressor.attack.value = 0.001;
-      this.compressor.release.value = 0.10;
+      this.compressor.release.value = 0.1;
       this.gainNode = this.audioContext.createGain();
       this.gainNode.gain.value = 0;
       this.workletNode.connect(this.compressor);
@@ -5660,12 +5853,14 @@ class SpectrumAudioWorklet {
 
       /* ---------- 4. Fade-in & UI resume button ------------------ */
       this.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-      this.gainNode.gain.linearRampToValueAtTime(this.volume, this.audioContext.currentTime + 0.10);
-      if (this.audioContext.state === "suspended") this.#createResumeBtn();
+      this.gainNode.gain.linearRampToValueAtTime(this.volume, this.audioContext.currentTime + 0.1);
+      if (this.audioContext.state === 'suspended') {
+        this.#createResumeBtn();
+      }
       this.enabled = true;
       return true;
     } catch (err) {
-      console.error("AudioWorklet init failed:", err);
+      console.error('AudioWorklet init failed:', err);
       this.enabled = false;
       return false;
     }
@@ -5674,10 +5869,12 @@ class SpectrumAudioWorklet {
   /* =================================================================== */
   /* ---------------------- FRAME-LEVEL API ---------------------------- */
   setBeeperState(value, tState) {
-    if (!this.enabled) return;
+    if (!this.enabled) {
+      return;
+    }
     const ear = value & 0x10 ? 1 : 0; // speaker bit
     const mic = value & 0x08 ? 0 : 1; // MIC is inverted
-    const level = ear * 0.90 + mic * 0.33; // empiric mix
+    const level = ear * 0.9 + mic * 0.33; // empiric mix
 
     if (level !== this.currentLevel) {
       this.frameEdges.push({
@@ -5696,7 +5893,9 @@ class SpectrumAudioWorklet {
     }];
   }
   endFrame(frameTStates) {
-    if (!this.enabled || !this.workletNode) return;
+    if (!this.enabled || !this.workletNode) {
+      return;
+    }
     this.totalTStates += frameTStates;
     ++this.frameCount;
     const buf = this.edgePool.pop() ||
@@ -5712,14 +5911,16 @@ class SpectrumAudioWorklet {
       frame: true,
       edges: buf,
       edgeCount: count,
-      frameTStates: frameTStates,
+      frameTStates,
       syncTState: this.totalTStates
     }, [buf.buffer]); // transfer ownership
   }
 
   /* =============================== UTILITIES ========================= */
   reset() {
-    if (!this.enabled) return;
+    if (!this.enabled) {
+      return;
+    }
     this.gainNode?.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.02);
     this.currentLevel = 0;
     this.frameEdges = [];
@@ -5736,7 +5937,7 @@ class SpectrumAudioWorklet {
   setVolume(v) {
     this.volume = Math.max(0, Math.min(1, v));
     if (this.gainNode) {
-      this.gainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, this.volume), this.audioContext.currentTime + 0.10);
+      this.gainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, this.volume), this.audioContext.currentTime + 0.1);
     }
   }
   setMuted(muted) {
@@ -5746,12 +5947,12 @@ class SpectrumAudioWorklet {
     this.debugMode = !!on;
   }
   isReady() {
-    return this.enabled && this.audioContext?.state === "running";
+    return this.enabled && this.audioContext?.state === 'running';
   }
   getStats() {
     return {
       enabled: this.enabled,
-      contextState: this.audioContext ? this.audioContext.state : "closed",
+      contextState: this.audioContext ? this.audioContext.state : 'closed',
       sampleRate: this.audioContext ? this.audioContext.sampleRate : 0,
       totalTStates: this.totalTStates,
       frameCount: this.frameCount,
@@ -5763,7 +5964,9 @@ class SpectrumAudioWorklet {
 
   /* ---------------------------- SHUTDOWN ----------------------------- */
   async stop() {
-    if (!this.enabled) return;
+    if (!this.enabled) {
+      return;
+    }
     this.enabled = false;
     this.gainNode?.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.05);
     await new Promise(res => setTimeout(res, 60));
@@ -5778,127 +5981,65 @@ class SpectrumAudioWorklet {
 
   /* ======================= PRIVATE HELPERS =========================== */
   #buildProcessorSource(sr) {
-    /* String-template so we can embed sample-rate-dependent constants */
+    /* String-template so we can embed sample-rate-dependent constants. The
+       shared band-limited resampler is inlined via toString() so there is one
+       source of truth for the DSP across the worklet, the fallback and tests. */
     return `
-            class ZXBeeperProcessor extends AudioWorkletProcessor {
-                static T_STATES_PER_FRAME = 69888;
-                static FRAMES_PER_SECOND  = 50;
-                static CPU_FREQ = ZXBeeperProcessor.T_STATES_PER_FRAME *
-                                   ZXBeeperProcessor.FRAMES_PER_SECOND;
+            const BeeperResampler = ${BeeperResampler.toString()};
 
+            class ZXBeeperProcessor extends AudioWorkletProcessor {
                 constructor () {
                     super();
-                    this.sr = ${sr};                              // fixed
-                    this.tStatesPerSample =
-                        ZXBeeperProcessor.CPU_FREQ / this.sr;
-                    this.samplesPerFrame =
-                        Math.round(this.sr / ZXBeeperProcessor.FRAMES_PER_SECOND);
+                    this.sr = ${sr};
+                    this.samplesPerFrame = Math.round(this.sr / 50);
+                    this.resampler = new BeeperResampler(this.sr, 3500000);
+                    this.tmp = new Float32Array(this.samplesPerFrame + 16);
 
-                    /* Edge data -------------------------------------- */
-                    this.edgeBuf      = null;
-                    this.edgeCount    = 0;
-
-                    /* Synth state ----------------------------------- */
-                    this.currentLevel    = 0;
-                    this.generatorTState = 0;      // absolute
-
-                    /* Filters: 3.5 kHz low-pass + DC blocker -------- */
-                    const fc = 3500;
-                    this.lpAlpha =
-                        1 - Math.exp(-2 * Math.PI * fc / this.sr);
-                    this.lpState   = 0;
-                    this.dcCoeff   = 0.9995;
-                    this.dcPrevIn  = 0;
-                    this.dcPrevOut = 0;
-
-                    /* Frame buffer ---------------------------------- */
-                    this.frameBuf   =
-                        new Float32Array(this.samplesPerFrame + 128);
-                    this.fbPos      = 0;
-                    this.frameReady = false;
+                    /* Sample ring buffer: decouples bursty postMessage frame
+                       delivery from the steady audio callback, so late or
+                       batched frames no longer drop/repeat (the old clicks). */
+                    this.RING   = this.samplesPerFrame * 8;
+                    this.ring   = new Float32Array(this.RING);
+                    this.rHead  = 0;
+                    this.rTail  = 0;
+                    this.avail  = 0;
+                    this.lastOut = 0;
 
                     this.port.onmessage = e => this.#onMessage(e.data);
                 }
 
-                /* ------------------ messages ---------------------- */
                 #onMessage (d) {
                     if (d.frame) {
-                        this.edgeBuf      = new Float64Array(d.edges);
-                        this.edgeCount    = d.edgeCount | 0;
-                        this.frameTStates = d.frameTStates | 0;
-                        this.syncTState   = d.syncTState | 0;
-
-                        this.#renderFrame();
-                        this.frameReady = true;
-
-                    } else if (d.reset) {
-                        this.currentLevel = 0;
-                        this.lpState      = 0;
-                        this.dcPrevIn     = 0;
-                        this.dcPrevOut    = 0;
-                        this.fbPos        = 0;
-                        this.frameReady   = false;
-                        this.generatorTState = 0;
-                    }
-                }
-
-                /* -------------- render single 20 ms frame ---------- */
-                #renderFrame () {
-                    const N = this.samplesPerFrame;
-                    let eix = 0;
-
-                    for (let s = 0; s < N; ++s) {
-                        const relTS = s * this.tStatesPerSample;
-                        while (eix < this.edgeCount &&
-                               this.edgeBuf[eix * 2] <= relTS) {
-                            this.currentLevel = this.edgeBuf[eix * 2 + 1];
-                            ++eix;
+                        const edgeBuf = new Float64Array(d.edges);
+                        const n = this.resampler.renderFrame(
+                            edgeBuf, d.edgeCount | 0, d.frameTStates | 0, this.tmp);
+                        for (let s = 0; s < n; ++s) {
+                            if (this.avail < this.RING) {
+                                this.ring[this.rHead] = this.tmp[s];
+                                this.rHead = (this.rHead + 1) % this.RING;
+                                ++this.avail;
+                            }
                         }
-
-                        /* low-pass */
-                        this.lpState += this.lpAlpha *
-                                        (this.currentLevel - this.lpState);
-
-                        /* bipolar + DC-block */
-                        const bb  = (this.lpState - 0.5) * 2;
-                        const out = bb - this.dcPrevIn +
-                                    this.dcCoeff * this.dcPrevOut;
-                        this.dcPrevIn  = bb;
-                        this.dcPrevOut = out;
-
-                        this.frameBuf[s] = out * 0.6;
+                        /* return buffer for reuse */
+                        this.port.postMessage({ returnBuffer: edgeBuf.buffer },
+                                              [edgeBuf.buffer]);
+                    } else if (d.reset) {
+                        this.resampler.reset();
+                        this.rHead = this.rTail = this.avail = 0;
+                        this.lastOut = 0;
                     }
-
-                    /* advance generator clock & PLL correction */
-                    this.generatorTState += N * this.tStatesPerSample;
-                    const drift = this.syncTState - this.generatorTState;
-                    this.generatorTState += drift * 0.05;        // 5 % pull
-
-                    this.fbPos = 0;
-
-                    /* return buffer for reuse */
-                    this.port.postMessage({ returnBuffer: this.edgeBuf.buffer },
-                                          [this.edgeBuf.buffer]);
-                    this.edgeBuf = null;
-                    this.edgeCount = 0;
                 }
 
-                /* ---------------- audio callback ------------------ */
                 process (_in, out) {
                     const ch = out[0][0];
                     if (!ch) return true;
-
                     for (let i = 0, n = ch.length; i < n; ++i) {
-                        if (this.frameReady && this.fbPos < this.samplesPerFrame) {
-                            ch[i] = this.frameBuf[this.fbPos++];
-                        } else {
-                            /* hold last sample to avoid clicks */
-                            ch[i] = this.fbPos ? this.frameBuf[this.fbPos - 1] : 0;
+                        if (this.avail > 0) {
+                            this.lastOut = this.ring[this.rTail];
+                            this.rTail = (this.rTail + 1) % this.RING;
+                            --this.avail;
                         }
-                        if (this.fbPos >= this.samplesPerFrame) {
-                            this.frameReady = false;
-                            this.fbPos = 0;
-                        }
+                        ch[i] = this.lastOut; // hold last sample on underrun (click-free)
                     }
                     return true;
                 }
@@ -5919,10 +6060,18 @@ class SpectrumAudioWorklet {
 }
 
 /**
- * ZX Spectrum .z80 Snapshot Loader (version 1)
- * This loader only supports the original 48K snapshot format.
+ * ZX Spectrum .z80 Snapshot Loader.
+ *
+ * Supports 48K v1 snapshots and the 48K-compatible v2/v3 page layout used by
+ * many emulators for saved 48K games.
  */
 
+const BASE_HEADER_LENGTH = 30;
+const RAM_48K_LENGTH = 49152;
+const RAM_PAGE_LENGTH = 0x4000;
+const EXTENDED_HEADER_START = 30;
+const EXTENDED_MEMORY_PAGES_48K = new Map([[8, 0x4000], [4, 0x8000], [5, 0xc000]]);
+const REQUIRED_48K_PAGES = [4, 5, 8];
 class Z80SnapshotLoader {
   constructor(memory, cpu, ula) {
     this.memory = memory;
@@ -5938,12 +6087,28 @@ class Z80SnapshotLoader {
     if (!(data instanceof Uint8Array)) {
       throw new Error('Snapshot data must be Uint8Array');
     }
-    if (data.length < 30) {
+    if (data.length < BASE_HEADER_LENGTH) {
       throw new Error('Snapshot too small');
     }
+    const header = data.subarray(0, BASE_HEADER_LENGTH);
+    const basePc = this._word(header, 6);
+    const snapshot = basePc === 0 ? this._readExtended48K(data) : {
+      pc: basePc,
+      blocks: [{
+        address: 0x4000,
+        data: this._readV1Memory(data)
+      }]
+    };
 
-    // Header fields
-    const header = data.subarray(0, 30);
+    // Byte 12 per the .z80 spec: bit 0 = bit 7 of R, bits 1-3 = border,
+    // bit 5 = data compressed. Compatibility rule: 255 means 1.
+    const flags1 = header[12] === 0xff ? 1 : header[12];
+    this._loadRegisters(header, flags1, snapshot.pc);
+    for (const block of snapshot.blocks) {
+      this._writeMemory(block.address, block.data);
+    }
+  }
+  _loadRegisters(header, flags1, pc) {
     const regs = this.cpu.registers;
     regs.set('A', header[0]);
     regs.set('F', header[1]);
@@ -5951,13 +6116,11 @@ class Z80SnapshotLoader {
     regs.set('B', header[3]);
     regs.set('L', header[4]);
     regs.set('H', header[5]);
-    regs.set16('PC', header[6] | header[7] << 8);
-    regs.set16('SP', header[8] | header[9] << 8);
+    regs.set16('PC', pc);
+    regs.set16('SP', this._word(header, 8));
     regs.data.I = header[10];
-    regs.data.R = header[11];
-    const flags1 = header[12];
-    const compressed = (flags1 & 0x20) !== 0;
-    const border = flags1 & 0x07;
+    regs.data.R = header[11] & 0x7f | (flags1 & 0x01) << 7;
+    const border = flags1 >> 1 & 0x07;
     regs.set('E', header[13]);
     regs.set('D', header[14]);
     regs.data.C_ = header[15];
@@ -5972,44 +6135,126 @@ class Z80SnapshotLoader {
     regs.set16('IX', header[25] | header[26] << 8);
     this.cpu.iff1 = header[27] !== 0;
     this.cpu.iff2 = header[28] !== 0;
-    this.cpu.interruptMode = header[29];
+    this.cpu.interruptMode = header[29] & 0x03; // bits 2-7 are other flags
+
     if (this.ula && typeof this.ula.setBorderColor === 'function') {
       this.ula.setBorderColor(border);
     }
-    const memData = compressed ? this._decompress(data.subarray(30)) : data.subarray(30, 30 + 49152);
-    for (let i = 0; i < memData.length && i < 49152; i++) {
-      this.memory.write(0x4000 + i, memData[i]);
+  }
+  _readV1Memory(data) {
+    const flags1 = data[12] === 0xff ? 1 : data[12];
+    const compressed = (flags1 & 0x20) !== 0;
+    return compressed ? this._decompress(data.subarray(BASE_HEADER_LENGTH), RAM_48K_LENGTH, true) : this._copyFixed(data.subarray(BASE_HEADER_LENGTH), RAM_48K_LENGTH);
+  }
+  _readExtended48K(data) {
+    if (data.length < 32) {
+      throw new Error('Unsupported .z80 extended snapshot: missing extended header length');
+    }
+    const extraLength = this._word(data, EXTENDED_HEADER_START);
+    const version = this._extendedVersion(extraLength);
+    if (!version) {
+      throw new Error(`Unsupported .z80 extended snapshot header length: ${extraLength}`);
+    }
+    const headerEnd = EXTENDED_HEADER_START + 2 + extraLength;
+    if (data.length < headerEnd) {
+      throw new Error('Truncated .z80 extended snapshot header');
+    }
+    const hardwareMode = data[34];
+    if (!this._is48KCompatibleHardware(version, hardwareMode)) {
+      throw new Error(`Unsupported .z80 ${version} hardware mode for 48K emulator: ${hardwareMode}`);
+    }
+    const blocks = [];
+    const seenPages = new Set();
+    let offset = headerEnd;
+    while (offset < data.length) {
+      if (offset + 3 > data.length) {
+        throw new Error('Truncated .z80 memory block header');
+      }
+      const encodedLength = this._word(data, offset);
+      const page = data[offset + 2];
+      offset += 3;
+      const payloadLength = encodedLength === 0xffff ? RAM_PAGE_LENGTH : encodedLength;
+      if (offset + payloadLength > data.length) {
+        throw new Error('Truncated .z80 memory block data');
+      }
+      const address = EXTENDED_MEMORY_PAGES_48K.get(page);
+      const payload = data.subarray(offset, offset + payloadLength);
+      offset += payloadLength;
+      if (address === undefined) {
+        continue;
+      }
+      const pageData = encodedLength === 0xffff ? this._copyFixed(payload, RAM_PAGE_LENGTH) : this._decompress(payload, RAM_PAGE_LENGTH, false);
+      blocks.push({
+        address,
+        data: pageData
+      });
+      seenPages.add(page);
+    }
+    for (const page of REQUIRED_48K_PAGES) {
+      if (!seenPages.has(page)) {
+        throw new Error(`Truncated .z80 48K snapshot: missing RAM page ${page}`);
+      }
+    }
+    return {
+      pc: this._word(data, 32),
+      blocks
+    };
+  }
+  _writeMemory(address, data) {
+    for (let i = 0; i < data.length; i++) {
+      this.memory.write(address + i, data[i]);
     }
   }
-  _decompress(data) {
-    const result = new Uint8Array(49152);
+  _copyFixed(data, length) {
+    const result = new Uint8Array(length);
+    result.set(data.subarray(0, length));
+    return result;
+  }
+  _decompress(data, expectedLength, stopAtEndMarker) {
+    const result = new Uint8Array(expectedLength);
     let ptr = 0;
     let i = 0;
     while (i < data.length && ptr < result.length) {
       const b = data[i++];
-      if (b === 0xED && i < data.length && data[i] === 0xED) {
+      if (stopAtEndMarker && b === 0x00 && data[i] === 0xed && data[i + 1] === 0xed && data[i + 2] === 0x00) {
+        break;
+      }
+      if (b === 0xed && i < data.length && data[i] === 0xed) {
         if (i + 2 >= data.length) {
           break;
         }
         const count = data[i + 1];
         const value = data[i + 2];
+        i += 3;
         if (count !== 0) {
-          i += 3;
-          result.fill(value, ptr, ptr + count);
-          ptr += count;
-          continue;
+          const end = Math.min(ptr + count, result.length);
+          result.fill(value, ptr, end);
+          ptr = end;
         }
+        continue;
       }
       result[ptr++] = b;
     }
     return result;
+  }
+  _extendedVersion(extraLength) {
+    if (extraLength === 23) return 'v2';
+    if (extraLength === 54 || extraLength === 55) return 'v3';
+    return undefined;
+  }
+  _is48KCompatibleHardware(version, hardwareMode) {
+    if (hardwareMode === 0 || hardwareMode === 1) return true;
+    return version === 'v3' && hardwareMode === 3;
+  }
+  _word(data, offset) {
+    return (data[offset] | data[offset + 1] << 8) & 0xffff;
   }
 }
 
 /**
  * ZX Spectrum Tape Emulation
  * Supports TAP and TZX tape formats
- * 
+ *
  * Key findings from research:
  * - Each bit is represented by 2 pulses (complete square wave)
  * - Pilot tone: 8063 pulses for headers, 3223 for data blocks
@@ -6018,6 +6263,7 @@ class Z80SnapshotLoader {
  * - TAP format is simple: 2-byte length + data (including flag + checksum)
  * - TZX format supports multiple block types for custom loaders
  */
+/* eslint-disable no-console */
 
 class Tape {
   constructor(spectrum) {
@@ -6113,7 +6359,7 @@ class Tape {
     console.log(`Total blocks: ${this.blocks.length}`);
     this.blocks.forEach((block, i) => {
       const type = this.getBlockTypeName(block.type);
-      console.log(`Block ${i}: ${type}, ` + `${block.data ? block.data.length + ' bytes' : 'no data'}, ` + `pause=${block.pause || 0}ms`);
+      console.log(`Block ${i}: ${type}, ` + `${block.data ? `${block.data.length} bytes` : 'no data'}, ` + `pause=${block.pause || 0}ms`);
     });
   }
 
@@ -6179,7 +6425,7 @@ class Tape {
       throw new Error('Invalid TZX file header');
     }
     const eofMarker = this.data[7];
-    if (eofMarker !== 0x1A) {
+    if (eofMarker !== 0x1a) {
       throw new Error('Invalid TZX EOF marker');
     }
     const majorVersion = this.data[8];
@@ -6259,7 +6505,7 @@ class Tape {
       zeroPulse: this.ZERO_PULSE,
       onePulse: this.ONE_PULSE,
       pilotPulses: flagByte < 128 ? this.PILOT_PULSES_HEADER : this.PILOT_PULSES_DATA,
-      pause: pause,
+      pause,
       usedBits: 8
     };
     this.blocks.push(block);
@@ -6318,8 +6564,8 @@ class Tape {
       throw new Error('Insufficient data for pulse sequence block');
     }
     const count = this.data[pos];
-    pos++;
-    if (pos + count * 2 > this.data.length) {
+    const dataPos = pos + 1;
+    if (dataPos + count * 2 > this.data.length) {
       throw new Error('Insufficient data for pulse sequence');
     }
     const block = {
@@ -6327,10 +6573,10 @@ class Tape {
       pulses: []
     };
     for (let i = 0; i < count; i++) {
-      block.pulses.push(this.readWord(pos + i * 2));
+      block.pulses.push(this.readWord(dataPos + i * 2));
     }
     this.blocks.push(block);
-    return pos + count * 2;
+    return dataPos + count * 2;
   }
 
   /**
@@ -6372,7 +6618,7 @@ class Tape {
     }
     this.blocks.push({
       type: this.BLOCK_PAUSE,
-      pause: pause
+      pause
     });
     return pos + 2;
   }
@@ -6384,26 +6630,36 @@ class Tape {
     switch (blockId) {
       case this.BLOCK_GROUP_START:
         // Group start: length byte + text
-        if (pos + 1 > this.data.length) return this.data.length;
+        if (pos + 1 > this.data.length) {
+          return this.data.length;
+        }
         return pos + 1 + this.data[pos];
       case this.BLOCK_GROUP_END:
         // Group end: no data
         return pos;
       case this.BLOCK_TEXT:
         // Text description: length byte + text
-        if (pos + 1 > this.data.length) return this.data.length;
+        if (pos + 1 > this.data.length) {
+          return this.data.length;
+        }
         return pos + 1 + this.data[pos];
       case this.BLOCK_MESSAGE:
         // Message block: time byte + length byte + text
-        if (pos + 2 > this.data.length) return this.data.length;
+        if (pos + 2 > this.data.length) {
+          return this.data.length;
+        }
         return pos + 2 + this.data[pos + 1];
       case this.BLOCK_ARCHIVE_INFO:
         // Archive info: length word + data
-        if (pos + 2 > this.data.length) return this.data.length;
+        if (pos + 2 > this.data.length) {
+          return this.data.length;
+        }
         return pos + 2 + this.readWord(pos);
       case this.BLOCK_HARDWARE_TYPE:
         // Hardware type: count byte + 3 bytes per entry
-        if (pos + 1 > this.data.length) return this.data.length;
+        if (pos + 1 > this.data.length) {
+          return this.data.length;
+        }
         return pos + 1 + this.data[pos] * 3;
       default:
         return pos;
@@ -6718,7 +6974,7 @@ class Tape {
 
   /**
    * Update pause state (can occur after any block)
-   * 
+   *
    * @private
    * @param {number} cycles - Current CPU cycle count
    * @returns {void}
@@ -6747,7 +7003,7 @@ class Tape {
 
   /**
    * Update pause block
-   * 
+   *
    * @private
    * @param {number} cycles - Current CPU cycle count
    * @returns {void}
@@ -6759,7 +7015,7 @@ class Tape {
 
   /**
    * Update pure tone block
-   * 
+   *
    * @private
    * @param {number} cycles - Current CPU cycle count
    * @returns {void}
@@ -6778,7 +7034,7 @@ class Tape {
 
   /**
    * Update pulse sequence block
-   * 
+   *
    * @private
    * @param {number} cycles - Current CPU cycle count
    * @returns {void}
@@ -6844,7 +7100,7 @@ class Tape {
 
   /**
    * Handle end of current block
-   * 
+   *
    * @private
    * @returns {void}
    */
@@ -6857,7 +7113,7 @@ class Tape {
       this.state = 'PAUSE';
       this.pauseCycles = block.pause * this.CYCLES_PER_MS;
       console.log(`Entering PAUSE state for ${block.pause}ms (${this.pauseCycles} cycles)`);
-      console.log(`Next block will be ${this.blockIndex < this.blocks.length ? 'block ' + this.blockIndex : 'end of tape'}`);
+      console.log(`Next block will be ${this.blockIndex < this.blocks.length ? `block ${this.blockIndex}` : 'end of tape'}`);
     } else {
       // Move to next block immediately
       console.log('No pause, moving to next block immediately');
@@ -6867,7 +7123,7 @@ class Tape {
 
   /**
    * Get current tape position as percentage
-   * 
+   *
    * @returns {number} Position as percentage (0-100)
    */
   getPosition() {
@@ -6880,7 +7136,7 @@ class Tape {
 
   /**
    * Get human-readable tape status
-   * 
+   *
    * @returns {string} Status message
    */
   getStatus() {
@@ -6900,7 +7156,7 @@ class Tape {
   /**
    * Get current EAR bit for tape input
    * This is what the Spectrum reads from port 0xFE bit 6
-   * 
+   *
    * @returns {number} Current EAR bit (0 or 1)
    */
   getEarBit() {
@@ -6972,10 +7228,10 @@ class TouchKeyboard {
   }
   _getDisplayKey(key) {
     const displayMap = {
-      'CAPS': 'CAPS SHIFT',
-      'SYMB': 'SYMBOL',
-      'SPACE': '━━━━━',
-      'ENTER': '↵'
+      CAPS: 'CAPS SHIFT',
+      SYMB: 'SYMBOL',
+      SPACE: '━━━━━',
+      ENTER: '↵'
     };
     return displayMap[key] || key;
   }
@@ -6996,7 +7252,9 @@ class TouchKeyboard {
     return classes.join(' ');
   }
   _addStyles() {
-    if (document.getElementById('zx-touch-keyboard-styles')) return;
+    if (document.getElementById('zx-touch-keyboard-styles')) {
+      return;
+    }
     const style = document.createElement('style');
     style.id = 'zx-touch-keyboard-styles';
     style.textContent = `
@@ -7133,7 +7391,9 @@ class TouchKeyboard {
   }
   _handleKeyDown(keyElement) {
     const key = keyElement.dataset.key;
-    if (this.activeKeys.has(keyElement)) return;
+    if (this.activeKeys.has(keyElement)) {
+      return;
+    }
     this.activeKeys.add(keyElement);
     keyElement.classList.add('active');
 
@@ -7143,7 +7403,9 @@ class TouchKeyboard {
   }
   _handleKeyUp(keyElement) {
     const key = keyElement.dataset.key;
-    if (!this.activeKeys.has(keyElement)) return;
+    if (!this.activeKeys.has(keyElement)) {
+      return;
+    }
     this.activeKeys.delete(keyElement);
     keyElement.classList.remove('active');
 
@@ -7153,9 +7415,9 @@ class TouchKeyboard {
   }
   _mapKey(key) {
     const keyMap = {
-      'CAPS': 'Shift',
-      'SYMB': 'Control',
-      'SPACE': ' '
+      CAPS: 'Shift',
+      SYMB: 'Control',
+      SPACE: ' '
     };
     return keyMap[key] || key;
   }
@@ -7189,11 +7451,9 @@ class TouchKeyboard {
   }
 }
 
-/* global document, cancelAnimationFrame, requestAnimationFrame */
-
 /**
  * ZXSpectrum - Main emulator class for the ZX Spectrum 48K
- * 
+ *
  * @class ZXSpectrum
  * @example
  * const spectrum = new ZXSpectrum('#canvas', {
@@ -7205,11 +7465,11 @@ class TouchKeyboard {
 class ZXSpectrum {
   /**
    * Create a new ZX Spectrum emulator instance
-   * 
+   *
    * @constructor
    * @param {string|HTMLCanvasElement} canvasOrSelector - Canvas element or CSS selector
    * @param {Object} [options={}] - Configuration options
-   * @param {string|Uint8Array} [options.rom='https://cdn.jsdelivr.net/npm/zx-generation@latest/rom/48k.rom'] - ROM data or URL
+   * @param {string|Uint8Array} [options.rom='https://cdn.jsdelivr.net/npm/@zx-vibes/emulator@latest/rom/48k.rom'] - ROM data or URL
    * @param {boolean} [options.autoStart=true] - Start emulation automatically after ROM loads
    * @param {boolean} [options.sound=true] - Enable sound emulation
    * @param {boolean} [options.useAudioWorklet=true] - Use AudioWorklet for better sound
@@ -7223,7 +7483,7 @@ class ZXSpectrum {
   constructor(canvasOrSelector, options = {}) {
     // Initialize options with defaults
     this.options = {
-      rom: 'https://cdn.jsdelivr.net/npm/zx-generation@latest/rom/48k.rom',
+      rom: 'https://cdn.jsdelivr.net/npm/@zx-vibes/emulator@latest/rom/48k.rom',
       autoStart: true,
       sound: true,
       useAudioWorklet: true,
@@ -7257,11 +7517,12 @@ class ZXSpectrum {
     this.tape = new Tape(this);
 
     // Setup sound callbacks
+    this._prevTapeBit = 1; // last tape EAR level, for loading-sound mixing
     if (this.sound) {
       this.ula.setPortWriteCallback(portValue => {
         if (this.sound && this.sound.enabled && this.useAudioWorklet) {
           const tStateOffset = this.cpu.cycles - this.frameStartCycles;
-          this.sound.setBeeperState(portValue, tStateOffset);
+          this.sound.setBeeperState(this._mixTapeAudio(portValue), tStateOffset);
         }
       });
       this.ula.onSpeakerChange = speakerBit => {
@@ -7300,6 +7561,9 @@ class ZXSpectrum {
     // Custom key mappings
     this.customKeyMap = {};
 
+    // Audio resume gesture handling
+    this._audioResumeHandler = null;
+
     // Touch keyboard
     this.touchKeyboard = null;
 
@@ -7319,6 +7583,9 @@ class ZXSpectrum {
     // Setup visibility handling
     this._setupVisibilityHandling();
 
+    // Setup audio resume handling for browser autoplay policies
+    this._setupAudioResumeHandling();
+
     // Initialize with ROM if provided
     if (this.options.rom) {
       this._initialize();
@@ -7327,7 +7594,7 @@ class ZXSpectrum {
 
   /**
    * Resolve canvas element from selector or element
-   * 
+   *
    * @private
    * @param {string|HTMLCanvasElement} canvasOrSelector - Canvas element or CSS selector
    * @returns {HTMLCanvasElement} Canvas element
@@ -7336,6 +7603,9 @@ class ZXSpectrum {
   _resolveCanvas(canvasOrSelector) {
     if (typeof canvasOrSelector === 'string') {
       // It's a selector
+      if (typeof document === 'undefined') {
+        throw new Error('Canvas selectors need a DOM. In Node, pass a canvas-like object ' + '(e.g. from the "canvas" package) instead of a selector string.');
+      }
       const element = document.querySelector(canvasOrSelector);
       if (!element) {
         throw new Error(`Canvas element not found: ${canvasOrSelector}`);
@@ -7347,18 +7617,19 @@ class ZXSpectrum {
         return canvas;
       }
       return element;
-    } else if (canvasOrSelector instanceof HTMLCanvasElement) {
-      return canvasOrSelector;
-    } else if (canvasOrSelector && canvasOrSelector.tagName === 'CANVAS') {
-      return canvasOrSelector;
-    } else {
-      throw new Error('Invalid canvas parameter. Expected selector string or canvas element.');
     }
+    if (typeof HTMLCanvasElement !== 'undefined' && canvasOrSelector instanceof HTMLCanvasElement) {
+      return canvasOrSelector;
+    }
+    if (canvasOrSelector && canvasOrSelector.tagName === 'CANVAS') {
+      return canvasOrSelector;
+    }
+    throw new Error('Invalid canvas parameter. Expected selector string or canvas element.');
   }
 
   /**
    * Setup canvas dimensions and rendering properties
-   * 
+   *
    * @private
    * @returns {void}
    */
@@ -7372,11 +7643,11 @@ class ZXSpectrum {
     // Handle scaling
     if (this.options.scale === 'auto') {
       // Default 2x scale
-      this.canvas.style.width = displaySize.width * 2 + 'px';
-      this.canvas.style.height = displaySize.height * 2 + 'px';
+      this.canvas.style.width = `${displaySize.width * 2}px`;
+      this.canvas.style.height = `${displaySize.height * 2}px`;
     } else if (typeof this.options.scale === 'number') {
-      this.canvas.style.width = displaySize.width * this.options.scale + 'px';
-      this.canvas.style.height = displaySize.height * this.options.scale + 'px';
+      this.canvas.style.width = `${displaySize.width * this.options.scale}px`;
+      this.canvas.style.height = `${displaySize.height * this.options.scale}px`;
     }
 
     // Pixelated rendering
@@ -7387,7 +7658,7 @@ class ZXSpectrum {
 
   /**
    * Setup keyboard event handlers
-   * 
+   *
    * @private
    * @returns {void}
    */
@@ -7396,25 +7667,41 @@ class ZXSpectrum {
     this._keyDownHandler = e => this._handleKeyDown(e);
     this._keyUpHandler = e => this._handleKeyUp(e);
 
-    // Add event listeners
-    document.addEventListener('keydown', this._keyDownHandler);
-    document.addEventListener('keyup', this._keyUpHandler);
+    // Add event listeners (headless callers drive keyDown()/keyUp() directly)
+    if (typeof document !== 'undefined') {
+      document.addEventListener('keydown', this._keyDownHandler);
+      document.addEventListener('keyup', this._keyUpHandler);
+    }
+
+    // Release every key when the window loses focus. Otherwise a key still held
+    // during an alt-tab / click-away never receives its keyup and stays stuck —
+    // the classic "UP is always pressed" bug.
+    if (typeof window !== 'undefined') {
+      this._blurHandler = () => this.ula.clearKeys();
+      window.addEventListener('blur', this._blurHandler);
+    }
   }
 
   /**
    * Setup touch keyboard for mobile devices
-   * 
+   *
    * @private
    * @returns {void}
    */
   _setupTouchKeyboard() {
     const shouldShow = this.options.touchKeyboard === 'auto' ? this._isTouchDevice() : this.options.touchKeyboard;
     if (shouldShow) {
+      if (typeof document === 'undefined') {
+        return;
+      }
       // Determine container
       let container;
       if (typeof this.options.touchKeyboard === 'string' && this.options.touchKeyboard !== 'auto') {
         container = this.options.touchKeyboard;
       } else {
+        if (!this.canvas.parentNode) {
+          return;
+        }
         // Create container after canvas
         container = document.createElement('div');
         container.className = 'zx-touch-container';
@@ -7426,23 +7713,28 @@ class ZXSpectrum {
 
   /**
    * Check if device supports touch input
-   * 
+   *
    * @private
    * @returns {boolean} True if touch device
    */
   _isTouchDevice() {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return false; // headless
+    }
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
   }
 
   /**
    * Handle keyboard key down events
-   * 
+   *
    * @private
    * @param {KeyboardEvent} e - Keyboard event
    * @returns {void}
    */
   _handleKeyDown(e) {
-    if (!this.running) return;
+    if (!this.running) {
+      return;
+    }
     const handled = this._processKey(e.key, true);
     if (handled) {
       e.preventDefault();
@@ -7451,13 +7743,14 @@ class ZXSpectrum {
 
   /**
    * Handle keyboard key up events
-   * 
+   *
    * @private
    * @param {KeyboardEvent} e - Keyboard event
    * @returns {void}
    */
   _handleKeyUp(e) {
-    if (!this.running) return;
+    // Always honour key releases, even while paused/stopped: if the keydown was
+    // seen while running, dropping its keyup would leave the key stuck "pressed".
     const handled = this._processKey(e.key, false);
     if (handled) {
       e.preventDefault();
@@ -7466,7 +7759,7 @@ class ZXSpectrum {
 
   /**
    * Process key press/release for Spectrum keyboard mapping
-   * 
+   *
    * @private
    * @param {string} key - Key string
    * @param {boolean} isDown - True if key pressed, false if released
@@ -7478,7 +7771,8 @@ class ZXSpectrum {
     if (customMapping) {
       if (typeof customMapping === 'string') {
         return this._processKey(customMapping, isDown);
-      } else if (customMapping.keys) {
+      }
+      if (customMapping.keys) {
         customMapping.keys.forEach(k => this._processKey(k, isDown));
         return true;
       }
@@ -7517,13 +7811,16 @@ class ZXSpectrum {
 
   /**
    * Setup page visibility handling for audio context
-   * 
+   *
    * @private
    * @returns {void}
    */
   _setupVisibilityHandling() {
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          this.ula.clearKeys(); // drop any held keys when the tab is backgrounded
+        }
         if (this.running && this.sound && this.sound.audioContext) {
           if (document.hidden) {
             this.sound.audioContext.suspend().catch(err => console.warn('Failed to suspend audio context:', err));
@@ -7536,8 +7833,40 @@ class ZXSpectrum {
   }
 
   /**
+   * Resume suspended audio contexts from user gestures.
+   *
+   * @private
+   * @returns {void}
+   */
+  _setupAudioResumeHandling() {
+    if (!this.sound || typeof document === 'undefined') {
+      return;
+    }
+    this._audioResumeHandler = () => {
+      this.resumeAudio().catch(err => console.warn('Failed to resume audio context:', err));
+    };
+    document.addEventListener('pointerdown', this._audioResumeHandler);
+    document.addEventListener('keydown', this._audioResumeHandler);
+  }
+
+  /**
+   * Remove audio gesture listeners installed by _setupAudioResumeHandling().
+   *
+   * @private
+   * @returns {void}
+   */
+  _removeAudioResumeHandling() {
+    if (!this._audioResumeHandler || typeof document === 'undefined') {
+      return;
+    }
+    document.removeEventListener('pointerdown', this._audioResumeHandler);
+    document.removeEventListener('keydown', this._audioResumeHandler);
+    this._audioResumeHandler = null;
+  }
+
+  /**
    * Initialize emulator with ROM and options
-   * 
+   *
    * @private
    * @async
    * @returns {Promise<void>}
@@ -7565,7 +7894,7 @@ class ZXSpectrum {
 
   /**
    * Load ROM data into the emulator
-   * 
+   *
    * @param {Uint8Array} romData - ROM data (must be 16384 bytes)
    * @throws {Error} If romData is not a Uint8Array
    */
@@ -7579,7 +7908,7 @@ class ZXSpectrum {
 
   /**
    * Load ROM from a URL
-   * 
+   *
    * @async
    * @param {string} url - URL to ROM file
    * @throws {Error} If ROM loading fails
@@ -7621,10 +7950,25 @@ class ZXSpectrum {
 
   /**
    * Run a single frame of emulation (69888 T-states)
-   * 
+   *
    * @private
    * @returns {void}
    */
+  /**
+   * Fold the current tape EAR input into the speaker bit while a tape is playing,
+   * so the loading signal is audible (real hardware mixes EAR into the audio out).
+   * A no-op during normal play, when no tape is running.
+   *
+   * @private
+   * @param {number} portValue - last value written to port 0xFE
+   * @returns {number} value with the tape level mixed into the speaker bit
+   */
+  _mixTapeAudio(portValue) {
+    if (this.tape && this.tape.playing) {
+      return portValue & 0xef | (this._prevTapeBit ? 0x10 : 0);
+    }
+    return portValue;
+  }
   runFrame() {
     let tStates = 0;
     this.frameStartCycles = this.cpu.cycles;
@@ -7638,6 +7982,14 @@ class ZXSpectrum {
       this.ula.addCycles(cyclesExecuted);
       const tapeInputBit = this.tape.update(this.cpu.cycles);
       this.ula.setTapeInput(tapeInputBit);
+      // Make the tape loading signal audible like real hardware: the ULA mixes the
+      // EAR input into the speaker output, so emit an audio edge on each tape flip.
+      if (tapeInputBit !== this._prevTapeBit) {
+        this._prevTapeBit = tapeInputBit;
+        if (this.sound && this.sound.enabled && this.useAudioWorklet && this.tape.playing) {
+          this.sound.setBeeperState(this._mixTapeAudio(this.ula.lastPortFE), this.cpu.cycles - this.frameStartCycles);
+        }
+      }
       if (this.ula.shouldGenerateInterrupt()) {
         this.cpu.interrupt();
       }
@@ -7647,6 +7999,7 @@ class ZXSpectrum {
       this.sound.endFrame(tStates);
     }
     this.frameCount++;
+    this.display.advanceFrame();
     const now = performance.now();
     this.framesSinceLastFps++;
     if (now - this.lastFpsUpdate >= 1000) {
@@ -7658,12 +8011,14 @@ class ZXSpectrum {
 
   /**
    * Start the emulation
-   * 
+   *
    * @async
    * @returns {Promise<void>}
    */
   async start() {
-    if (this.running) return;
+    if (this.running) {
+      return;
+    }
 
     // Initialize sound if enabled
     if (this.sound) {
@@ -7735,7 +8090,7 @@ class ZXSpectrum {
 
   /**
    * Main emulation loop - executes CPU cycles and manages timing
-   * 
+   *
    * @private
    * @returns {void}
    */
@@ -7761,7 +8116,7 @@ class ZXSpectrum {
 
   /**
    * Start the rendering loop
-   * 
+   *
    * @private
    * @returns {void}
    */
@@ -7780,7 +8135,7 @@ class ZXSpectrum {
 
   /**
    * Render the display from memory to pixel buffer
-   * 
+   *
    * @private
    * @returns {Uint8Array} Display buffer
    */
@@ -7788,14 +8143,14 @@ class ZXSpectrum {
     const screenMemory = this.memory.getScreenMemory();
     const attributeMemory = this.memory.getAttributeMemory();
     const borderColor = this.ula.getBorderColor();
-    const scanlineBorderColors = this.ula.isBorderColorChanged() ? this.ula.getScanlineBorderColors() : null;
+    const scanlineBorderColors = this.ula.getScanlineBorderColors();
     this.ula.resetBorderChanged();
     return this.display.render(screenMemory, attributeMemory, borderColor, scanlineBorderColors);
   }
 
   /**
    * Draw the display buffer to canvas
-   * 
+   *
    * @private
    * @param {HTMLCanvasElement} [canvas=null] - Target canvas (uses default if null)
    * @returns {void}
@@ -7809,7 +8164,7 @@ class ZXSpectrum {
 
   /**
    * Simulate a key press
-   * 
+   *
    * @param {string|KeyboardEvent} keyOrEvent - Key string or keyboard event
    */
   keyDown(keyOrEvent) {
@@ -7819,7 +8174,7 @@ class ZXSpectrum {
 
   /**
    * Simulate a key release
-   * 
+   *
    * @param {string|KeyboardEvent} keyOrEvent - Key string or keyboard event
    */
   keyUp(keyOrEvent) {
@@ -7829,7 +8184,7 @@ class ZXSpectrum {
 
   /**
    * Simulate a key press and release
-   * 
+   *
    * @param {string|KeyboardEvent} keyOrEvent - Key string or keyboard event
    * @param {number} [duration=50] - Duration of key press in milliseconds
    * @returns {Promise<void>}
@@ -7842,7 +8197,7 @@ class ZXSpectrum {
 
   /**
    * Type text automatically with realistic timing
-   * 
+   *
    * @param {string} text - Text to type
    * @param {Object} [options={}] - Typing options
    * @param {number} [options.keyDelay=100] - Delay between key presses in milliseconds
@@ -7862,7 +8217,7 @@ class ZXSpectrum {
 
   /**
    * Load a snapshot from saved state data
-   * 
+   *
    * @param {Object} data - Snapshot data
    * @param {Uint8Array} [data.ram] - RAM contents
    * @param {Object} [data.cpu] - CPU state
@@ -7876,13 +8231,13 @@ class ZXSpectrum {
       this.cpu.setState(data.cpu);
     }
     if (data.ula) {
-      this.ula.borderColor = data.ula.borderColor || 7;
+      this.ula.borderColor = data.ula.borderColor ?? 7;
     }
   }
 
   /**
    * Load a Z80 snapshot file
-   * 
+   *
    * @param {ArrayBuffer|Uint8Array} data - Z80 snapshot data
    */
   loadZ80Snapshot(data) {
@@ -7892,7 +8247,7 @@ class ZXSpectrum {
 
   /**
    * Save current state as snapshot
-   * 
+   *
    * @returns {Object} Snapshot data with ram, cpu, and ula state
    */
   saveSnapshot() {
@@ -7907,7 +8262,7 @@ class ZXSpectrum {
 
   /**
    * Get emulator statistics
-   * 
+   *
    * @returns {Object} Statistics object
    * @returns {number} .fps - Current frames per second
    * @returns {number} .frameCount - Total frames rendered
@@ -7927,11 +8282,11 @@ class ZXSpectrum {
 
   /**
    * Write a byte to memory (POKE)
-   * 
+   *
    * @param {number} address - Memory address (0-65535)
    * @param {number} value - Value to write (0-255)
    * @returns {void}
-   * 
+   *
    * @example
    * spectrum.poke(23624, 0); // Clear keyboard buffer
    */
@@ -7941,10 +8296,10 @@ class ZXSpectrum {
 
   /**
    * Read a byte from memory (PEEK)
-   * 
+   *
    * @param {number} address - Memory address (0-65535)
    * @returns {number} Byte value (0-255)
-   * 
+   *
    * @example
    * const borderColor = spectrum.peek(23624); // Read current border color
    */
@@ -7954,7 +8309,7 @@ class ZXSpectrum {
 
   /**
    * Enable or disable turbo mode
-   * 
+   *
    * @param {boolean} enabled - True to enable turbo mode
    * @returns {void}
    */
@@ -7963,10 +8318,10 @@ class ZXSpectrum {
   }
 
   /**
-   * Load a TAP file for tape emulation
-   * 
-   * @param {ArrayBuffer|Uint8Array} buffer - TAP file data
-   * @param {string} [filename] - Optional filename for display
+   * Load a TAP or TZX file for tape emulation
+   *
+   * @param {ArrayBuffer|Uint8Array} buffer - Tape file data
+   * @param {string} filename - Filename used to determine format (.tap or .tzx)
    */
   loadTape(buffer, filename) {
     this.tape.load(buffer, filename);
@@ -7974,7 +8329,7 @@ class ZXSpectrum {
 
   /**
    * Load a TAP file from URL
-   * 
+   *
    * @async
    * @param {string} url - URL to TAP file
    * @throws {Error} If tape loading fails
@@ -8023,7 +8378,7 @@ class ZXSpectrum {
 
   /**
    * Get current tape status
-   * 
+   *
    * @returns {Object} Tape status
    * @returns {string} .status - Current status message
    * @returns {number} .position - Current position in tape
@@ -8041,7 +8396,7 @@ class ZXSpectrum {
 
   /**
    * Set audio volume
-   * 
+   *
    * @param {number} volume - Volume level (0.0 to 1.0)
    * @returns {void}
    */
@@ -8053,7 +8408,7 @@ class ZXSpectrum {
 
   /**
    * Mute or unmute audio
-   * 
+   *
    * @param {boolean} muted - True to mute, false to unmute
    * @returns {void}
    */
@@ -8064,8 +8419,25 @@ class ZXSpectrum {
   }
 
   /**
+   * Resume the browser audio context after a user gesture.
+   *
+   * @async
+   * @returns {Promise<boolean>} True when audio is running after the attempt
+   */
+  async resumeAudio() {
+    const context = this.sound?.audioContext;
+    if (!context) {
+      return false;
+    }
+    if (context.state === 'suspended') {
+      await context.resume();
+    }
+    return context.state === 'running';
+  }
+
+  /**
    * Enable or disable audio debug mode
-   * 
+   *
    * @param {boolean} enabled - True to enable debug mode
    * @returns {void}
    */
@@ -8077,11 +8449,11 @@ class ZXSpectrum {
 
   /**
    * Set custom key mapping
-   * 
+   *
    * @param {string} pcKey - PC keyboard key
    * @param {string|Object} spectrumKey - Spectrum key or key combination
    * @returns {void}
-   * 
+   *
    * @example
    * spectrum.setKeyMapping('Tab', 'CAPS_SHIFT');
    * spectrum.setKeyMapping('F1', { keys: ['CAPS_SHIFT', '1'] });
@@ -8092,10 +8464,10 @@ class ZXSpectrum {
 
   /**
    * Set multiple custom key mappings
-   * 
+   *
    * @param {Object} mappings - Object with PC key to Spectrum key mappings
    * @returns {void}
-   * 
+   *
    * @example
    * spectrum.setKeyMappings({
    *     'Tab': 'CAPS_SHIFT',
@@ -8108,7 +8480,7 @@ class ZXSpectrum {
 
   /**
    * Clear all custom key mappings
-   * 
+   *
    * @returns {void}
    */
   clearCustomKeyMappings() {
@@ -8117,16 +8489,20 @@ class ZXSpectrum {
 
   /**
    * Clean up and destroy the emulator instance
-   * 
+   *
    * Stops emulation, removes event listeners, and cleans up resources
    */
   destroy() {
     this.stop();
+    this._removeAudioResumeHandling();
 
     // Remove keyboard handlers
     if (this.options.handleKeyboard && this._keyDownHandler) {
       document.removeEventListener('keydown', this._keyDownHandler);
       document.removeEventListener('keyup', this._keyUpHandler);
+    }
+    if (this._blurHandler && typeof window !== 'undefined') {
+      window.removeEventListener('blur', this._blurHandler);
     }
 
     // Destroy touch keyboard
@@ -8140,5 +8516,5 @@ class ZXSpectrum {
   }
 }
 
-export { PC_KEY_MAP, SPECTRUM_KEYS, ZXSpectrum };
+export { Flags, PC_KEY_MAP, Registers, SPECTRUM_KEYS, SpectrumDisplay, SpectrumMemory, SpectrumSound, SpectrumULA, Tape, Z80, Z80SnapshotLoader, ZXSpectrum };
 //# sourceMappingURL=zxgeneration.esm.js.map

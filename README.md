@@ -13,7 +13,8 @@ emulator, the `zxs` CLI, an MCP server for agent integrations, starter projects,
 reference docs, and a public gallery.
 
 - Public gallery: <https://alvaromah.github.io/zx-vibes/>
-- npm release: `0.1.0`
+- npm packages: `zx-vibes`, `create-zx-vibes`, `@zx-vibes/toolkit`,
+  `@zx-vibes/asm`, and `@zx-vibes/emulator`
 - Runtime: Node.js 20 or newer
 - Package manager: pnpm recommended
 
@@ -21,12 +22,17 @@ reference docs, and a public gallery.
 
 - `pnpm create zx-vibes` to scaffold a working Spectrum project.
 - `zxs build`, `zxs run`, `zxs verify`, and `zxs preview` for the local loop.
+- `zxs boot` and `zxs play` for browser playback of a clean 48K machine,
+  snapshots, and tape files.
+- Snapshot, memory, graphics, disassembly, scan, and xref commands for
+  inspection and reverse-engineering workflows.
 - `zxs-mcp` for Codex, Claude, and other MCP-capable coding agents.
 - A default embedded assembler from `@zx-vibes/asm`.
 - Optional `sjasmplus` support for advanced assembler workflows.
 - A ZX Spectrum 48K emulator package for headless tests and browser players.
-- Reference notes for memory, screen layout, keyboard input, ROM routines,
-  colour attributes, timing, and common Spectrum bugs.
+- Reference notes and project-local agent skills for assembler syntax, memory,
+  screen layout, keyboard input, ROM routines, colour attributes, timing, sound,
+  testing assertions, reverse engineering, and common Spectrum bugs.
 
 ## Quick Start From npm
 
@@ -55,8 +61,9 @@ The generated project includes:
 - `lib/` helpers for screen and keyboard routines.
 - `tests/smoke.test.json` for declarative verification.
 - `zx.config.json` for build configuration.
-- `AGENTS.md` and `CLAUDE.md` with the same agent playbook that also works as
-  human guidance.
+- `AGENTS.md` and `CLAUDE.md` with the same agent playbook, plus local
+  `docs/agents/skills/` and `docs/reference/` material for agent and human
+  guidance.
 - npm scripts for `build`, `run`, `test`, `verify`, and `preview`.
 
 ## Working With an Agent
@@ -80,7 +87,10 @@ The intended loop is:
 6. Run `pnpm exec zxs verify`.
 
 Agents can use the same commands directly, or connect through the MCP server for
-structured build, run, screen, inspect, debug, keyboard, and state tools.
+structured build, run, screen, inspect, debug, keyboard, and state tools. The
+CLI is also useful during investigation work because most inspection commands
+can read a session, `.sna`, `.z80`, or raw `--bin` source without mutating the
+project state.
 
 ## CLI Basics
 
@@ -100,8 +110,11 @@ pnpm exec zxs build
 pnpm exec zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png
 pnpm exec zxs screen --text --png screen.png
 pnpm exec zxs test tests
+pnpm exec zxs test tests --list-assertions
 pnpm exec zxs verify
 pnpm exec zxs preview --port 5173 --watch
+pnpm exec zxs boot
+pnpm exec zxs play game.z80
 pnpm exec zxs bench --frames 2000
 ```
 
@@ -109,17 +122,33 @@ pnpm exec zxs bench --frames 2000
 `--watch` to rebuild the snapshot and reload the page when source/config files
 change. If the requested port is busy, preview tries later ports and prints the
 URL it actually selected; add `--strict-port` when a busy `--port` should be an
-error.
+error. Use `--detach`, `--list`, and `--stop` when you want the preview server
+to keep running outside the current command.
+
+`zxs boot` opens a clean ZX Spectrum 48K boot screen in the same browser player.
+`zxs play <file>` opens `.z80`, `.sna`, `.tap`, and `.tzx` files without
+creating a project first. The emulator supports `.z80` v1 snapshots plus
+48K-compatible `.z80` v2/v3 snapshots.
 
 Debug and inspection commands are also available:
 
 ```bash
 pnpm exec zxs regs
 pnpm exec zxs mem read 0x8000 --len 64
+pnpm exec zxs mem dump --range 0x4000-0x5aff --out screen.ram
 pnpm exec zxs break add 0x8000
+pnpm exec zxs watch add --write 0x5800-0x5aff
 pnpm exec zxs step 10
+pnpm exec zxs disasm PC --count 12 --json
 pnpm exec zxs trace --frames 5
 pnpm exec zxs state save session.zxstate
+pnpm exec zxs state export --z80 session.z80
+pnpm exec zxs snapshot info game.z80
+pnpm exec zxs snapshot ram game.z80 --out game.ram
+pnpm exec zxs gfx screen --z80 game.z80 --out screen.png
+pnpm exec zxs gfx find --z80 game.z80
+pnpm exec zxs scan --z80 game.z80 --opcode "ED B0"
+pnpm exec zxs xref 0x5c00 --z80 game.z80
 ```
 
 ## MCP Server

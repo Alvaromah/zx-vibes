@@ -31,12 +31,16 @@ zxs snapshot ram game.z80 --out ram.bin
 zxs gfx screen --z80 game.z80 --out screen.png
 zxs gfx attrs --z80 game.z80 --out attrs.png
 zxs gfx linear 0xc000 --z80 game.z80 --width-bytes 2 --height 16 --count 16 --columns 8 --out sprites.png
-zxs gfx font 0x3d00 --fresh --glyphs 96 --out rom-font.png
+zxs gfx font 0xc000 --z80 game.z80 --glyphs 96 --out font.png
 ```
 
 If `gfx find --json` reports candidate ranges, inspect them with `gfx linear`
 using plausible widths: 1 byte for fonts/8px tiles, 2 bytes for 16px sprites,
 and 4 bytes for 32px title graphics.
+
+Use `zxs play game.z80` for quick browser playback of `.z80`, `.sna`, `.tap`,
+or `.tzx` files, and `zxs boot` for a clean 48K ROM screen. Return to the
+read-only extraction commands above when collecting evidence.
 
 ## Code Following
 

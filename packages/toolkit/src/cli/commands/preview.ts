@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { createServer, type Server, type ServerResponse } from 'node:http';
+import { createServer, request, type Server, type ServerResponse } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, relative } from 'node:path';
 import { createRequire } from 'node:module';
@@ -44,7 +44,10 @@ interface PreviewBuild {
   bootFrames: number;
 }
 
-interface PreviewServerRecord {
+export interface PreviewServerRecord {
+  owner: 'zx-vibes-preview-server';
+  token: string;
+  kind: BrowserPlayerStage | 'preview';
   pid: number;
   port: number;
   requestedPort: number;
@@ -59,6 +62,8 @@ const WATCH_SKIP_DIRS = new Set(['.git', '.zxs', 'build', 'dist', 'node_modules'
 const PREVIEW_HOST = '127.0.0.1';
 const MAX_PORT_FALLBACK_ATTEMPTS = 20;
 const PREVIEW_SERVER_RECORD = join('.zxs', 'preview-server.json');
+const PREVIEW_SERVER_OWNER = 'zx-vibes-preview-server';
+const PREVIEW_CONTROL_STOP_PATH = '/__zxs_preview/stop';
 
 interface PreviewListenResult {
   port: number;
@@ -78,9 +83,15 @@ interface BrowserPlayerServeOptions {
   stage: BrowserPlayerStage;
   playDir: string;
   mode: PlayerMode;
+  fileName: string;
   opts: PlayCommandOptions;
   file?: string;
   boot?: { mode: 'fresh-rom-cache'; frames: number };
+}
+
+interface PreparedPlayable {
+  mode: PlayerMode;
+  fileName: string;
 }
 
 export async function previewCommand(opts: PreviewCommandOptions): Promise<number> {
@@ -136,9 +147,14 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
 
   const clients = new Set<ServerResponse>();
   let selectedPort = requestedPort;
+  const controlToken = randomUUID();
 
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', `http://${PREVIEW_HOST}:${selectedPort}`);
+    if (url.pathname === PREVIEW_CONTROL_STOP_PATH) {
+      handlePreviewStopRequest(req.method ?? 'GET', url, res, server, controlToken);
+      return;
+    }
     if (opts.watch && url.pathname === '/events') {
       res.writeHead(200, {
         'content-type': 'text/event-stream',
@@ -204,6 +220,9 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
         selectedPort = listen.port;
         startWatcher();
         const record = writePreviewServerRecord({
+          owner: PREVIEW_SERVER_OWNER,
+          token: controlToken,
+          kind: 'preview',
           pid: process.pid,
           port: selectedPort,
           requestedPort,
@@ -212,7 +231,7 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
           watch: opts.watch,
           buildId: currentBuild.buildId,
         });
-        server.once('close', () => clearPreviewServerRecord(record.pid));
+        server.once('close', () => clearPreviewServerRecord(record));
         emit(
           {
             ok: true,
@@ -249,8 +268,8 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
 
 export async function playCommand(file: string, opts: PlayCommandOptions): Promise<number> {
   const playDir = preparePlayerDir();
-  const mode = preparePlayable(file, playDir);
-  return serveBrowserPlayer({ stage: 'play', playDir, mode, opts, file });
+  const playable = preparePlayable(file, playDir);
+  return serveBrowserPlayer({ stage: 'play', playDir, ...playable, opts, file });
 }
 
 export async function bootCommand(opts: PlayCommandOptions): Promise<number> {
@@ -260,6 +279,7 @@ export async function bootCommand(opts: PlayCommandOptions): Promise<number> {
     stage: 'boot',
     playDir,
     mode: 'snapshot',
+    fileName: 'game.z80',
     opts,
     boot: { mode: 'fresh-rom-cache', frames: BOOT_FRAMES },
   });
@@ -272,7 +292,7 @@ function preparePlayerDir(): string {
 }
 
 async function serveBrowserPlayer(params: BrowserPlayerServeOptions): Promise<number> {
-  const { opts, playDir, mode } = params;
+  const { opts, playDir, mode, fileName } = params;
   const requestedPort = parsePort(opts.port);
 
   const emulatorPkg = dirname(require.resolve('@zx-vibes/emulator/package.json'));
@@ -284,20 +304,24 @@ async function serveBrowserPlayer(params: BrowserPlayerServeOptions): Promise<nu
     );
   }
 
-  writeFileSync(join(playDir, 'index.html'), playHtml(mode));
+  writeFileSync(join(playDir, 'index.html'), playHtml(mode, fileName));
 
   const files = new Map<string, string>([
     ['/', join(playDir, 'index.html')],
     ['/index.html', join(playDir, 'index.html')],
     ['/48k.rom', join(emulatorPkg, 'rom', '48k.rom')],
     ['/zxgeneration.esm.js', emulatorBundle],
-    ['/game.z80', join(playDir, 'game.z80')],
-    ['/game.tap', join(playDir, 'game.tap')],
+    [`/${fileName}`, join(playDir, fileName)],
   ]);
 
   let selectedPort = requestedPort;
+  const controlToken = randomUUID();
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', `http://${PREVIEW_HOST}:${selectedPort}`);
+    if (url.pathname === PREVIEW_CONTROL_STOP_PATH) {
+      handlePreviewStopRequest(req.method ?? 'GET', url, res, server, controlToken);
+      return;
+    }
     const path = files.get(url.pathname);
     if (!path || !existsSync(path)) {
       res.writeHead(404);
@@ -318,6 +342,9 @@ async function serveBrowserPlayer(params: BrowserPlayerServeOptions): Promise<nu
       .then((listen) => {
         selectedPort = listen.port;
         const record = writePreviewServerRecord({
+          owner: PREVIEW_SERVER_OWNER,
+          token: controlToken,
+          kind: params.stage,
           pid: process.pid,
           port: selectedPort,
           requestedPort,
@@ -325,7 +352,7 @@ async function serveBrowserPlayer(params: BrowserPlayerServeOptions): Promise<nu
           startedAt: new Date().toISOString(),
           watch: false,
         });
-        server.once('close', () => clearPreviewServerRecord(record.pid));
+        server.once('close', () => clearPreviewServerRecord(record));
         emit(
           {
             ok: true,
@@ -333,6 +360,7 @@ async function serveBrowserPlayer(params: BrowserPlayerServeOptions): Promise<nu
             url: record.url,
             ...(params.file !== undefined ? { file: params.file } : {}),
             mode,
+            servedFile: fileName,
             ...(params.boot !== undefined ? { boot: params.boot } : {}),
             port: selectedPort,
             requestedPort,
@@ -359,37 +387,66 @@ async function serveBrowserPlayer(params: BrowserPlayerServeOptions): Promise<nu
 
 function previewListCommand(opts: { json: boolean }): number {
   const record = readPreviewServerRecord();
-  const running = record ? isProcessRunning(record.pid) : false;
+  const running = record ? isProcessRunning(record.pid ?? -1) : false;
   emit(
     {
       ok: true,
       stage: 'preview',
-      servers: record ? [{ ...record, running }] : [],
+      servers: record ? [previewRecordForResponse(record, running)] : [],
     },
     opts.json,
-    () => (record ? `${running ? 'running' : 'stale'} pid=${record.pid} ${record.url}` : 'no tracked preview server')
+    () =>
+      record
+        ? `${running ? 'running' : 'stale'} ${record.kind ?? 'preview'} pid=${record.pid ?? -1} ${record.url ?? '<unknown>'}`
+        : 'no tracked preview server'
   );
   return EXIT.OK;
 }
 
-function previewStopCommand(opts: { json: boolean }): number {
+async function previewStopCommand(opts: { json: boolean }): Promise<number> {
   const record = readPreviewServerRecord();
   if (!record) {
     emit({ ok: true, stage: 'preview', stopped: false }, opts.json, () => 'no tracked preview server');
     return EXIT.OK;
   }
-  let stopped = false;
-  if (isProcessRunning(record.pid)) {
-    process.kill(record.pid);
-    stopped = true;
+
+  const pid = record.pid ?? -1;
+  const url = record.url ?? '<unknown>';
+  const running = isProcessRunning(pid);
+  if (!running) {
+    clearPreviewServerRecordFile();
+    emit(
+      { ok: true, stage: 'preview', stopped: false, pid, url },
+      opts.json,
+      () => `removed stale preview pid ${pid}`
+    );
+    return EXIT.OK;
   }
-  clearPreviewServerRecord(record.pid);
+
+  if (!isOwnedPreviewServerRecord(record)) {
+    emit(
+      {
+        ok: false,
+        stage: 'preview',
+        stopped: false,
+        pid,
+        url,
+        error: { message: 'tracked preview record is missing a zx-vibes ownership token' },
+      },
+      opts.json,
+      () => 'tracked preview record is missing a zx-vibes ownership token; refusing to stop it'
+    );
+    return EXIT.USER_ERROR;
+  }
+
+  const stopped = await requestPreviewServerStop(record);
+  if (stopped) clearPreviewServerRecord(record);
   emit(
-    { ok: true, stage: 'preview', stopped, pid: record.pid, url: record.url },
+    { ok: stopped, stage: 'preview', stopped, pid: record.pid, url: record.url },
     opts.json,
-    () => (stopped ? `stopped preview pid ${record.pid}` : `removed stale preview pid ${record.pid}`)
+    () => (stopped ? `stopped preview pid ${record.pid}` : `could not stop preview pid ${record.pid}`)
   );
-  return EXIT.OK;
+  return stopped ? EXIT.OK : EXIT.USER_ERROR;
 }
 
 function previewDetachCommand(opts: PreviewCommandOptions): number {
@@ -401,22 +458,6 @@ function previewDetachCommand(opts: PreviewCommandOptions): number {
     stdio: 'ignore',
   });
   child.unref();
-  mkdirSync(dirname(PREVIEW_SERVER_RECORD), { recursive: true });
-  writeFileSync(
-    PREVIEW_SERVER_RECORD,
-    JSON.stringify(
-      {
-        pid: child.pid ?? -1,
-        port: parsePort(opts.port),
-        requestedPort: parsePort(opts.port),
-        url: `http://${PREVIEW_HOST}:${parsePort(opts.port)}/`,
-        startedAt: new Date().toISOString(),
-        watch: opts.watch,
-      },
-      null,
-      2
-    )
-  );
   emit(
     {
       ok: true,
@@ -431,10 +472,10 @@ function previewDetachCommand(opts: PreviewCommandOptions): number {
   return EXIT.OK;
 }
 
-function readPreviewServerRecord(): PreviewServerRecord | undefined {
+function readPreviewServerRecord(): Partial<PreviewServerRecord> | undefined {
   if (!existsSync(PREVIEW_SERVER_RECORD)) return undefined;
   try {
-    return JSON.parse(readFileSync(PREVIEW_SERVER_RECORD, 'utf8')) as PreviewServerRecord;
+    return JSON.parse(readFileSync(PREVIEW_SERVER_RECORD, 'utf8')) as Partial<PreviewServerRecord>;
   } catch {
     return undefined;
   }
@@ -446,11 +487,96 @@ function writePreviewServerRecord(record: PreviewServerRecord): PreviewServerRec
   return record;
 }
 
-function clearPreviewServerRecord(pid: number): void {
+function clearPreviewServerRecord(record: Pick<PreviewServerRecord, 'pid' | 'token'>): void {
   const current = readPreviewServerRecord();
-  if (!current || current.pid === pid) {
+  if (!current || (current.pid === record.pid && current.token === record.token)) {
     rmSync(PREVIEW_SERVER_RECORD, { force: true });
   }
+}
+
+function clearPreviewServerRecordFile(): void {
+  rmSync(PREVIEW_SERVER_RECORD, { force: true });
+}
+
+export function isOwnedPreviewServerRecord(record: Partial<PreviewServerRecord>): record is PreviewServerRecord {
+  return (
+    record.owner === PREVIEW_SERVER_OWNER &&
+    typeof record.token === 'string' &&
+    record.token.length > 0 &&
+    typeof record.port === 'number' &&
+    record.port > 0
+  );
+}
+
+function previewRecordForResponse(record: Partial<PreviewServerRecord>, running: boolean): Partial<Omit<PreviewServerRecord, 'token'>> & {
+  running: boolean;
+  owned: boolean;
+} {
+  return {
+    ...(record.owner !== undefined ? { owner: record.owner } : {}),
+    kind: record.kind ?? 'preview',
+    ...(record.pid !== undefined ? { pid: record.pid } : {}),
+    ...(record.port !== undefined ? { port: record.port } : {}),
+    ...(record.requestedPort !== undefined ? { requestedPort: record.requestedPort } : {}),
+    ...(record.url !== undefined ? { url: record.url } : {}),
+    ...(record.startedAt !== undefined ? { startedAt: record.startedAt } : {}),
+    ...(record.watch !== undefined ? { watch: record.watch } : {}),
+    ...(record.buildId !== undefined ? { buildId: record.buildId } : {}),
+    running,
+    owned: isOwnedPreviewServerRecord(record),
+  };
+}
+
+function handlePreviewStopRequest(
+  method: string,
+  url: URL,
+  res: ServerResponse,
+  server: Server,
+  token: string
+): void {
+  if (method !== 'POST') {
+    res.writeHead(405, { 'content-type': 'text/plain' });
+    res.end('method not allowed');
+    return;
+  }
+  if (url.searchParams.get('token') !== token) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('forbidden');
+    return;
+  }
+  res.writeHead(200, { 'content-type': 'text/plain' });
+  res.end('stopping');
+  setImmediate(() => server.close());
+}
+
+function requestPreviewServerStop(record: PreviewServerRecord): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+    const req = request(
+      {
+        host: PREVIEW_HOST,
+        port: record.port,
+        path: `${PREVIEW_CONTROL_STOP_PATH}?token=${encodeURIComponent(record.token)}`,
+        method: 'POST',
+      },
+      (res) => {
+        const ok = res.statusCode === 200;
+        res.resume();
+        res.on('end', () => settle(ok));
+      }
+    );
+    req.setTimeout(2000, () => {
+      req.destroy();
+      settle(false);
+    });
+    req.on('error', () => settle(false));
+    req.end();
+  });
 }
 
 function isProcessRunning(pid: number): boolean {
@@ -463,21 +589,22 @@ function isProcessRunning(pid: number): boolean {
   }
 }
 
-function preparePlayable(file: string, playDir: string): 'snapshot' | 'tape' {
+export function preparePlayable(file: string, playDir: string): PreparedPlayable {
   const ext = extname(file).toLowerCase();
   const data = new Uint8Array(readFileSync(file));
   if (ext === '.z80') {
     writeFileSync(join(playDir, 'game.z80'), data);
-    return 'snapshot';
+    return { mode: 'snapshot', fileName: 'game.z80' };
   }
   if (ext === '.sna') {
     const machine = loadSnapshotMachine(file, data);
     writeFileSync(join(playDir, 'game.z80'), writeZ80v1(machine));
-    return 'snapshot';
+    return { mode: 'snapshot', fileName: 'game.z80' };
   }
   if (ext === '.tap' || ext === '.tzx') {
-    writeFileSync(join(playDir, 'game.tap'), data);
-    return 'tape';
+    const fileName = ext === '.tzx' ? 'game.tzx' : 'game.tap';
+    writeFileSync(join(playDir, fileName), data);
+    return { mode: 'tape', fileName };
   }
   throw userError('zxs play supports .z80, .sna, .tap, and .tzx files', 'play');
 }
@@ -486,13 +613,13 @@ function prepareCleanBoot(playDir: string): void {
   writeFileSync(join(playDir, 'game.z80'), writeZ80v1(bootCachedMachine()));
 }
 
-function playHtml(mode: PlayerMode): string {
+export function playHtml(mode: PlayerMode, fileName: string): string {
   const loader =
     mode === 'snapshot'
-      ? `const snapshot = new Uint8Array(await (await fetch('./game.z80')).arrayBuffer());
+      ? `const snapshot = new Uint8Array(await (await fetch('./${fileName}')).arrayBuffer());
           spectrum.loadZ80Snapshot(snapshot);`
-      : `const tape = await (await fetch('./game.tap')).arrayBuffer();
-          spectrum.loadTape(tape, 'game.tap');
+      : `const tape = await (await fetch('./${fileName}')).arrayBuffer();
+          spectrum.loadTape(tape, ${JSON.stringify(fileName)});
           spectrum.playTape();`;
   return `<!doctype html>
 <html lang="en">

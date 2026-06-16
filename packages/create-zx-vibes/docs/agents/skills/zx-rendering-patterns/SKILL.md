@@ -11,7 +11,9 @@ screen clearing, or proposals for double buffering.
 
 ## Routing
 
-Start from local, tested project material. Load only what matches the task:
+Start from local, tested project material. Generated projects normally include
+`docs/reference/`, `src/`, `lib/`, and `tests/`; the recipe paths below are
+repository-checkout references. Load only what matches the task:
 
 - Pixel addressing or arbitrary pixel plotting:
   `docs/reference/screen-layout.md`,

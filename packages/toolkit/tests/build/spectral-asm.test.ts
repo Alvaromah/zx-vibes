@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,5 +40,30 @@ describeIfSpectralAsm('@zx-vibes/asm backend', () => {
 
     expect(result.ok, JSON.stringify(result.errors)).toBe(true);
     expect(readFileSync(result.outputs.bin!).length).toBeGreaterThan(200);
+  });
+
+  it('propagates SAVEBIN artifact outputs from the embedded assembler', async () => {
+    const dir = outDir();
+    const entry = join(dir, 'main.asm');
+    writeFileSync(
+      entry,
+      [
+        '    DEVICE ZXSPECTRUM48',
+        '    ORG 0x8000',
+        'start:',
+        '    db 1,2,3,4',
+        '    SAVEBIN "part.bin", start, 4',
+        '',
+      ].join('\n')
+    );
+
+    const result = await build(entry, {
+      outDir: join(dir, 'build'),
+      assembler: 'spectral',
+    });
+
+    expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+    expect(result.outputs.artifacts).toHaveLength(1);
+    expect(readFileSync(result.outputs.artifacts![0]!)).toEqual(Buffer.from([1, 2, 3, 4]));
   });
 });

@@ -11,6 +11,6 @@
     "preview": "zxs preview --watch"
   },
   "devDependencies": {
-    "zx-vibes": "^0.1.0"
+    "zx-vibes": "^0.1.3"
   }
 }

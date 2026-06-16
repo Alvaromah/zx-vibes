@@ -41,8 +41,9 @@ blank or corrupted screen, ignores keys, runs too fast/slow, flickers, or fails
 - `docs/reference/attributes-and-colour.md`
 - `docs/reference/interrupts-and-timing.md`
 - `docs/reference/rom-routines.md`
-- Relevant recipe tests under `packages/toolkit/recipes/*/test.json`
-- Relevant recipe code under `packages/toolkit/recipes/*/recipe.asm`
+- In a repository checkout: relevant recipe tests under
+  `packages/toolkit/recipes/*/test.json` and recipe code under
+  `packages/toolkit/recipes/*/recipe.asm`.
 
 External cross-checks, when local docs are insufficient: World of Spectrum 48K
 reference, Nocash ZX specs, Sinclair Wiki keyboard notes, ZX BASIC manual

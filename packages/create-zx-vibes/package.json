@@ -33,7 +33,7 @@
     "build": "tsup && node ../../scripts/ensure-shebang.js dist/index.js && node scripts/sync-assets.js",
     "check:assets": "node scripts/sync-assets.js --check",
     "prepack": "pnpm run build",
-    "test": "tsup --silent && node ../../scripts/ensure-shebang.js --silent dist/index.js && node dist/index.js --help",
+    "test": "tsup --silent && node ../../scripts/ensure-shebang.js --silent dist/index.js && node scripts/smoke-test.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts"
   },

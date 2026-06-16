@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { assemble, assembleFile, writeAssemblyOutputs } from '../src/index.js';
 
-const workspace = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const workspace = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const asmCliPath = join(packageRoot, 'dist', 'cli.js');
 
@@ -823,6 +823,22 @@ describe('assemble', () => {
     expect(badCount.stderr).toContain("Invalid instruction count: '0'");
   });
 
+  it('CLI version and doctor output follow package metadata', () => {
+    const metadata = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as { version: string };
+
+    const version = asmCli('--version');
+    expect(version.status, version.stdout + version.stderr).toBe(0);
+    expect(version.stdout.trim()).toBe(metadata.version);
+
+    const doctor = asmCli('doctor', '--json');
+    expect(doctor.status, doctor.stdout + doctor.stderr).toBe(0);
+    expect(JSON.parse(doctor.stdout)).toMatchObject({
+      ok: true,
+      assembler: '@zx-vibes/asm',
+      version: metadata.version,
+    });
+  });
+
   it('supports DUP/REPT source repetition with counters and nesting', () => {
     const result = assemble(
       [
@@ -1033,27 +1049,40 @@ describe('Spectral corpus compatibility', () => {
   const sjasmplusAvailable = hasSjasmplus();
   const maybeIt = sjasmplusAvailable ? it : it.skip;
   const entries = [
-    'spectral/templates/game/src/main.asm',
-    'spectral/examples/pong-by-agent/main.asm',
-    'spectral/examples/arkanoid-quickstart/src/main.asm',
-    'spectral/recipes/01-clear-screen/demo.asm',
-    'spectral/recipes/02-print-rom/demo.asm',
-    'spectral/recipes/03-pixel-address/demo.asm',
-    'spectral/recipes/04-sprite-xor-8x8/demo.asm',
-    'spectral/recipes/05-sprite-masked-16x16/demo.asm',
-    'spectral/recipes/06-keyboard-qaop/demo.asm',
-    'spectral/recipes/07-game-loop/demo.asm',
-    'spectral/recipes/08-im2-isr/demo.asm',
-    'spectral/recipes/09-beeper-fx/demo.asm',
-    'spectral/recipes/10-score-bcd/demo.asm',
-    'spectral/recipes/11-prng/demo.asm',
-    'spectral/recipes/12-attr-effects/demo.asm',
+    'starters/game/src/main.asm',
+    'starters/platformer/src/main.asm',
+    'packages/toolkit/templates/game/src/main.asm',
+    'packages/toolkit/templates/platformer/src/main.asm',
+    'packages/toolkit/examples/bounce.asm',
+    'packages/toolkit/examples/pong-by-agent/main.asm',
+    'packages/toolkit/examples/arkanoid-quickstart/src/main.asm',
+    'packages/toolkit/recipes/01-clear-screen/demo.asm',
+    'packages/toolkit/recipes/02-print-rom/demo.asm',
+    'packages/toolkit/recipes/03-pixel-address/demo.asm',
+    'packages/toolkit/recipes/04-sprite-xor-8x8/demo.asm',
+    'packages/toolkit/recipes/05-sprite-masked-16x16/demo.asm',
+    'packages/toolkit/recipes/06-keyboard-qaop/demo.asm',
+    'packages/toolkit/recipes/07-game-loop/demo.asm',
+    'packages/toolkit/recipes/08-im2-isr/demo.asm',
+    'packages/toolkit/recipes/09-beeper-fx/demo.asm',
+    'packages/toolkit/recipes/10-score-bcd/demo.asm',
+    'packages/toolkit/recipes/11-prng/demo.asm',
+    'packages/toolkit/recipes/12-attr-effects/demo.asm',
   ];
+
+  it('assembles the current templates, examples, recipes, and root starters', () => {
+    for (const rel of entries) {
+      const entry = resolve(workspace, rel);
+      expect(existsSync(entry), `${rel} should exist`).toBe(true);
+      const ours = assembleFile(entry);
+      expect(ours.ok, `${rel}: ${JSON.stringify(ours.errors)}`).toBe(true);
+    }
+  });
 
   maybeIt('matches sjasmplus bytes for current templates, examples, and recipes', () => {
     for (const rel of entries) {
       const entry = resolve(workspace, rel);
-      if (!existsSync(entry)) continue;
+      expect(existsSync(entry), `${rel} should exist`).toBe(true);
       const ours = assembleFile(entry);
       expect(ours.ok, `${rel}: ${JSON.stringify(ours.errors)}`).toBe(true);
 

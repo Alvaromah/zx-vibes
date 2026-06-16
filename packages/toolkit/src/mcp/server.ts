@@ -29,6 +29,10 @@ import { bootCachedMachine, readStateFile, writeStateFile } from '../cli/session
 import { hex, parseAddress } from '../cli/output.js';
 import { configuredAssembler, configuredEntry, configuredOutDir, loadProjectConfig, resolveProjectPath } from '../cli/config.js';
 
+interface PackageMetadata {
+  version: string;
+}
+
 interface KeyEventInput {
   keys?: string | undefined;
   typeText?: string | undefined;
@@ -46,6 +50,9 @@ interface ProjectPath {
 const MCP_STEP_OVER_MAX_COUNT = 32;
 const MCP_STEP_OVER_MAX_FRAMES = 100;
 const MCP_TRACE_MAX_FRAMES = 300;
+const packageMetadata = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+) as PackageMetadata;
 
 class SpectralSession {
   private machine: Machine | null = null;
@@ -247,11 +254,12 @@ function writeProjectFile(path: ProjectPath, data: Uint8Array): void {
 
 function buildOutputsForResponse(
   projectRoot: string,
-  outputs: { bin?: string; sld?: string }
-): { bin?: string; sld?: string } {
+  outputs: { bin?: string; sld?: string; artifacts?: string[] }
+): { bin?: string; sld?: string; artifacts?: string[] } {
   return {
     ...(outputs.bin ? { bin: projectPathForResponse(projectRoot, outputs.bin) } : {}),
     ...(outputs.sld ? { sld: projectPathForResponse(projectRoot, outputs.sld) } : {}),
+    ...(outputs.artifacts ? { artifacts: outputs.artifacts.map((p) => projectPathForResponse(projectRoot, p)) } : {}),
   };
 }
 
@@ -264,7 +272,7 @@ function diagnosticForResponse(projectRoot: string, diagnostic: Diagnostic): Dia
 
 export function createServer(options: McpServerOptions = {}): McpServer {
   const projectRoot = resolve(options.projectRoot ?? process.cwd());
-  const server = new McpServer({ name: 'zx-vibes', version: '0.1.0' });
+  const server = new McpServer({ name: 'zx-vibes', version: packageMetadata.version });
   const session = new SpectralSession(projectRoot);
 
   server.registerTool(

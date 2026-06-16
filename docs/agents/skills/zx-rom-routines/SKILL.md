@@ -43,8 +43,8 @@ unexpected ROM errors.
 - `docs/reference/keyboard-input.md`
 - `docs/reference/interrupts-and-timing.md`
 - `docs/reference/attributes-and-colour.md`
-- `packages/toolkit/recipes/02-print-rom/recipe.asm`
-- `packages/toolkit/recipes/09-beeper-fx/recipe.asm`
+- In a repository checkout: `packages/toolkit/recipes/02-print-rom/recipe.asm`
+  and `packages/toolkit/recipes/09-beeper-fx/recipe.asm`.
 
 External cross-checks, when local docs are insufficient: SkoolKid ROM routine
 documentation and World of Spectrum 48K reference for ROM entry points.

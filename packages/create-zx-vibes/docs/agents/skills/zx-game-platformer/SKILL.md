@@ -11,9 +11,10 @@ tile collisions, gravity, jumping, or a platformer starter extension.
 
 ## Key Rules
 
-- Start from the platformer starter patterns before inventing structure:
-  `starters/platformer/`, `packages/toolkit/templates/platformer/`, or the
-  generated project's matching files.
+- Start from the platformer starter patterns before inventing structure. In a
+  generated project, use local `src/`, `lib/`, `tests/`, and
+  `AGENT_PLAYBOOK.md`; in a repository checkout, compare against
+  `starters/platformer/` or `packages/toolkit/templates/platformer/`.
 - Keep the main loop HALT-synced: `EI` once, then `HALT`, input, erase old
   sprite, update physics/collisions, draw new sprite, repeat.
 - Prefer cell-aligned movement and collision at first. Store player position,
@@ -33,14 +34,10 @@ tile collisions, gravity, jumping, or a platformer starter extension.
 
 ## Load First
 
-- `starters/platformer/AGENT_PLAYBOOK.md`
-- `starters/platformer/src/main.asm`
-- `starters/platformer/tests/smoke.test.json`
-- `starters/platformer/lib/screen.asm`
-- `starters/platformer/lib/keys.asm`
-
-If working in toolkit-packaged templates instead of root starters, use the
-equivalent files under `packages/toolkit/templates/platformer/`.
+- In generated projects: `AGENT_PLAYBOOK.md`, `src/main.asm`,
+  `tests/smoke.test.json`, `lib/screen.asm`, and `lib/keys.asm`.
+- In a repository checkout: `starters/platformer/*` has the source starter, and
+  `packages/toolkit/templates/platformer/*` has the packaged template copy.
 
 ## Local References And Recipes
 
@@ -51,6 +48,9 @@ equivalent files under `packages/toolkit/templates/platformer/`.
 - `docs/reference/attributes-and-colour.md` for platformer colour design.
 - `docs/reference/common-bugs.md` when hangs, trails, ROM jumps, or stack drift
   appear.
+
+Repository-only recipe references:
+
 - `packages/toolkit/recipes/04-sprite-xor-8x8/recipe.asm`
 - `packages/toolkit/recipes/05-sprite-masked-16x16/recipe.asm`
 - `packages/toolkit/recipes/06-keyboard-qaop/recipe.asm`
