@@ -25,7 +25,7 @@ import {
 } from './commands/gfx.js';
 import { keyCommand, typeCommand } from './commands/input-cmds.js';
 import { newCommand } from './commands/new.js';
-import { playCommand, previewCommand } from './commands/preview.js';
+import { bootCommand, playCommand, previewCommand } from './commands/preview.js';
 import {
   memDumpCommand,
   memLoadCommand,
@@ -607,6 +607,16 @@ program
   .option(...jsonOpt)
   .action(async (opts) => {
     process.exitCode = await previewCommand(opts);
+  });
+
+program
+  .command('boot')
+  .description('Open a clean ZX Spectrum 48K boot screen in the browser player')
+  .option('--port <n>', 'local player port', '5173')
+  .option('--strict-port', 'fail if --port is already in use instead of trying later ports', false)
+  .option(...jsonOpt)
+  .action(async (opts) => {
+    process.exitCode = await bootCommand(opts);
   });
 
 program

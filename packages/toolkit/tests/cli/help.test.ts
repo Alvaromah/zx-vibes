@@ -34,6 +34,15 @@ describe('zxs help and version output', () => {
     expect(help.stdout).toContain('--strict-port');
   });
 
+  it('documents the clean boot browser player command', () => {
+    const help = zxs('boot', '--help');
+
+    expect(help.status, help.stdout + help.stderr).toBe(0);
+    expect(help.stdout).toContain('Open a clean ZX Spectrum 48K boot screen');
+    expect(help.stdout).toContain('--port <n>');
+    expect(help.stdout).toContain('--strict-port');
+  });
+
   it.each([
     ['build'],
     ['run'],
@@ -67,6 +76,7 @@ describe('zxs help and version output', () => {
     ['setup'],
     ['verify'],
     ['preview'],
+    ['boot'],
     ['bench'],
   ])('prints help for zxs %s', (...command) => {
     const help = zxs(...command, '--help');

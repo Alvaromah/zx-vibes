@@ -71,6 +71,18 @@ interface PreviewListenOptions {
   maxAttempts?: number;
 }
 
+type BrowserPlayerStage = 'boot' | 'play';
+type PlayerMode = 'snapshot' | 'tape';
+
+interface BrowserPlayerServeOptions {
+  stage: BrowserPlayerStage;
+  playDir: string;
+  mode: PlayerMode;
+  opts: PlayCommandOptions;
+  file?: string;
+  boot?: { mode: 'fresh-rom-cache'; frames: number };
+}
+
 export async function previewCommand(opts: PreviewCommandOptions): Promise<number> {
   if (opts.list) return previewListCommand(opts);
   if (opts.stop) return previewStopCommand(opts);
@@ -236,17 +248,42 @@ export async function previewCommand(opts: PreviewCommandOptions): Promise<numbe
 }
 
 export async function playCommand(file: string, opts: PlayCommandOptions): Promise<number> {
-  const requestedPort = parsePort(opts.port);
+  const playDir = preparePlayerDir();
+  const mode = preparePlayable(file, playDir);
+  return serveBrowserPlayer({ stage: 'play', playDir, mode, opts, file });
+}
+
+export async function bootCommand(opts: PlayCommandOptions): Promise<number> {
+  const playDir = preparePlayerDir();
+  prepareCleanBoot(playDir);
+  return serveBrowserPlayer({
+    stage: 'boot',
+    playDir,
+    mode: 'snapshot',
+    opts,
+    boot: { mode: 'fresh-rom-cache', frames: BOOT_FRAMES },
+  });
+}
+
+function preparePlayerDir(): string {
   const playDir = join('.zxs', 'play');
   mkdirSync(playDir, { recursive: true });
+  return playDir;
+}
+
+async function serveBrowserPlayer(params: BrowserPlayerServeOptions): Promise<number> {
+  const { opts, playDir, mode } = params;
+  const requestedPort = parsePort(opts.port);
 
   const emulatorPkg = dirname(require.resolve('@zx-vibes/emulator/package.json'));
   const emulatorBundle = join(emulatorPkg, 'dist', 'zxgeneration.esm.js');
   if (!existsSync(emulatorBundle)) {
-    throw userError('Emulator browser bundle is missing. Run pnpm --filter @zx-vibes/emulator build first.', 'play');
+    throw userError(
+      'Emulator browser bundle is missing. Run pnpm --filter @zx-vibes/emulator build first.',
+      params.stage
+    );
   }
 
-  const mode = preparePlayable(file, playDir);
   writeFileSync(join(playDir, 'index.html'), playHtml(mode));
 
   const files = new Map<string, string>([
@@ -292,10 +329,11 @@ export async function playCommand(file: string, opts: PlayCommandOptions): Promi
         emit(
           {
             ok: true,
-            stage: 'play',
+            stage: params.stage,
             url: record.url,
-            file,
+            ...(params.file !== undefined ? { file: params.file } : {}),
             mode,
+            ...(params.boot !== undefined ? { boot: params.boot } : {}),
             port: selectedPort,
             requestedPort,
             portFallback: selectedPort !== requestedPort,
@@ -304,9 +342,9 @@ export async function playCommand(file: string, opts: PlayCommandOptions): Promi
           () =>
             [
               selectedPort !== requestedPort
-                ? `WARNING: requested play port ${requestedPort} was busy; using ${selectedPort}`
+                ? `WARNING: requested ${params.stage} port ${requestedPort} was busy; using ${selectedPort}`
                 : undefined,
-              `Play running at ${record.url} (${mode})`,
+              `${params.stage === 'boot' ? 'Boot' : 'Play'} running at ${record.url} (${params.stage === 'boot' ? 'clean Spectrum' : mode})`,
             ]
               .filter((line): line is string => line !== undefined)
               .join('\n')
@@ -314,7 +352,7 @@ export async function playCommand(file: string, opts: PlayCommandOptions): Promi
         resolve(EXIT.OK);
       })
       .catch((err: unknown) => {
-        resolve(emitCliError(err, opts.json, 'play'));
+        resolve(emitCliError(err, opts.json, params.stage));
       });
   });
 }
@@ -444,7 +482,11 @@ function preparePlayable(file: string, playDir: string): 'snapshot' | 'tape' {
   throw userError('zxs play supports .z80, .sna, .tap, and .tzx files', 'play');
 }
 
-function playHtml(mode: 'snapshot' | 'tape'): string {
+function prepareCleanBoot(playDir: string): void {
+  writeFileSync(join(playDir, 'game.z80'), writeZ80v1(bootCachedMachine()));
+}
+
+function playHtml(mode: PlayerMode): string {
   const loader =
     mode === 'snapshot'
       ? `const snapshot = new Uint8Array(await (await fetch('./game.z80')).arrayBuffer());
