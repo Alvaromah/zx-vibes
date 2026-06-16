@@ -1,16 +1,30 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const emulator = join(root, 'packages', 'emulator');
 const source = join(root, 'packages', 'emulator', 'dist', 'zxgeneration.esm.js');
 const targets = [
   join(root, 'gallery', 'zxgeneration.esm.js'),
   join(root, 'packages', 'toolkit', 'gallery', 'zxgeneration.esm.js'),
 ];
 
+const rollupBin = join(emulator, 'node_modules', 'rollup', 'dist', 'bin', 'rollup');
+const emulatorPackage = JSON.parse(readFileSync(join(emulator, 'package.json'), 'utf8'));
+
+execFileSync(process.execPath, [rollupBin, '-c'], {
+  cwd: emulator,
+  env: {
+    ...process.env,
+    npm_package_version: emulatorPackage.version,
+  },
+  stdio: 'inherit',
+});
+
 if (!existsSync(source)) {
-  throw new Error('Missing emulator browser bundle. Run pnpm --filter @zx-vibes/emulator build first.');
+  throw new Error('Missing emulator browser bundle after pnpm --filter @zx-vibes/emulator run build.');
 }
 
 const sourceBytes = readFileSync(source);
