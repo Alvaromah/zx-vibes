@@ -18,6 +18,8 @@ export class SymbolTable {
   private readonly addrToLabelExact = new Map<number, string>();
   private readonly addrToLoc = new Map<number, SourceLoc>();
   private readonly fileLineToAddr = new Map<string, number>();
+  /** source line number → {file, addr} entries, for O(1) snap-forward lookup. */
+  private readonly lineToEntries = new Map<number, { file: string; addr: number }[]>();
   /** Label addresses in RAM (0x4000+), sorted, for nearest-label lookup. */
   private sortedAddrs: number[] = [];
 
@@ -51,6 +53,9 @@ export class SymbolTable {
           const key = `${file}:${srcLine}`;
           if (!t.fileLineToAddr.has(key)) {
             t.fileLineToAddr.set(key, value);
+            const entries = t.lineToEntries.get(srcLine);
+            if (entries) entries.push({ file, addr: value });
+            else t.lineToEntries.set(srcLine, [{ file, addr: value }]);
           }
         }
       }
@@ -69,11 +74,11 @@ export class SymbolTable {
       const n = spec.startsWith('$') ? parseInt(spec.slice(1), 16) : Number(spec);
       return Number.isNaN(n) ? undefined : n & 0xffff;
     }
-    if (this.labels.has(spec)) return this.labels.get(spec);
+    if (this.labels.has(spec)) return this.labels.get(spec)! & 0xffff;
     // case-insensitive label fallback
     const lower = spec.toLowerCase();
     for (const [name, addr] of this.labels) {
-      if (name.toLowerCase() === lower) return addr;
+      if (name.toLowerCase() === lower) return addr & 0xffff;
     }
     const fileLine = spec.match(/^(.+):(\d+)$/);
     if (fileLine) {
@@ -90,13 +95,10 @@ export class SymbolTable {
     // Exact then snap-forward: a breakpoint on a comment/label-only line
     // lands on the next line that emitted code.
     for (let l = line; l <= line + 10; l++) {
-      for (const [key, addr] of this.fileLineToAddr) {
-        const sep = key.lastIndexOf(':');
-        const file = key.slice(0, sep);
-        const keyLine = parseInt(key.slice(sep + 1), 10);
-        if (keyLine === l && (file === fileSuffix || file.endsWith(fileSuffix))) {
-          return addr;
-        }
+      const entries = this.lineToEntries.get(l);
+      if (!entries) continue;
+      for (const { file, addr } of entries) {
+        if (file === fileSuffix || file.endsWith(fileSuffix)) return addr;
       }
     }
     return undefined;

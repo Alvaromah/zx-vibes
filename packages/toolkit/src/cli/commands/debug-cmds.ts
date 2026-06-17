@@ -263,9 +263,12 @@ export function disasmCommand(
   }
 
   const count = parseCount(opts.count, 'instruction count');
+  // Mask to 16 bits: a multi-byte instruction near 0xFFFF reads operand bytes
+  // past the top of memory; wrap them instead of reading out of the backing store.
+  const read = (a: number) => m.memory.read(a & 0xffff);
   const rawLines = range
-    ? disassembleRange((a) => m.memory.read(a), range.from, range.to)
-    : disassemble((a) => m.memory.read(a), addr, count);
+    ? disassembleRange(read, range.from, range.to)
+    : disassemble(read, addr, count);
   const lines = rawLines.map((l) => {
     const structured = structureDisasmLine(l);
     return {

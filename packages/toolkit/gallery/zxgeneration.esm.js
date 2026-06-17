@@ -795,6 +795,28 @@ class ArithmeticInstructions {
   }
 
   /* -------------------------------------------------------------
+   * INC / DEC on a raw 8-bit value (used by the undocumented
+   * INC/DEC IXH/IXL/IYH/IYL forms). Updates F exactly as INC/DEC r
+   * and returns the new byte so the caller can store it back into
+   * the appropriate half of IX/IY.
+   * ----------------------------------------------------------- */
+
+  inc8(value) {
+    const before = value & 0xff;
+    const after = before + 1 & 0xff;
+    const f = this.flags.updateIncFlags(this.registers.get('F'), before, after);
+    this.registers.set('F', f);
+    return after;
+  }
+  dec8(value) {
+    const before = value & 0xff;
+    const after = before - 1 & 0xff;
+    const f = this.flags.updateDecFlags(this.registers.get('F'), before, after);
+    this.registers.set('F', f);
+    return after;
+  }
+
+  /* -------------------------------------------------------------
    * INC / DEC (HL) memory cell
    * ----------------------------------------------------------- */
 
@@ -6216,7 +6238,7 @@ class Z80SnapshotLoader {
     let i = 0;
     while (i < data.length && ptr < result.length) {
       const b = data[i++];
-      if (stopAtEndMarker && b === 0x00 && data[i] === 0xed && data[i + 1] === 0xed && data[i + 2] === 0x00) {
+      if (stopAtEndMarker && b === 0x00 && i + 2 < data.length && data[i] === 0xed && data[i + 1] === 0xed && data[i + 2] === 0x00) {
         break;
       }
       if (b === 0xed && i < data.length && data[i] === 0xed) {
@@ -6278,6 +6300,11 @@ class Tape {
     this.data = null;
     this.format = null;
 
+    // Verbose per-block/per-pulse tracing. Off by default so playback does not
+    // flood the console (and pay the formatting cost) on every edge; set to true
+    // to debug loaders. console.warn/console.error remain unconditional.
+    this.debug = false;
+
     // Current block info
     this.currentBlock = null;
     this.blockIndex = 0;
@@ -6333,6 +6360,13 @@ class Tape {
     this.CYCLES_PER_MS = 3500;
   }
 
+  /** Gated verbose log — only emitted when `this.debug` is enabled. */
+  _log(...args) {
+    if (this.debug) {
+      console.log(...args);
+    }
+  }
+
   /**
    * Load a tape file
    * @param {ArrayBuffer} buffer - The tape file data
@@ -6355,11 +6389,11 @@ class Tape {
     } else {
       throw new Error(`Unsupported tape format: ${ext}`);
     }
-    console.log(`Loaded ${this.format} file: ${filename}`);
-    console.log(`Total blocks: ${this.blocks.length}`);
+    this._log(`Loaded ${this.format} file: ${filename}`);
+    this._log(`Total blocks: ${this.blocks.length}`);
     this.blocks.forEach((block, i) => {
       const type = this.getBlockTypeName(block.type);
-      console.log(`Block ${i}: ${type}, ` + `${block.data ? `${block.data.length} bytes` : 'no data'}, ` + `pause=${block.pause || 0}ms`);
+      this._log(`Block ${i}: ${type}, ` + `${block.data ? `${block.data.length} bytes` : 'no data'}, ` + `pause=${block.pause || 0}ms`);
     });
   }
 
@@ -6408,7 +6442,7 @@ class Tape {
 
       // Log block info
       const blockType = flagByte === 0x00 ? 'Header' : 'Data';
-      console.log(`TAP Block ${this.blocks.length - 1}: ${blockType} (flag=0x${flagByte.toString(16).padStart(2, '0')}), ` + `${length} bytes`);
+      this._log(`TAP Block ${this.blocks.length - 1}: ${blockType} (flag=0x${flagByte.toString(16).padStart(2, '0')}), ` + `${length} bytes`);
       pos += length;
     }
   }
@@ -6430,7 +6464,7 @@ class Tape {
     }
     const majorVersion = this.data[8];
     const minorVersion = this.data[9];
-    console.log(`TZX version ${majorVersion}.${minorVersion}`);
+    this._log(`TZX version ${majorVersion}.${minorVersion}`);
 
     // Skip header
     let pos = 10;
@@ -6467,10 +6501,12 @@ class Tape {
             break;
           default:
             console.warn(`Unknown TZX block type: 0x${blockId.toString(16)} at position ${pos - 1}`);
-            // Try to skip unknown block by looking for size
+            // Try to skip unknown block by looking for size. Clamp the jump so a
+            // corrupt/oversized length can neither move backwards nor overshoot.
             if (pos + 4 <= this.data.length) {
               const size = this.readDWord(pos);
-              pos += 4 + size;
+              const next = pos + 4 + size;
+              pos = next > this.data.length ? this.data.length : next;
             } else {
               pos = this.data.length;
             }
@@ -6614,7 +6650,7 @@ class Tape {
 
     // Pause of 0 means stop the tape
     if (pause === 0) {
-      console.log('TZX: Stop the tape block encountered');
+      this._log('TZX: Stop the tape block encountered');
     }
     this.blocks.push({
       type: this.BLOCK_PAUSE,
@@ -6684,7 +6720,9 @@ class Tape {
    * Read a 32-bit dword (little-endian)
    */
   readDWord(pos) {
-    return this.data[pos] | this.data[pos + 1] << 8 | this.data[pos + 2] << 16 | this.data[pos + 3] << 24;
+    // `>>> 0` forces an unsigned 32-bit result; without it a high byte >= 0x80
+    // makes the `<< 24` term negative, which can drive parse offsets backwards.
+    return (this.data[pos] | this.data[pos + 1] << 8 | this.data[pos + 2] << 16 | this.data[pos + 3] << 24) >>> 0;
   }
 
   /**
@@ -6731,10 +6769,10 @@ class Tape {
    */
   play() {
     if (!this.blocks || this.blocks.length === 0) {
-      console.log('No blocks to play');
+      this._log('No blocks to play');
       return;
     }
-    console.log('Starting tape playback');
+    this._log('Starting tape playback');
     this.playing = true;
     this.paused = false;
 
@@ -6750,7 +6788,7 @@ class Tape {
    */
   pause() {
     this.paused = true;
-    console.log('Tape paused');
+    this._log('Tape paused');
   }
 
   /**
@@ -6761,7 +6799,7 @@ class Tape {
     this.paused = false;
     this.blockIndex = 0;
     this.reset();
-    console.log('Tape stopped');
+    this._log('Tape stopped');
   }
 
   /**
@@ -6770,7 +6808,7 @@ class Tape {
   rewind() {
     this.stop();
     this.blockIndex = 0;
-    console.log('Tape rewound');
+    this._log('Tape rewound');
   }
 
   /**
@@ -6778,18 +6816,18 @@ class Tape {
    */
   nextBlock() {
     if (this.blockIndex >= this.blocks.length) {
-      console.log('End of tape reached');
+      this._log('End of tape reached');
       this.stop();
       return;
     }
     this.currentBlock = this.blocks[this.blockIndex];
     const blockType = this.getBlockTypeName(this.currentBlock.type);
-    console.log(`\nStarting block ${this.blockIndex}: ${blockType}`);
+    this._log(`\nStarting block ${this.blockIndex}: ${blockType}`);
     if (this.currentBlock.data) {
       const flagByte = this.currentBlock.data[0];
-      console.log(`  Flag byte: 0x${flagByte.toString(16).padStart(2, '0')} (${flagByte < 128 ? 'Header' : 'Data'})`);
-      console.log(`  Data length: ${this.currentBlock.data.length} bytes`);
-      console.log(`  Pause after: ${this.currentBlock.pause || 0}ms`);
+      this._log(`  Flag byte: 0x${flagByte.toString(16).padStart(2, '0')} (${flagByte < 128 ? 'Header' : 'Data'})`);
+      this._log(`  Data length: ${this.currentBlock.data.length} bytes`);
+      this._log(`  Pause after: ${this.currentBlock.pause || 0}ms`);
     }
     this.blockIndex++;
 
@@ -6808,14 +6846,14 @@ class Tape {
         this.state = 'PILOT';
         // Initialize next edge timing
         this.nextEdgeCycle = this.cpu.cycles + this.currentBlock.pilotPulse;
-        console.log(`  Starting PILOT state with ${this.currentBlock.pilotPulses} pulses`);
+        this._log(`  Starting PILOT state with ${this.currentBlock.pilotPulses} pulses`);
         break;
       case this.BLOCK_PAUSE:
         this.state = 'PAUSE';
         this.pauseCycles = this.currentBlock.pause * this.CYCLES_PER_MS;
         // If pause is 0, stop the tape
         if (this.currentBlock.pause === 0) {
-          console.log('Stop the tape command encountered');
+          this._log('Stop the tape command encountered');
           this.stop();
         }
         break;
@@ -6901,7 +6939,7 @@ class Tape {
 
         // Each pulse consists of 2 edges
         if (this.edgeCount >= block.pilotPulses * 2) {
-          console.log(`Pilot complete after ${this.edgeCount} edges`);
+          this._log(`Pilot complete after ${this.edgeCount} edges`);
           this.state = 'SYNC1';
           this.nextEdgeCycle = cycles + block.sync1Pulse;
         }
@@ -6923,10 +6961,10 @@ class Tape {
           this.currentBit = block.data[0] >> 7 & 1;
           const pulseLength = this.currentBit ? block.onePulse : block.zeroPulse;
           this.nextEdgeCycle = cycles + pulseLength;
-          console.log(`Starting DATA state: ${block.data.length} bytes, first bit=${this.currentBit}`);
+          this._log(`Starting DATA state: ${block.data.length} bytes, first bit=${this.currentBit}`);
         } else {
           // No data, move to next block
-          console.log('No data in block, moving to next');
+          this._log('No data in block, moving to next');
           this.handleBlockEnd();
         }
         break;
@@ -6987,15 +7025,15 @@ class Tape {
       // During pause, keep EAR bit low (0)
       this.lastEarBit = 0;
       if (this.pauseCycles <= 0) {
-        console.log(`Pause complete after ${elapsed} cycles, moving to next block`);
-        console.log(`Current state: ${this.state}, Block index: ${this.blockIndex}/${this.blocks.length}`);
+        this._log(`Pause complete after ${elapsed} cycles, moving to next block`);
+        this._log(`Current state: ${this.state}, Block index: ${this.blockIndex}/${this.blocks.length}`);
         this.pauseCycles = 0;
         this.state = 'IDLE'; // Reset state before moving to next block
         this.nextBlock();
       }
     } else {
       // No pause cycles, move to next block immediately
-      console.log('No pause cycles remaining, moving to next block');
+      this._log('No pause cycles remaining, moving to next block');
       this.state = 'IDLE';
       this.nextBlock();
     }
@@ -7026,7 +7064,7 @@ class Tape {
       this.nextEdgeCycle += this.currentBlock.pulseLength;
       this.pulseCount++;
       if (this.pulseCount >= this.currentBlock.pulseCount) {
-        console.log(`Pure tone complete after ${this.pulseCount} pulses`);
+        this._log(`Pure tone complete after ${this.pulseCount} pulses`);
         this.nextBlock();
       }
     }
@@ -7046,7 +7084,7 @@ class Tape {
         this.nextEdgeCycle += this.currentBlock.pulses[this.pulseIndex];
         this.pulseIndex++;
       } else {
-        console.log('Pulse sequence complete');
+        this._log('Pulse sequence complete');
         this.nextBlock();
       }
     }
@@ -7106,17 +7144,17 @@ class Tape {
    */
   handleBlockEnd() {
     const block = this.currentBlock;
-    console.log(`Block ${this.blockIndex - 1} complete: ${this.bytePosition} bytes sent`);
+    this._log(`Block ${this.blockIndex - 1} complete: ${this.bytePosition} bytes sent`);
 
     // Check if there's a pause after this block
     if (block.pause && block.pause > 0) {
       this.state = 'PAUSE';
       this.pauseCycles = block.pause * this.CYCLES_PER_MS;
-      console.log(`Entering PAUSE state for ${block.pause}ms (${this.pauseCycles} cycles)`);
-      console.log(`Next block will be ${this.blockIndex < this.blocks.length ? `block ${this.blockIndex}` : 'end of tape'}`);
+      this._log(`Entering PAUSE state for ${block.pause}ms (${this.pauseCycles} cycles)`);
+      this._log(`Next block will be ${this.blockIndex < this.blocks.length ? `block ${this.blockIndex}` : 'end of tape'}`);
     } else {
       // Move to next block immediately
-      console.log('No pause, moving to next block immediately');
+      this._log('No pause, moving to next block immediately');
       this.nextBlock();
     }
   }

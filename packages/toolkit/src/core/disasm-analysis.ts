@@ -46,8 +46,7 @@ function extractTargets(mnemonic: string, operands: string[]): StructuredDisasmL
 
   for (const operand of operands) {
     for (const addr of hexAddresses(operand)) {
-      const targetKind =
-        kind ?? (operand.includes('(') ? 'memory' : addr >= 0x4000 ? 'immediate' : 'immediate');
+      const targetKind = kind ?? (operand.includes('(') ? 'memory' : 'immediate');
       out.push({ addr, kind: targetKind, ...annotateAddress(addr) });
     }
   }

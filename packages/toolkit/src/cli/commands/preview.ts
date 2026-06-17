@@ -740,8 +740,12 @@ async function writePreviewBuild(opts: {
 function hashPreviewInputs(root: string): string {
   const h = createHash('sha1');
   for (const file of collectWatchFiles(root)) {
+    // Hash size + mtime instead of file contents: the watch loop runs every
+    // ~500ms, and reading every .asm/.inc/.bin/.json on each tick is a needless
+    // full-tree disk read. Size+mtime detects edits for the dev-watch use case.
+    const stat = statSync(file);
     h.update(relative(root, file));
-    h.update(readFileSync(file));
+    h.update(`:${stat.size}:${stat.mtimeMs}`);
   }
   return h.digest('hex');
 }

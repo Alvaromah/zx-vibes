@@ -87,6 +87,10 @@ export class WatchpointMonitor {
   }
 
   attach(m: Machine): void {
+    // Clear any latched hit from a previous run; otherwise the `if (!self.hit)`
+    // guard in the read wrapper (and onMemoryWrite) would stay short-circuited
+    // and silently stop detecting accesses on this attach.
+    this.hit = null;
     this.machine = m;
     const mem = m.memory;
     this.origRead = mem.read;

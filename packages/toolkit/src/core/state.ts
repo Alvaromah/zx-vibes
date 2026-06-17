@@ -102,30 +102,56 @@ export function serializeMachine(m: Machine): ZxState {
   };
 }
 
+/** Decode a base64 field and assert its exact byte length, so a malformed
+ * .zxstate produces a descriptive error instead of a RangeError (source longer
+ * than destination) or a silent partial restore (source shorter). */
+function decodeFixed(b64: unknown, expected: number, label: string): Buffer {
+  if (typeof b64 !== 'string') {
+    throw new Error(`corrupt .zxstate: ${label} is missing or not a string`);
+  }
+  const buf = Buffer.from(b64, 'base64');
+  if (buf.length !== expected) {
+    throw new Error(`corrupt .zxstate: ${label} is ${buf.length} bytes (expected ${expected})`);
+  }
+  return buf;
+}
+
 export function applyState(m: Machine, state: ZxState): void {
   if (state.version !== 1) {
     throw new Error(`Unsupported .zxstate version: ${state.version}`);
   }
+  if (!state.cpu || !state.ula) {
+    throw new Error('corrupt .zxstate: missing cpu or ula section');
+  }
 
-  m.memory.ram.set(Buffer.from(state.ram, 'base64'));
+  m.memory.ram.set(decodeFixed(state.ram, m.memory.ram.length, 'ram'));
 
   const { cpu } = state;
   m.cpu.setState(cpu);
   const regs = m.cpu.registers;
-  regs.data['A_'] = cpu.aPrime;
-  regs.data['F_'] = cpu.fPrime;
-  regs.data['B_'] = cpu.bPrime;
-  regs.data['C_'] = cpu.cPrime;
-  regs.data['D_'] = cpu.dPrime;
-  regs.data['E_'] = cpu.ePrime;
-  regs.data['H_'] = cpu.hPrime;
-  regs.data['L_'] = cpu.lPrime;
+  // Shadow registers come straight from untrusted JSON; mask to 8 bits so a
+  // malformed value cannot inject out-of-range state into the CPU.
+  regs.data['A_'] = cpu.aPrime & 0xff;
+  regs.data['F_'] = cpu.fPrime & 0xff;
+  regs.data['B_'] = cpu.bPrime & 0xff;
+  regs.data['C_'] = cpu.cPrime & 0xff;
+  regs.data['D_'] = cpu.dPrime & 0xff;
+  regs.data['E_'] = cpu.ePrime & 0xff;
+  regs.data['H_'] = cpu.hPrime & 0xff;
+  regs.data['L_'] = cpu.lPrime & 0xff;
 
   const u = state.ula;
   const ula = m.ula;
   ula.borderColor = u.borderColor;
   ula.speakerBit = u.speakerBit;
   ula.micBit = u.micBit;
+  if (!Array.isArray(u.keyboardMatrix) || u.keyboardMatrix.length !== ula.keyboardMatrix.length) {
+    throw new Error(
+      `corrupt .zxstate: keyboardMatrix has ${
+        Array.isArray(u.keyboardMatrix) ? u.keyboardMatrix.length : 'no'
+      } entries (expected ${ula.keyboardMatrix.length})`
+    );
+  }
   ula.keyboardMatrix.set(u.keyboardMatrix);
   ula.lastPortFE = u.lastPortFE;
   ula.tapeInputBit = u.tapeInputBit;
@@ -133,7 +159,9 @@ export function applyState(m: Machine, state: ZxState): void {
   ula.cycleCounter = u.cycleCounter;
   ula.interruptPending = u.interruptPending;
   ula.borderChanged = u.borderChanged;
-  ula.scanlineBorderColors.set(Buffer.from(u.scanlineBorderColors, 'base64'));
+  ula.scanlineBorderColors.set(
+    decodeFixed(u.scanlineBorderColors, ula.scanlineBorderColors.length, 'scanlineBorderColors')
+  );
 
   m.frameCount = state.frameCount;
   m.tStatesIntoFrame = state.tStatesIntoFrame;

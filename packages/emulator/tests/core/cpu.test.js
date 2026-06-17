@@ -264,6 +264,23 @@ describe('Z80 CPU', () => {
       expect(cpu.execute()).toBe(20); // BIT 0,(IY+1)
       expect(cpu.cycles).toBe(43);
     });
+
+    it('should execute undocumented INC/DEC IXH/IXL/IYH/IYL without throwing', () => {
+      // Regression: these opcodes called a non-existent arithmetic.inc8/dec8
+      // and threw a TypeError, aborting emulation.
+      loadProgram([0xdd, 0x24, 0xdd, 0x25, 0xdd, 0x2c, 0xfd, 0x24]);
+      cpu.registers.set16('IX', 0x1234);
+      cpu.registers.set16('IY', 0x4055);
+
+      expect(cpu.execute()).toBe(8); // INC IXH
+      expect(cpu.registers.get16('IX')).toBe(0x1334);
+      expect(cpu.execute()).toBe(8); // DEC IXH
+      expect(cpu.registers.get16('IX')).toBe(0x1234);
+      expect(cpu.execute()).toBe(8); // INC IXL
+      expect(cpu.registers.get16('IX')).toBe(0x1235);
+      expect(cpu.execute()).toBe(8); // INC IYH
+      expect(cpu.registers.get16('IY')).toBe(0x4155);
+    });
   });
 
   describe('flags', () => {

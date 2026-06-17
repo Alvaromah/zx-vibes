@@ -192,6 +192,29 @@ class ArithmeticInstructions {
   }
 
   /* -------------------------------------------------------------
+   * INC / DEC on a raw 8-bit value (used by the undocumented
+   * INC/DEC IXH/IXL/IYH/IYL forms). Updates F exactly as INC/DEC r
+   * and returns the new byte so the caller can store it back into
+   * the appropriate half of IX/IY.
+   * ----------------------------------------------------------- */
+
+  inc8(value) {
+    const before = value & 0xff;
+    const after = (before + 1) & 0xff;
+    const f = this.flags.updateIncFlags(this.registers.get('F'), before, after);
+    this.registers.set('F', f);
+    return after;
+  }
+
+  dec8(value) {
+    const before = value & 0xff;
+    const after = (before - 1) & 0xff;
+    const f = this.flags.updateDecFlags(this.registers.get('F'), before, after);
+    this.registers.set('F', f);
+    return after;
+  }
+
+  /* -------------------------------------------------------------
    * INC / DEC (HL) memory cell
    * ----------------------------------------------------------- */
 

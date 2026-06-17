@@ -1,5 +1,5 @@
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -23,9 +23,19 @@ if (checkOnly) {
   process.exit(0);
 }
 
+const pkgRoot = resolve(pkg);
 for (const { src, dest } of pairs) {
+  assertWithinPkg(dest);
   if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
   cpSync(src, dest, { recursive: true });
+}
+
+/** Defense-in-depth before a recursive delete: refuse any dest outside the package. */
+function assertWithinPkg(dest) {
+  const resolved = resolve(dest);
+  if (resolved !== pkgRoot && !resolved.startsWith(pkgRoot + sep)) {
+    throw new Error(`Refusing to modify a path outside the package: ${dest}`);
+  }
 }
 
 function assertSourceExists({ name, src }) {

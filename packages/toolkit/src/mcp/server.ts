@@ -50,9 +50,18 @@ interface ProjectPath {
 const MCP_STEP_OVER_MAX_COUNT = 32;
 const MCP_STEP_OVER_MAX_FRAMES = 100;
 const MCP_TRACE_MAX_FRAMES = 300;
-const packageMetadata = JSON.parse(
-  readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
-) as PackageMetadata;
+function readPackageVersion(): string {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+    ) as PackageMetadata;
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+const packageMetadata: PackageMetadata = { version: readPackageVersion() };
 
 class SpectralSession {
   private machine: Machine | null = null;
