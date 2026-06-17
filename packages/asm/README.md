@@ -1,13 +1,46 @@
 # @zx-vibes/asm
 
-zx-vibes Z80 assembler/disassembler for ZX Spectrum 48K projects.
+TypeScript Z80 assembler/disassembler for zx-vibes ZX Spectrum 48K workflows.
 
-This is an MVP package intended to remove the hard dependency on an external
-assembler for the zx-vibes starter-game workflow. It deliberately targets the
-current zx-vibes recipes/templates/examples before broader sjasmplus
-compatibility.
+Current package version in this repository: `0.1.2`.
 
-## MVP Surface
+The package removes the default need for an external assembler in generated
+zx-vibes projects. It targets the current starters, toolkit templates, recipes,
+and examples before claiming full sjasmplus compatibility.
+
+## Install
+
+Most projects receive this package through the umbrella `zx-vibes` package.
+Install it directly when you want the standalone assembler API or CLI:
+
+```bash
+pnpm add -D @zx-vibes/asm
+pnpm exec zxasm --help
+```
+
+Node.js 20 or newer is required.
+
+## Bins
+
+| Bin | Purpose |
+| --- | --- |
+| `zxasm` | Canonical standalone assembler/disassembler CLI. |
+| `spectral-asm` | Compatibility alias for older projects. |
+
+`zxasm --version` reports the `@zx-vibes/asm` package version.
+
+## CLI
+
+```bash
+pnpm exec zxasm assemble src/main.asm -I lib -DDEBUG=1 --out-dir build
+pnpm exec zxasm disasm build/main.bin --org 0x8000 --count 32
+pnpm exec zxasm doctor
+```
+
+Successful assembly writes a raw binary, SLD-compatible symbols when available,
+and any additional artifacts requested through `SAVEBIN`.
+
+## Supported Surface
 
 - Z80 raw binary assembly.
 - SLD-compatible label and source-line output for zx-vibes debugging.
@@ -46,11 +79,33 @@ compatibility.
   and `SET 3,[IX+4],A`.
 - Table-driven disassembly compatible with zx-vibes debugger output.
 
-```bash
-zxasm assemble src/main.asm -I lib -DDEBUG=1 --out-dir build
-```
-
-`spectral-asm` remains a compatibility bin alias for older projects.
-
 Unsupported sjasmplus features should fail clearly instead of silently
 misassembling code.
+
+## Relationship To `zxs build`
+
+`@zx-vibes/toolkit` uses this package by default. The embedded backend name in
+`zxs build --assembler` remains `spectral` for compatibility with older
+configuration:
+
+```bash
+pnpm exec zxs build --assembler spectral
+```
+
+Use the separate `sjasmplus` backend only when a project intentionally depends
+on syntax outside this package's current surface.
+
+## Development
+
+From the repository root:
+
+```bash
+pnpm --filter @zx-vibes/asm build
+pnpm --filter @zx-vibes/asm typecheck
+pnpm --filter @zx-vibes/asm lint
+pnpm --filter @zx-vibes/asm test
+```
+
+## License
+
+MIT.

@@ -1,92 +1,189 @@
-# Spectral
+# @zx-vibes/toolkit
 
-**AI agents for the ZX Spectrum.**
+Main implementation package for the zx-vibes ZX Spectrum 48K toolchain.
 
-Spectral is a toolchain that lets AI coding agents (Claude Code, Codex, and
-friends) write ZX Spectrum 48K games autonomously, with a real feedback loop:
+`@zx-vibes/toolkit` provides the `zxs` CLI, the `zxs-mcp` MCP server, project
+templates, recipes, generated-project reference docs, and the headless/browser
+feedback loop used by coding agents and humans.
 
-```
-assemble → run headless → observe (screenshot + state) → debug → iterate
-```
+Current package version in this repository: `0.2.1`.
 
-It is built on [zx-generation](https://github.com/alvaromah/zx-generation), a
-cycle-accurate ZX Spectrum emulator in pure JavaScript — itself 100%
-LLM-generated. An LLM-written emulator, running LLM-written games.
+## Install
 
-## Quick start
+Most users should install the umbrella package:
 
 ```bash
-npm install
-npm run build
-node dist/cli/index.js doctor          # check Node, ROM, and assembler backends
-
-# The agent loop, end to end:
-node dist/cli/index.js build game.asm
-node dist/cli/index.js run --bin build/game.bin --org 0x8000 \
-    --frames 300 --screenshot screen.png --json
+pnpm add -D zx-vibes
+pnpm exec zxs --help
 ```
 
-Every command supports `--json` for machine-readable output. Exit codes:
-`0` ok · `1` build/user error · `2` hang detected · `3` environment problem.
-
-By default `zxs build` uses the embedded `@zx-vibes/asm` backend, so the
-current starter/recipe workflow does not require an external assembler binary.
-`sjasmplus` remains available as an optional compatibility backend for
-advanced sjasmplus-only projects:
+Use this package directly when embedding or testing toolkit internals:
 
 ```bash
-node dist/cli/index.js build game.asm
-node dist/cli/index.js build game.asm --assembler sjasmplus
-# or for zxs test / MCP-driven sessions that need sjasmplus:
-ZXS_ASSEMBLER=sjasmplus node dist/cli/index.js test recipes
+pnpm add -D @zx-vibes/toolkit
+pnpm exec zxs doctor
 ```
 
-The embedded backend emits the same raw `.bin` plus SLD symbols used by the
-debugger. It is intentionally narrower than full sjasmplus compatibility.
+The package requires Node.js 20 or newer.
 
-## How fast?
+## Bins
 
-The emulator runs headless in-process — no sockets, no external emulator
-binaries. On an Apple Silicon laptop: **~6,600 frames/second, 132× real
-hardware (~463 MHz Z80-equivalent)**. Running 5 emulated seconds of a game
-costs ~40ms.
+| Bin | Purpose |
+| --- | --- |
+| `zxs` | Build, run, inspect, debug, verify, scaffold, and preview ZX Spectrum projects. |
+| `zxs-mcp` | MCP server exposing the toolkit to agent clients. |
+| `zx-vibes` | Compatibility alias for the toolkit CLI. |
 
-## MCP server
+`zxs --version` reports the `@zx-vibes/toolkit` package version.
 
-`zxs-mcp` exposes the same toolkit over the Model Context Protocol with a
-persistent live machine — and `zx_screen` returns the display as an image, so
-Claude literally *sees* the Spectrum screen. The repo ships a project-scoped
-`.mcp.json`; open it with Claude Code (after `npm run build`) and ask:
+## CLI Surface
 
-> load build/bounce.bin and tell me what's on the screen
+Common project loop:
 
-Tools: `zx_build`, `zx_run`, `zx_screen`, `zx_inspect`, `zx_debug`
-(breakpoints/watchpoints/step/disasm/trace), `zx_keys`, `zx_state`.
+```bash
+pnpm exec zxs doctor
+pnpm exec zxs build
+pnpm exec zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png
+pnpm exec zxs screen --text --png screen.png
+pnpm exec zxs test tests
+pnpm exec zxs verify
+pnpm exec zxs preview --watch
+```
 
-## Status
+Browser playback:
 
-- ✅ **Phase 0 — walking skeleton**: headless 48K Spectrum in Node (boots the
-  real ROM), `zxs build` (JSON diagnostics + did-you-mean hints), `zxs run`,
-  PNG screenshots, `doctor`/`bench`, deterministic golden tests
-- ✅ **Phase 1 — agent feedback loop**: `.zxs/` sessions resumable across
-  processes, frame-accurate key plans, ROM-font screen OCR (cheap text eyes),
-  hang watchdog (di-halt / tight-loop / rom-error / sp-corrupt / pc-in-rom,
-  exit code 2), SNA load + `.z80` export
-- ✅ **Phase 2 — debugger & tracer**: full Z80 disassembler (round-trip
-  verified), SLD symbols (breakpoints by label or `file.asm:line`),
-  watchpoints, `step --over`, hot-spot tracing — all symbolicated
-- ✅ **Phase 3 — MCP server**: persistent machine over stdio, screen as image
-  content
-- ✅ **Phase 4 — knowledge layer**: `zxs new` scaffolding (working skeleton +
-  agent playbook), 8 reference docs, CI-tested recipe cookbook, `zxs test`
-  declarative runner — **milestone passed: an AI agent built
-  [a playable Pong](examples/pong-by-agent/) unassisted in ~8 iterations**
-- ⏳ **Phase 5 — hardening & launch**: pc-in-rom watchdog ✅, recipe cookbook
-  complete (12/12) ✅, [gallery site](gallery/) ✅ (`npx serve gallery` —
-  play the agents' games in your browser); left: GitHub/npm publish,
-  upstream PRs, the time-lapse video
+```bash
+pnpm exec zxs boot
+pnpm exec zxs play game.z80
+pnpm exec zxs play game.tap
+pnpm exec zxs play game.tzx
+```
+
+`zxs boot` opens a clean ZX Spectrum 48K boot screen. `zxs play` opens `.z80`,
+`.sna`, `.tap`, and `.tzx` files without requiring a project. TAP/TZX playback
+preserves the served filename so the emulator can select the correct parser.
+
+Preview lifecycle:
+
+```bash
+pnpm exec zxs preview --port 5173 --watch
+pnpm exec zxs preview --detach
+pnpm exec zxs preview --list
+pnpm exec zxs preview --stop
+```
+
+Detached preview records include a local ownership token. `--stop` asks the
+tracked preview server to stop instead of killing arbitrary PIDs.
+
+Inspection and reverse-engineering helpers:
+
+```bash
+pnpm exec zxs regs
+pnpm exec zxs mem read 0x8000 --len 64
+pnpm exec zxs snapshot info game.z80
+pnpm exec zxs snapshot ram game.z80 --out game.ram
+pnpm exec zxs snapshot mem game.z80 0x4000 --len 32
+pnpm exec zxs gfx screen --z80 game.z80 --out screen.png
+pnpm exec zxs gfx attrs --z80 game.z80 --out attrs.png
+pnpm exec zxs gfx find --z80 game.z80
+pnpm exec zxs disasm PC --count 12 --json
+pnpm exec zxs scan --z80 game.z80 --opcode "ED B0"
+pnpm exec zxs xref 0x5c00 --z80 game.z80
+```
+
+The toolkit supports `.z80` v1 48K snapshots and 48K-compatible `.z80` v2/v3
+snapshots using pages 8, 4, and 5. 128K paging is outside the current emulator
+support.
+
+## Assembler Backends
+
+The default backend is the embedded `@zx-vibes/asm` package. It emits the raw
+`.bin`, SLD symbols, and additional `SAVEBIN` artifacts consumed by toolkit
+debugging and preview workflows.
+
+The backend name in `zxs build --assembler` is still `spectral` for
+configuration compatibility:
+
+```bash
+pnpm exec zxs build --assembler spectral
+```
+
+Advanced projects can opt into an external `sjasmplus` binary:
+
+```bash
+ZXS_ASSEMBLER=sjasmplus pnpm exec zxs build
+pnpm exec zxs build --assembler sjasmplus
+```
+
+Starter projects, templates, and recipes are expected to work with the embedded
+assembler unless a change explicitly targets optional `sjasmplus` usage.
+
+## Scaffolding
+
+`zxs new` creates the same project contract as `create-zx-vibes`:
+
+```bash
+pnpm exec zxs new my-game --template game
+pnpm exec zxs new my-platformer --template platformer --no-install
+```
+
+Generated projects include:
+
+- `src/main.asm`, helper routines, `zx.config.json`, and smoke tests.
+- npm scripts for `build`, `run`, `test`, `verify`, and `preview`.
+- `AGENTS.md` and `CLAUDE.md` generated from the shared playbook.
+- `.mcp.json` and `docs/agents/codex-mcp.toml` for MCP clients.
+- local `docs/reference/` and `docs/agents/skills/` copies.
+
+Dependencies install by default. Use `--no-install` for offline work or local
+checkout testing.
+
+## MCP Server
+
+Generate local MCP config snippets with:
+
+```bash
+pnpm exec zxs setup --agent codex
+pnpm exec zxs setup --agent claude
+```
+
+The MCP server runs as:
+
+```bash
+pnpm exec zxs-mcp
+```
+
+It exposes structured build, run, screen, inspect, debug, keyboard, and state
+tools over stdio.
+
+## Package Contents
+
+The npm package publishes:
+
+- `bin/` CLI shims.
+- `dist/` built toolkit and MCP modules.
+- `docs/reference/` and `docs/agents/`.
+- `recipes/`.
+- `templates/`.
+
+Gallery assets and examples exist in the repository, but they are not part of
+this package's current `files` list.
+
+## Development
+
+From the repository root:
+
+```bash
+pnpm --filter @zx-vibes/toolkit build
+pnpm --filter @zx-vibes/toolkit typecheck
+pnpm --filter @zx-vibes/toolkit lint
+pnpm --filter @zx-vibes/toolkit test
+```
+
+Use root `pnpm run verify` when changes affect generated assets, CLI/MCP
+contracts, assembler integration, emulator integration, or package publishing.
 
 ## License
 
-MIT. The bundled 48K ROM ships with zx-generation under Amstrad's
-long-standing emulator-distribution permission.
+MIT. The toolkit depends on `@zx-vibes/emulator`, which includes a ZX Spectrum
+48K ROM under the separate notice in the emulator package's `rom/README.md`.

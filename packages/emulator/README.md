@@ -1,324 +1,124 @@
 # @zx-vibes/emulator
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-try%20it%20now-brightgreen)](https://hi-score.dev/)
 
-`@zx-vibes/emulator` is a modern, JavaScript-powered emulator of the
-legendary **Sinclair ZX Spectrum** home computer.
+JavaScript ZX Spectrum 48K emulator package used by zx-vibes.
 
-**100 % AI-crafted** — the project was conceived, designed, and developed end-to-end by LLMs (Large Language Models).  
-The codebase was generated, reviewed, and refined primarily with **Anthropic Claude (Claude Code)**.
+Current package version in this repository: `0.1.3`.
 
-> *No human lines were typed:* every commit originates from model output; human input was limited to prompting, dependency wiring, CI/CD orchestration and few documentation details.
+The package provides a browser-oriented `ZXSpectrum` facade, lower-level CPU and
+Spectrum components, a distributable browser bundle, examples, and the 48K ROM
+asset used by toolkit preview/playback flows.
 
-## Why this matters
-- **Transparency** – Showcases the current state of autonomous software engineering.  
-- **Benchmarking** – Serves as a live case-study for AI-generated code quality, maintainability, and performance.  
+## Install
 
-## Limitations & future work
-- Edge-case fuzzing for every ZX instruction is still pending.  
-- Performance tuning (JIT, SIMD) is on the roadmap.  
-- Expect rapid iteration as newer model checkpoints become available.
+```bash
+pnpm add @zx-vibes/emulator
+```
 
-## Live demo
-👉 **Try it here:** <https://hi-score.dev/>
+Node.js 20 or newer is required for package development and tests. Browser use
+depends on standard Canvas and Web Audio APIs.
 
----
+## Browser Quick Start
 
-## Table of Contents
+```html
+<canvas id="screen"></canvas>
+<script type="module">
+  import { ZXSpectrum } from 'https://cdn.jsdelivr.net/npm/@zx-vibes/emulator@latest/dist/zxgeneration.esm.js';
 
-- [@zx-vibes/emulator](#zx-vibesemulator)
-  - [Why this matters](#why-this-matters)
-  - [Limitations \& future work](#limitations--future-work)
-  - [Live demo](#live-demo)
-  - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Screenshots](#screenshots)
-  - [Quick Start](#quick-start)
-    - [Basic usage](#basic-usage)
-    - [Loading programs](#loading-programs)
-  - [Examples](#examples)
-  - [Projects using @zx-vibes/emulator](#projects-using-zx-vibesemulator)
-  - [Browser Support](#browser-support)
-  - [API Reference](#api-reference)
-  - [src file structure](#src-file-structure)
-  - [Development Guide](#development-guide)
-  - [License](#license)
+  new ZXSpectrum('#screen', {
+    rom: 'https://cdn.jsdelivr.net/npm/@zx-vibes/emulator@latest/rom/48k.rom',
+    scale: 2,
+    sound: true,
+  });
+</script>
+```
 
----
+Package import:
+
+```js
+import { ZXSpectrum } from '@zx-vibes/emulator';
+
+const spectrum = new ZXSpectrum('#screen', {
+  rom: './rom/48k.rom',
+  scale: 2,
+  sound: true,
+  onReady: (machine) => machine.start(),
+});
+```
 
 ## Features
 
-- **Cycle-accurate Z80 CPU emulation**  
-- **Full 48 K Spectrum support**  
-- **Pixel-perfect video output** (256 × 192) with border and colour-clash effects  
-- **Authentic audio** via the Web Audio API - **needs improvements**
-- **Tape loading** for `.TAP` and `.TZX` files and **snapshot** loading for
-  `.Z80` v1 plus 48K-compatible `.Z80` v2/v3 files.
-- **On-screen touch keyboard** for mobile devices  
-- **Turbo mode flag** retained for compatibility; browser pacing remains
-  frame-driven.
-- **Zero dependencies** — pure ES 2023 JavaScript modules  
-- **Responsive layout** for phones and tablets  
+- ZX Spectrum 48K CPU, memory, ULA/display, keyboard, beeper, tape, and
+  snapshot support.
+- Browser facade for canvas rendering, keyboard input, touch keyboard, and
+  Web Audio playback.
+- TAP and TZX tape loading. `loadTape(data, filename)` requires a filename so
+  the parser can select `.tap` or `.tzx` behavior.
+- `.z80` v1 snapshot loading plus 48K-compatible `.z80` v2/v3 loading using
+  standard pages 8, 4, and 5.
+- Internal state snapshot save/load for emulator sessions.
+- Low-level component exports used by `@zx-vibes/toolkit` tests and runtime
+  integration.
 
----
+Current limitations:
 
-## Screenshots
+- 128K `.z80` paging is not supported.
+- `setTurboMode(enabled)` records a compatibility flag; the public browser loop
+  remains frame-paced.
+- `saveSnapshot()` returns the emulator's internal state object, not a `.z80`
+  file.
 
-<table>
-  <tr>
-    <td><img src="docs/screenshots/screenshot-1.png" alt="screenshot-1" width="300"/></td>
-    <td><img src="docs/screenshots/screenshot-2.png" alt="screenshot-1" width="300"/></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/screenshot-3.png" alt="screenshot-1" width="300"/></td>
-    <td><img src="docs/screenshots/screenshot-4.png" alt="screenshot-1" width="300"/></td>
-  </tr>
-</table>
+## Loading Tape And Snapshots
 
----
-
-## Quick Start
-
-### Basic usage
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>ZX Spectrum</title>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: #000;
-        }
-    </style>
-</head>
-<body>
-    <canvas id="screen"></canvas>
-    <script type="module">
-        import { ZXSpectrum } from 'https://cdn.jsdelivr.net/npm/@zx-vibes/emulator@latest/dist/zxgeneration.esm.js';
-        new ZXSpectrum('#screen');
-    </script>
-</body>
-</html>
-```
-
-### Loading programs
-
-```javascript
-// Load a TAP file
-const tap = await fetch('game.tap').then(r => r.arrayBuffer());
-spectrum.loadTape(new Uint8Array(tap), 'game.tap');
-
-// Type the LOAD "" command
-spectrum.typeText('J""\n');
-
-// Start tape playback
+```js
+const tape = await fetch('./game.tzx').then((response) => response.arrayBuffer());
+spectrum.loadTape(tape, 'game.tzx');
 spectrum.playTape();
 ```
 
----
-
-## Examples
-
-| File                      | Description                                            |
-| ------------------------- | ------------------------------------------------------ |
-| **examples/minimal.html** | Truly minimal emulator setup                           |
-| **examples/basic.html**   | Full-featured interface with controls and tape loading |
-| **examples/retro.css**    | ZX Spectrum themed styling for examples                |
-
----
-
-## Projects using @zx-vibes/emulator
-
-- **[zx-vibes](https://github.com/Alvaromah/zx-vibes)** (`@zx-vibes/toolkit`) —
-  an AI-agent toolchain that lets coding agents such as **Claude Code** write
-  ZX Spectrum 48K games autonomously. It drives `@zx-vibes/emulator` as a headless,
-  in-process emulator to close the loop: *assemble → run → observe → debug →
-  iterate*. An LLM-written emulator, running LLM-written games.
-
-> Building something with `@zx-vibes/emulator`? Open a PR to add it here.
-
----
-
-## Browser Support
-
-| Browser         | Version | Status            |
-| --------------- | ------- | ----------------- |
-| Chrome          | 80 +    | ✅ Fully supported |
-| Firefox         | 75 +    | ✅ Fully supported |
-| Safari          | 13.1 +  | ✅ Fully supported |
-| Edge (Chromium) | 80 +    | ✅ Fully supported |
-| Chrome Android  | 80 +    | ✅ Fully supported |
-| Mobile Safari   | 13.4 +  | ✅ Fully supported |
-
----
-
-## API Reference
-
-```ts
-class ZXSpectrum {
-  constructor(canvasOrSelector: string | HTMLCanvasElement, options?: Options);
-
-  // ROM Management
-  loadROM(data: Uint8Array): void;
-  loadROMFromURL(url: string): Promise<void>;
-
-  // Emulation Control
-  start(): Promise<void>;
-  stop(): void;
-  reset(): void;
-  setTurboMode(enabled: boolean): void;
-  destroy(): void;
-
-  // Tape Operations
-  loadTape(data: ArrayBuffer | Uint8Array, filename: string): void;
-  loadTapeFromURL(url: string): Promise<void>;
-  playTape(): void;
-  pauseTape(): void;
-  stopTape(): void;
-  rewindTape(): void;
-  getTapeStatus(): TapeStatus;
-
-  // Keyboard Input
-  keyDown(keyOrEvent: string | KeyboardEvent): void;
-  keyUp(keyOrEvent: string | KeyboardEvent): void;
-  keyPress(keyOrEvent: string | KeyboardEvent, duration?: number): Promise<void>;
-  typeText(text: string, options?: TypeOptions): Promise<void>;
-  setKeyMapping(pcKey: string, spectrumKey: string | KeyMapping): void;
-  setKeyMappings(mappings: Record<string, string | KeyMapping>): void;
-  clearCustomKeyMappings(): void;
-
-  // Snapshots
-  loadSnapshot(data: SnapshotData): void;
-  loadZ80Snapshot(data: ArrayBuffer | Uint8Array): void;
-  saveSnapshot(): SnapshotData;
-
-  // Memory Access
-  poke(address: number, value: number): void;
-  peek(address: number): number;
-
-  // Audio Control
-  setVolume(volume: number): void;
-  setMuted(muted: boolean): void;
-  setAudioDebugMode(enabled: boolean): void;
-
-  // Statistics
-  getStats(): EmulatorStats;
-}
-
-interface Options {
-  rom?: string | Uint8Array;        // ROM data or URL
-  autoStart?: boolean;              // Start automatically (default: true)
-  sound?: boolean;                  // Enable sound (default: true)
-  useAudioWorklet?: boolean;        // Use AudioWorklet API (default: true)
-  scale?: number | 'auto';          // Display scale (default: 'auto')
-  handleKeyboard?: boolean;         // Handle keyboard input (default: true)
-  touchKeyboard?: boolean | 'auto'; // Touch keyboard support (default: 'auto')
-  fps?: number;                     // Frames per second (default: 50)
-  onReady?: (emulator: ZXSpectrum) => void;
-  onError?: (error: Error) => void;
-}
-
-interface TypeOptions {
-  keyDelay?: number;    // Delay between keys in ms (default: 100)
-  keyDuration?: number; // Key press duration in ms (default: 50)
-}
-
-interface TapeStatus {
-  status: string;
-  position: number;
-  playing: boolean;
-  paused: boolean;
-}
-
-interface SnapshotData {
-  ram: Uint8Array;
-  cpu: CPUState;
-  ula: { borderColor: number };
-}
+```js
+const snapshot = await fetch('./game.z80').then((response) => response.arrayBuffer());
+spectrum.loadZ80Snapshot(snapshot);
 ```
 
----
+See `API.md` for the current facade and lower-level API reference.
 
-## src file structure
+## Package Exports
 
-```
-src/
-├── core/              # Z80 CPU core
-│   ├── cpu.js         # Main CPU emulation
-│   ├── registers.js   # CPU registers implementation
-│   └── flags.js       # CPU flags handling
-├── decoder/           # Instruction decoding
-│   └── instruction-decoder.js
-├── instructions/      # Z80 instruction implementations
-│   ├── arithmetic.js  # Arithmetic operations
-│   ├── bit.js         # Bit manipulation
-│   ├── extended.js    # Extended instruction set
-│   ├── indexed.js     # IX/IY indexed instructions
-│   ├── jump.js        # Jump and call instructions
-│   ├── load.js        # Load and store operations
-│   ├── logical.js     # Logical operations
-│   └── misc.js        # Miscellaneous instructions
-├── interfaces/        # Hardware interfaces
-│   ├── io-interface.js     # I/O port interface
-│   └── memory-interface.js # Memory access interface
-├── spectrum/          # ZX Spectrum hardware emulation
-│   ├── spectrum.js    # Main emulator class
-│   ├── memory.js      # Memory management
-│   ├── display.js     # Video display rendering
-│   ├── ula.js         # ULA chip emulation
-│   ├── sound.js       # Basic sound generation
-│   ├── audio-worklet.js # Advanced audio using Web Audio
-│   ├── tape.js        # Tape loading emulation
-│   ├── snapshot.js    # Snapshot loading/saving
-│   └── touch-keyboard.js # Touch screen keyboard
-└── utils/             # Helper utilities
-    ├── debugger.js    # Debugging utilities
-    └── helpers.js     # General helper functions
+- `.`: browser facade and lower-level exports from `src/index.js`.
+- `./src/*`: source modules.
+- `./dist/*`: Rollup browser bundles.
+- `./rom/*`: ROM assets.
+- `./package.json`: package metadata.
+
+Published files include `src`, `dist`, `rom`, `examples`, `README.md`,
+`API.md`, and `LICENSE`.
+
+## Development
+
+From the repository root:
+
+```bash
+pnpm --filter @zx-vibes/emulator build
+pnpm --filter @zx-vibes/emulator typecheck
+pnpm --filter @zx-vibes/emulator lint
+pnpm --filter @zx-vibes/emulator test
+pnpm --filter @zx-vibes/emulator start
 ```
 
----
+Root gallery browser bundles are checked against
+`packages/emulator/dist/zxgeneration.esm.js` by:
 
-## Development Guide
+```bash
+pnpm run check:gallery-bundles
+```
 
-1. **Clone the repository**
-   
-   ```bash
-   git clone https://github.com/Alvaromah/zx-vibes
-   cd zx-vibes/packages/emulator
-   ```
+## ROM Notice
 
-2. **Serve the files**
-   
-   ```bash
-   # Python
-   python -m http.server 8000
-   
-   # Node.js
-   npx serve .
-   
-   # PHP
-   php -S localhost:8000
-   ```
-
-3. **Open the demo**
-   
-   Visit [http://localhost:8000/examples/basic.html](http://localhost:8000/examples/basic.html) in your browser.
-
-
----
+The package includes a ZX Spectrum 48K ROM for emulator use. The ROM is
+copyrighted material distributed under the permission described in
+`rom/README.md`; that notice is separate from the MIT license covering the
+source code.
 
 ## License
 
-MIT — see the [LICENSE](LICENSE) file for details.
-
-> The original ZX Spectrum ROM (`rom/48k.rom`) is copyright **Sky UK Limited** (acquired from Amstrad plc). Distributed solely for use with emulators under Amstrad’s permission. See `rom/README.md` for the full copyright notice.
-
----
-
-Made with ❤️ + 🤖 for the ZX Spectrum community
+MIT for the package source. See `rom/README.md` for the separate ROM notice.

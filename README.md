@@ -27,7 +27,8 @@ reference docs, and a public gallery.
 - Snapshot, memory, graphics, disassembly, scan, and xref commands for
   inspection and reverse-engineering workflows.
 - `zxs-mcp` for Codex, Claude, and other MCP-capable coding agents.
-- A default embedded assembler from `@zx-vibes/asm`.
+- A default embedded assembler from `@zx-vibes/asm`, exposed directly as
+  `zxasm`.
 - Optional `sjasmplus` support for advanced assembler workflows.
 - A ZX Spectrum 48K emulator package for headless tests and browser players.
 - Reference notes and project-local agent skills for assembler syntax, memory,
@@ -39,20 +40,20 @@ reference docs, and a public gallery.
 Create a project from the published npm package:
 
 ```bash
-pnpm create zx-vibes my-game --template game --install
+pnpm create zx-vibes my-game --template game
 cd my-game
-pnpm exec zxs doctor
-pnpm exec zxs build
-pnpm exec zxs verify
-pnpm exec zxs preview --watch
+npx --no-install zxs doctor
+npm run build
+npm run verify
+npm run preview
 ```
 
 Use the `platformer` starter when you want a slightly more game-shaped baseline:
 
 ```bash
-pnpm create zx-vibes my-platformer --template platformer --install
+pnpm create zx-vibes my-platformer --template platformer
 cd my-platformer
-pnpm exec zxs verify
+npm run verify
 ```
 
 The generated project includes:
@@ -64,7 +65,14 @@ The generated project includes:
 - `AGENTS.md` and `CLAUDE.md` with the same agent playbook, plus local
   `docs/agents/skills/` and `docs/reference/` material for agent and human
   guidance.
+- `.mcp.json` for Claude-compatible MCP clients and
+  `docs/agents/codex-mcp.toml` for Codex.
 - npm scripts for `build`, `run`, `test`, `verify`, and `preview`.
+- a `zx-vibes` dev dependency floor of `^0.1.3`, which resolves to the current
+  compatible patch release on normal installs.
+
+`pnpm create zx-vibes` and `zxs new` both install dependencies by default. Use
+`--no-install` for offline work or when testing an unpublished local checkout.
 
 ## Working With an Agent
 
@@ -79,18 +87,21 @@ Build it, run it, inspect the screen, and iterate until verify passes.
 The intended loop is:
 
 1. Edit Z80 assembly.
-2. Run `pnpm exec zxs build`.
-3. Run `pnpm exec zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png`.
-4. Inspect the screen with `pnpm exec zxs screen --text --png screen.png`.
+2. Run `npm run build`.
+3. Run `npx --no-install zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png`.
+4. Inspect the screen with `npx --no-install zxs screen --text --png screen.png`.
 5. If sound is part of the task, assert `audio.beeperEdges > 0` in run JSON or
    add a declarative `{ "type": "beeperEdges", "min": 1 }` test.
-6. Run `pnpm exec zxs verify`.
+6. Run `npm run verify`.
 
 Agents can use the same commands directly, or connect through the MCP server for
 structured build, run, screen, inspect, debug, keyboard, and state tools. The
 CLI is also useful during investigation work because most inspection commands
 can read a session, `.sna`, `.z80`, or raw `--bin` source without mutating the
 project state.
+
+If you intentionally use pnpm inside a generated project, `pnpm exec zxs` is the
+pnpm equivalent of `npx --no-install zxs` after dependencies are installed.
 
 ## CLI Basics
 
@@ -99,6 +110,7 @@ Install through a generated project, or add the umbrella package yourself:
 ```bash
 pnpm add -D zx-vibes
 pnpm exec zxs --help
+pnpm exec zxasm --help
 ```
 
 Common commands:
@@ -123,12 +135,16 @@ pnpm exec zxs bench --frames 2000
 change. If the requested port is busy, preview tries later ports and prints the
 URL it actually selected; add `--strict-port` when a busy `--port` should be an
 error. Use `--detach`, `--list`, and `--stop` when you want the preview server
-to keep running outside the current command.
+to keep running outside the current command. Detached server records include a
+local ownership token, so `--stop` only stops the tracked zx-vibes preview
+server.
 
 `zxs boot` opens a clean ZX Spectrum 48K boot screen in the same browser player.
 `zxs play <file>` opens `.z80`, `.sna`, `.tap`, and `.tzx` files without
-creating a project first. The emulator supports `.z80` v1 snapshots plus
-48K-compatible `.z80` v2/v3 snapshots.
+creating a project first. Tape playback preserves `.tap` and `.tzx` filenames
+so the emulator can select the correct parser. The emulator supports `.z80` v1
+snapshots plus 48K-compatible `.z80` v2/v3 snapshots; 128K paging is not
+supported.
 
 Debug and inspection commands are also available:
 
@@ -145,7 +161,9 @@ pnpm exec zxs state save session.zxstate
 pnpm exec zxs state export --z80 session.z80
 pnpm exec zxs snapshot info game.z80
 pnpm exec zxs snapshot ram game.z80 --out game.ram
+pnpm exec zxs snapshot mem game.z80 0x4000 --len 32
 pnpm exec zxs gfx screen --z80 game.z80 --out screen.png
+pnpm exec zxs gfx attrs --z80 game.z80 --out attrs.png
 pnpm exec zxs gfx find --z80 game.z80
 pnpm exec zxs scan --z80 game.z80 --opcode "ED B0"
 pnpm exec zxs xref 0x5c00 --z80 game.z80
@@ -184,11 +202,27 @@ For Claude-compatible clients:
 }
 ```
 
+Generated projects already include `.mcp.json` and
+`docs/agents/codex-mcp.toml` with this local `pnpm exec zxs-mcp` shape.
+
 ## Assembler Backends
 
 The default backend is `@zx-vibes/asm`, a TypeScript Z80 assembler and
-disassembler that works without native dependencies. For projects that need a
-`sjasmplus` feature, install `sjasmplus` separately and select it with either:
+disassembler that works without native dependencies. Use `zxasm` directly when
+you want the standalone assembler CLI:
+
+```bash
+pnpm exec zxasm assemble src/main.asm -I lib --out-dir build
+pnpm exec zxasm disasm build/main.bin --org 0x8000 --count 32
+pnpm exec zxasm doctor
+```
+
+The embedded backend name in `zxs build --assembler` remains `spectral` for
+compatibility with older configuration. `spectral-asm` also remains a bin alias
+for `zxasm`.
+
+For projects that need a `sjasmplus` feature, install `sjasmplus` separately
+and select it with either:
 
 ```bash
 ZXS_ASSEMBLER=sjasmplus pnpm exec zxs build
@@ -212,6 +246,7 @@ pnpm run verify
 Useful root commands:
 
 ```bash
+pnpm run check:drift
 pnpm run build
 pnpm run typecheck
 pnpm run lint
@@ -219,6 +254,11 @@ pnpm run test
 pnpm run pack
 pnpm run verify
 ```
+
+`pnpm run verify` runs generated-asset drift checks first, then build,
+typecheck, lint, and tests. Drift checks compare root starters with toolkit
+templates, root docs with copied package docs, create-package assets with root
+source assets, and gallery browser bundles with the current emulator bundle.
 
 ### Local Clone Workflows
 
@@ -280,13 +320,18 @@ starters/                 Source starter projects copied by the generator
 
 ## Published Packages
 
-| Package | Purpose |
-| --- | --- |
-| `zx-vibes` | Umbrella package that exposes `zxs`, `zxs-mcp`, and related bins. |
-| `create-zx-vibes` | `pnpm create zx-vibes` project generator. |
-| `@zx-vibes/toolkit` | CLI, MCP server, build/run/verify loop, recipes, and gallery tooling. |
-| `@zx-vibes/asm` | TypeScript Z80 assembler/disassembler. |
-| `@zx-vibes/emulator` | JavaScript ZX Spectrum 48K emulator. |
+Current manifests and npm registry versions match as of 2026-06-16:
+
+| Package | Version | Public surface |
+| --- | ---: | --- |
+| `zx-vibes` | `0.1.4` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
+| `create-zx-vibes` | `0.2.0` | `create-zx-vibes` bin used by `pnpm create zx-vibes`. |
+| `@zx-vibes/toolkit` | `0.2.1` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
+| `@zx-vibes/asm` | `0.1.2` | `zxasm` bin plus `spectral-asm` compatibility alias; assembler/disassembler API. |
+| `@zx-vibes/emulator` | `0.1.3` | Browser bundle, ROM assets, examples, and JavaScript emulator exports. |
+
+`zxs --version` reports the toolkit version because the CLI is implemented by
+`@zx-vibes/toolkit`. `zxasm --version` reports the assembler package version.
 
 ## Gallery and Docs
 
@@ -294,9 +339,32 @@ The public gallery is deployed with GitHub Pages at
 <https://alvaromah.github.io/zx-vibes/>. It showcases generated Spectrum games
 with playable browser snapshots, screenshots, metadata, and transcripts.
 
-Reference docs live in `docs/reference/` and are copied into generated projects
-so agents can answer common Spectrum implementation questions without leaving
-the workspace.
+Root `gallery/` is the Pages deployment source. `packages/toolkit/gallery/`
+contains package-side gallery assets, and both gallery browser bundles are
+checked against `packages/emulator/dist/zxgeneration.esm.js` by
+`pnpm run check:gallery-bundles`.
+
+Reference docs live in `docs/reference/`; project-local agent skills live in
+`docs/agents/skills/`. Both are copied into generated projects and into the
+packages that ship docs. `pnpm run check:drift` verifies those copied docs stay
+in sync.
+
+## Release, CI, and Security
+
+CI runs on Ubuntu, macOS, and Windows across Node 20 and 22. The required path
+is `check:drift`, build, a clean `git diff`, typecheck, lint, and tests. The
+`main` branch is protected with those six CI matrix jobs as strict required
+checks, and force pushes/deletion are disabled.
+
+Releases use Changesets. The release workflow validates on Node 20 and 22, then
+only publishes when manually dispatched with `publish=true`; the publish job
+installs, builds, runs `pnpm run pack`, verifies npm auth, and then runs
+`pnpm changeset publish`.
+
+Security posture as of 2026-06-16: root pnpm overrides pin patched transitive
+dependency floors for `form-data@4.0.6`, `js-yaml@4.2.0`, and
+`read-yaml-file@2.1.0`; GitHub Dependabot reports no open alerts; and
+`pnpm audit --audit-level moderate` reports no known vulnerabilities.
 
 ## Contributing
 
