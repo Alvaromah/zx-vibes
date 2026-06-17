@@ -9,6 +9,7 @@ Current package version in this repository: `0.2.0`.
 ```bash
 pnpm create zx-vibes my-game --template game
 cd my-game
+npm run doctor
 npm run build
 npm run verify
 npm run preview
@@ -28,6 +29,11 @@ pnpm create zx-vibes my-platformer --template platformer --no-install
 
 The CLI also accepts `--install` explicitly, but it is already the default.
 
+For a complete install-to-verified-project manual, including Codex, Claude
+Code, optional MCP setup, and the manual CLI loop, see
+[`docs/manual/`](docs/manual/index.md). The published manual lives under the
+zx-vibes Pages site at <https://alvaromah.github.io/zx-vibes/manual/>.
+
 ## Generated Project Contract
 
 Generated projects include:
@@ -36,7 +42,8 @@ Generated projects include:
 - `lib/` helpers for screen and keyboard routines.
 - `tests/smoke.test.json` declarative verification.
 - `zx.config.json` build configuration.
-- npm scripts for `build`, `run`, `test`, `verify`, and `preview`.
+- npm scripts for `doctor`, `build`, `run`, `screen`, `test`, `verify`,
+  `preview`, and advanced `zxs` passthrough commands.
 - `AGENTS.md` and `CLAUDE.md` generated from the shared agent playbook.
 - `.mcp.json` for Claude-compatible MCP clients.
 - `docs/agents/codex-mcp.toml` for Codex MCP configuration.

@@ -42,7 +42,7 @@ Create a project from the published npm package:
 ```bash
 pnpm create zx-vibes my-game --template game
 cd my-game
-npx --no-install zxs doctor
+npm run doctor
 npm run build
 npm run verify
 npm run preview
@@ -56,6 +56,11 @@ cd my-platformer
 npm run verify
 ```
 
+For a complete install-to-verified-project manual, including Codex, Claude
+Code, optional MCP setup, and the manual CLI loop, see
+[`docs/manual/`](docs/manual/index.md). The published manual lives under the
+Pages site at <https://alvaromah.github.io/zx-vibes/manual/>.
+
 The generated project includes:
 
 - `src/main.asm` as the assembler entry point.
@@ -67,7 +72,8 @@ The generated project includes:
   guidance.
 - `.mcp.json` for Claude-compatible MCP clients and
   `docs/agents/codex-mcp.toml` for Codex.
-- npm scripts for `build`, `run`, `test`, `verify`, and `preview`.
+- npm scripts for `doctor`, `build`, `run`, `screen`, `test`, `verify`,
+  `preview`, and advanced `zxs` passthrough commands.
 - a `zx-vibes` dev dependency floor of `^0.1.3`, which resolves to the current
   compatible patch release on normal installs.
 
@@ -88,8 +94,8 @@ The intended loop is:
 
 1. Edit Z80 assembly.
 2. Run `npm run build`.
-3. Run `npx --no-install zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png`.
-4. Inspect the screen with `npx --no-install zxs screen --text --png screen.png`.
+3. Run `npm run run`.
+4. Inspect the screen with `npm run screen`.
 5. If sound is part of the task, assert `audio.beeperEdges > 0` in run JSON or
    add a declarative `{ "type": "beeperEdges", "min": 1 }` test.
 6. Run `npm run verify`.
@@ -100,34 +106,44 @@ CLI is also useful during investigation work because most inspection commands
 can read a session, `.sna`, `.z80`, or raw `--bin` source without mutating the
 project state.
 
-If you intentionally use pnpm inside a generated project, `pnpm exec zxs` is the
-pnpm equivalent of `npx --no-install zxs` after dependencies are installed.
+If you want the classic "program installed in my shell" workflow, install the
+umbrella package globally once:
+
+```bash
+npm install -g zx-vibes
+zxs doctor
+zxs verify
+```
+
+For advanced one-off commands without a global install, generated projects also
+provide `npm run zxs -- <command>`, for example `npm run zxs -- regs`.
 
 ## CLI Basics
 
-Install through a generated project, or add the umbrella package yourself:
+Install globally when you want `zxs` and `zxasm` to behave like normal shell
+programs:
 
 ```bash
-pnpm add -D zx-vibes
-pnpm exec zxs --help
-pnpm exec zxasm --help
+npm install -g zx-vibes
+zxs --help
+zxasm --help
 ```
 
 Common commands:
 
 ```bash
-pnpm exec zxs new demo --template game
-pnpm exec zxs doctor
-pnpm exec zxs build
-pnpm exec zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png
-pnpm exec zxs screen --text --png screen.png
-pnpm exec zxs test tests
-pnpm exec zxs test tests --list-assertions
-pnpm exec zxs verify
-pnpm exec zxs preview --port 5173 --watch
-pnpm exec zxs boot
-pnpm exec zxs play game.z80
-pnpm exec zxs bench --frames 2000
+zxs new demo --template game
+zxs doctor
+zxs build
+zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png
+zxs screen --text --png screen.png
+zxs test tests
+zxs test tests --list-assertions
+zxs verify
+zxs preview --port 5173 --watch
+zxs boot
+zxs play game.z80
+zxs bench --frames 2000
 ```
 
 `zxs preview` serves a browser player with a visible build hash. Add
@@ -149,24 +165,24 @@ supported.
 Debug and inspection commands are also available:
 
 ```bash
-pnpm exec zxs regs
-pnpm exec zxs mem read 0x8000 --len 64
-pnpm exec zxs mem dump --range 0x4000-0x5aff --out screen.ram
-pnpm exec zxs break add 0x8000
-pnpm exec zxs watch add --write 0x5800-0x5aff
-pnpm exec zxs step 10
-pnpm exec zxs disasm PC --count 12 --json
-pnpm exec zxs trace --frames 5
-pnpm exec zxs state save session.zxstate
-pnpm exec zxs state export --z80 session.z80
-pnpm exec zxs snapshot info game.z80
-pnpm exec zxs snapshot ram game.z80 --out game.ram
-pnpm exec zxs snapshot mem game.z80 0x4000 --len 32
-pnpm exec zxs gfx screen --z80 game.z80 --out screen.png
-pnpm exec zxs gfx attrs --z80 game.z80 --out attrs.png
-pnpm exec zxs gfx find --z80 game.z80
-pnpm exec zxs scan --z80 game.z80 --opcode "ED B0"
-pnpm exec zxs xref 0x5c00 --z80 game.z80
+zxs regs
+zxs mem read 0x8000 --len 64
+zxs mem dump --range 0x4000-0x5aff --out screen.ram
+zxs break add 0x8000
+zxs watch add --write 0x5800-0x5aff
+zxs step 10
+zxs disasm PC --count 12 --json
+zxs trace --frames 5
+zxs state save session.zxstate
+zxs state export --z80 session.z80
+zxs snapshot info game.z80
+zxs snapshot ram game.z80 --out game.ram
+zxs snapshot mem game.z80 0x4000 --len 32
+zxs gfx screen --z80 game.z80 --out screen.png
+zxs gfx attrs --z80 game.z80 --out attrs.png
+zxs gfx find --z80 game.z80
+zxs scan --z80 game.z80 --opcode "ED B0"
+zxs xref 0x5c00 --z80 game.z80
 ```
 
 ## MCP Server
@@ -175,8 +191,8 @@ pnpm exec zxs xref 0x5c00 --z80 game.z80
 configuration snippets with:
 
 ```bash
-pnpm exec zxs setup --agent codex
-pnpm exec zxs setup --agent claude
+zxs setup --agent codex
+zxs setup --agent claude
 ```
 
 For Codex, the config shape is:
@@ -212,9 +228,9 @@ disassembler that works without native dependencies. Use `zxasm` directly when
 you want the standalone assembler CLI:
 
 ```bash
-pnpm exec zxasm assemble src/main.asm -I lib --out-dir build
-pnpm exec zxasm disasm build/main.bin --org 0x8000 --count 32
-pnpm exec zxasm doctor
+zxasm assemble src/main.asm -I lib --out-dir build
+zxasm disasm build/main.bin --org 0x8000 --count 32
+zxasm doctor
 ```
 
 The embedded backend name in `zxs build --assembler` remains `spectral` for
@@ -225,8 +241,8 @@ For projects that need a `sjasmplus` feature, install `sjasmplus` separately
 and select it with either:
 
 ```bash
-ZXS_ASSEMBLER=sjasmplus pnpm exec zxs build
-pnpm exec zxs build --assembler sjasmplus
+ZXS_ASSEMBLER=sjasmplus zxs build
+zxs build --assembler sjasmplus
 ```
 
 The starter projects are designed to work with the embedded assembler by
@@ -284,8 +300,8 @@ testing an unpublished local checkout as above. Once dependencies are installed,
 use the normal project-local commands:
 
 ```bash
-pnpm exec zxs verify
-pnpm exec zxs preview --watch
+npm run verify
+npm run preview
 ```
 
 `pnpm run pack` writes package tarballs to `.packs/`. Installing only
@@ -308,7 +324,7 @@ pnpm --filter create-zx-vibes run check:assets
 ## Monorepo Layout
 
 ```text
-docs/                     Shared reference docs and MCP config snippets
+docs/                     Manual, shared reference docs, and MCP config snippets
 gallery/                  Built GitHub Pages gallery output
 packages/asm/             @zx-vibes/asm assembler/disassembler
 packages/create-zx-vibes/ create-zx-vibes project generator
@@ -339,15 +355,21 @@ The public gallery is deployed with GitHub Pages at
 <https://alvaromah.github.io/zx-vibes/>. It showcases generated Spectrum games
 with playable browser snapshots, screenshots, metadata, and transcripts.
 
+The published manual is available at
+<https://alvaromah.github.io/zx-vibes/manual/>. Markdown source lives in
+`docs/manual/`, and the Pages workflow builds it with VitePress into
+`gallery/manual/` before uploading the `gallery/` artifact.
+
 Root `gallery/` is the Pages deployment source. `packages/toolkit/gallery/`
 contains package-side gallery assets, and both gallery browser bundles are
 checked against `packages/emulator/dist/zxgeneration.esm.js` by
 `pnpm run check:gallery-bundles`.
 
 Reference docs live in `docs/reference/`; project-local agent skills live in
-`docs/agents/skills/`. Both are copied into generated projects and into the
-packages that ship docs. `pnpm run check:drift` verifies those copied docs stay
-in sync.
+`docs/agents/skills/`. Manual, reference, and agent docs are copied into the
+create-package docs, while reference and agent docs are also copied into
+generated projects and toolkit package docs. `pnpm run check:drift` verifies
+those copied docs stay in sync.
 
 ## Release, CI, and Security
 

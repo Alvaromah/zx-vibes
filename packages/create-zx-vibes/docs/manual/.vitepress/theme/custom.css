@@ -1,0 +1,42 @@
+:root {
+  --vp-c-brand-1: #0077d9;
+  --vp-c-brand-2: #005fb8;
+  --vp-c-brand-3: #00a3ff;
+  --vp-c-brand-soft: rgba(0, 119, 217, 0.14);
+  --vp-home-hero-name-color: #0077d9;
+}
+
+.manual-logo,
+.vp-doc img[alt="ZX Vibes sticker logo"] {
+  display: block;
+  width: min(320px, 80%);
+  margin: 0 0 1.5rem;
+}
+
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.manual-grid a {
+  display: block;
+  height: 100%;
+  padding: 1rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  color: var(--vp-c-text-1);
+  text-decoration: none;
+  background: var(--vp-c-bg-soft);
+}
+
+.manual-grid a:hover {
+  border-color: var(--vp-c-brand-1);
+}
+
+.manual-grid strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--vp-c-brand-1);
+}

@@ -12,6 +12,9 @@
   "scripts": {
     "check:gallery-bundles": "node scripts/check-gallery-bundles.js",
     "check:starter-templates": "node scripts/check-starter-template-drift.js",
+    "docs:dev": "vitepress dev docs/manual",
+    "docs:build": "vitepress build docs/manual",
+    "docs:preview": "vitepress preview docs/manual",
     "check:drift": "pnpm --filter create-zx-vibes run check:assets && pnpm --filter @zx-vibes/toolkit run check:docs && pnpm run check:starter-templates && pnpm run check:gallery-bundles",
     "build": "pnpm -r --sort run build",
     "typecheck": "pnpm -r --sort run typecheck",
@@ -26,7 +29,8 @@
     "eslint": "^9.39.4",
     "globals": "^17.6.0",
     "typescript": "^5.8.0",
-    "typescript-eslint": "^8.61.0"
+    "typescript-eslint": "^8.61.0",
+    "vitepress": "^1.6.4"
   },
   "pnpm": {
     "overrides": {

@@ -1,6 +1,6 @@
-# __NAME__ — Spectral shortcuts
+# __NAME__ - zx-vibes shortcuts
 
-ZXS ?= npx --no-install zxs
+ZXS ?= npm run zxs --
 
 build:
 	$(ZXS) build
