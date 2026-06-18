@@ -377,4 +377,35 @@ describe('Z80 CPU', () => {
       expect(cpu.getAF()).toBe(0xDEF0);
     });
   });
+
+  describe('SCF/CCF undocumented flags (Q register)', () => {
+    const XY = 0x28; // bits 5 and 3
+
+    function run(program, instructionCount) {
+      loadProgram(program);
+      for (let i = 0; i < instructionCount; i++) cpu.execute();
+    }
+
+    it('SCF right after a flag-modifying instruction takes bits 3/5 from A', () => {
+      // LD A,0 ; CP 0x28 ; SCF — CP sets F3/F5 (from operand 0x28) and modifies
+      // the flags, so Q = F and bits 3/5 come from A (= 0).
+      run([0x3e, 0x00, 0xfe, 0x28, 0x37], 3);
+      expect(cpu.registers.f & 0x01).toBe(0x01); // carry set
+      expect(cpu.registers.f & XY).toBe(0x00);
+    });
+
+    it('SCF after a non-flag-modifying instruction takes bits 3/5 from F|A', () => {
+      // LD A,0 ; CP 0x28 ; LD A,0 ; SCF — the LD does not touch F, so Q = 0 and
+      // bits 3/5 come from F (still set by CP) | A. Same F and A as the test
+      // above, but a different preceding instruction → different result.
+      run([0x3e, 0x00, 0xfe, 0x28, 0x3e, 0x00, 0x37], 4);
+      expect(cpu.registers.f & 0x01).toBe(0x01);
+      expect(cpu.registers.f & XY).toBe(XY);
+    });
+
+    it('CCF follows the same Q-based rule for bits 3/5', () => {
+      run([0x3e, 0x00, 0xfe, 0x28, 0x3e, 0x00, 0x3f], 4);
+      expect(cpu.registers.f & XY).toBe(XY);
+    });
+  });
 });

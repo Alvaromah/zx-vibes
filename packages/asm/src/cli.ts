@@ -31,12 +31,14 @@ program
   .option('--out-dir <dir>', 'output directory', 'build')
   .option('-I, --inc <path>', 'include search path', collect, [])
   .option('-D, --define <define>', 'define a symbol, optionally NAME=value', collect, [])
+  .option('--sandbox', 'restrict INCLUDE/INCBIN reads to the project (cwd + include paths)', false)
   .option('--json', 'machine-readable JSON output', false)
-  .action(async (file: string, opts: { outDir: string; inc: string[]; define: string[]; json: boolean }) => {
+  .action(async (file: string, opts: { outDir: string; inc: string[]; define: string[]; sandbox: boolean; json: boolean }) => {
     const started = performance.now();
     const result = assembleFile(file, {
       includePaths: opts.inc,
       defines: parseDefines(opts.define),
+      sandbox: opts.sandbox,
     });
     const outputs = result.ok
       ? writeAssemblyOutputs(result, {

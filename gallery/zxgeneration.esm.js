@@ -36,6 +36,9 @@ class Registers {
       SP: 0xffff,
       PC: 0x0000
     };
+    // "Q" latch: the flags value left by the last instruction that modified F
+    // (0 if it did not). Used only by SCF/CCF for their undocumented bits 3/5.
+    this.q = 0;
   }
 
   // 8-bit register access
@@ -959,33 +962,42 @@ class LogicalInstructions {
    * SCF (Set Carry Flag)
    */
   scf() {
-    let newF = this.registers.get('F');
+    const a = this.registers.get('A');
+    const f = this.registers.get('F');
+    let newF = f;
     newF = this.flags.setFlag(newF, this.flags.masks.C, true);
     newF = this.flags.setFlag(newF, this.flags.masks.H, false);
     newF = this.flags.setFlag(newF, this.flags.masks.N, false);
 
-    // Undocumented flags from A
-    const a = this.registers.get('A');
-    newF = this.flags.setFlag(newF, this.flags.masks.F5, (a & 0x20) !== 0);
-    newF = this.flags.setFlag(newF, this.flags.masks.F3, (a & 0x08) !== 0);
+    // Undocumented bits 3/5 on the NMOS Z80: ((Q ^ F) | A). The Q latch holds
+    // the flags left by the last flag-modifying instruction (0 otherwise), so
+    // this is `A` right after an ALU op and `F | A` after a non-flag op.
+    newF = this.applyScfCcfUndocumented(newF, f, a);
     this.registers.set('F', newF);
     return 4; // cycles
+  }
+
+  /** Shared SCF/CCF bit 3/5 derivation (see scf for the rationale). */
+  applyScfCcfUndocumented(newF, f, a) {
+    const xy = this.flags.masks.F5 | this.flags.masks.F3;
+    const q = this.registers.q || 0;
+    return newF & ~xy | (q ^ f | a) & xy;
   }
 
   /**
    * CCF (Complement Carry Flag)
    */
   ccf() {
-    const oldCarry = this.flags.getFlag(this.registers.get('F'), this.flags.masks.C);
-    let newF = this.registers.get('F');
+    const a = this.registers.get('A');
+    const f = this.registers.get('F');
+    const oldCarry = this.flags.getFlag(f, this.flags.masks.C);
+    let newF = f;
     newF = this.flags.setFlag(newF, this.flags.masks.H, oldCarry);
     newF = this.flags.setFlag(newF, this.flags.masks.C, !oldCarry);
     newF = this.flags.setFlag(newF, this.flags.masks.N, false);
 
-    // Undocumented flags from A
-    const a = this.registers.get('A');
-    newF = this.flags.setFlag(newF, this.flags.masks.F5, (a & 0x20) !== 0);
-    newF = this.flags.setFlag(newF, this.flags.masks.F3, (a & 0x08) !== 0);
+    // Undocumented bits 3/5: ((Q ^ F) | A) — same NMOS rule as SCF.
+    newF = this.applyScfCcfUndocumented(newF, f, a);
     this.registers.set('F', newF);
     return 4; // cycles
   }
@@ -3894,13 +3906,19 @@ class Z80 {
       // until an interrupt occurs. This is important for accurate timing.
       this.cycles += 4;
       this.registers.incrementR();
+      this.registers.q = 0; // HALT (executing NOPs) does not modify the flags
       return 4;
     }
+    const fBefore = this.registers.get('F');
     const opcode = this.memory.fetchByte(this.registers);
     this.registers.incrementR();
     const instructionCycles = this.decoder.execute(opcode, this);
     this.cycles += instructionCycles;
     this.updateInterruptEnableDelay();
+    // Maintain the Q latch: F if this instruction changed the flags, else 0.
+    // SCF/CCF read it on the *next* instruction to derive bits 3/5.
+    const fAfter = this.registers.get('F');
+    this.registers.q = fAfter !== fBefore ? fAfter : 0;
     return instructionCycles;
   }
   updateInterruptEnableDelay() {
@@ -3925,6 +3943,7 @@ class Z80 {
       this.iff1 = false;
       this.iff2 = false;
       this.registers.incrementR();
+      this.registers.q = 0; // the interrupt acknowledge does not modify the flags
 
       // Handle different interrupt modes
       switch (this.interruptMode) {

@@ -89,15 +89,21 @@ class Z80 {
       // until an interrupt occurs. This is important for accurate timing.
       this.cycles += 4;
       this.registers.incrementR();
+      this.registers.q = 0; // HALT (executing NOPs) does not modify the flags
       return 4;
     }
 
+    const fBefore = this.registers.get('F');
     const opcode = this.memory.fetchByte(this.registers);
     this.registers.incrementR();
 
     const instructionCycles = this.decoder.execute(opcode, this);
     this.cycles += instructionCycles;
     this.updateInterruptEnableDelay();
+    // Maintain the Q latch: F if this instruction changed the flags, else 0.
+    // SCF/CCF read it on the *next* instruction to derive bits 3/5.
+    const fAfter = this.registers.get('F');
+    this.registers.q = fAfter !== fBefore ? fAfter : 0;
     return instructionCycles;
   }
 
@@ -123,6 +129,7 @@ class Z80 {
       this.iff1 = false;
       this.iff2 = false;
       this.registers.incrementR();
+      this.registers.q = 0; // the interrupt acknowledge does not modify the flags
 
       // Handle different interrupt modes
       switch (this.interruptMode) {

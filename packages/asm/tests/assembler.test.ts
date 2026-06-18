@@ -620,6 +620,51 @@ describe('assemble', () => {
     expect(hex(result.bytes)).toBe('0310');
   });
 
+  it('sandbox mode blocks INCLUDE reads outside the project (and is off by default)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'spectral-asm-sandbox-'));
+    const project = join(root, 'project');
+    mkdirSync(project);
+    writeFileSync(join(root, 'secret.asm'), 'SECRET EQU 0x42\n'); // outside the project
+    writeFileSync(join(project, 'main.asm'), ['    ORG 0x8000', '    INCLUDE "../secret.asm"', ''].join('\n'));
+
+    const blocked = assembleFile(join(project, 'main.asm'), { cwd: project, sandbox: true });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.errors.some((e) => /outside the sandbox roots/.test(e.message))).toBe(true);
+
+    // Same source assembles fine with sandbox off (default) — backward compatible.
+    const allowed = assembleFile(join(project, 'main.asm'), { cwd: project });
+    expect(allowed.ok, JSON.stringify(allowed.errors)).toBe(true);
+  });
+
+  it('sandbox mode blocks INCBIN reads outside the project', () => {
+    const root = mkdtempSync(join(tmpdir(), 'spectral-asm-sandbox-bin-'));
+    const project = join(root, 'project');
+    mkdirSync(project);
+    writeFileSync(join(root, 'secret.bin'), Buffer.from([0xde, 0xad, 0xbe, 0xef]));
+    writeFileSync(join(project, 'main.asm'), ['    ORG 0x8000', '    INCBIN "../secret.bin"', ''].join('\n'));
+
+    const blocked = assembleFile(join(project, 'main.asm'), { cwd: project, sandbox: true });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.errors.some((e) => /outside the sandbox roots/.test(e.message))).toBe(true);
+  });
+
+  it('sandbox mode still allows includes within the project and its include paths', () => {
+    const root = mkdtempSync(join(tmpdir(), 'spectral-asm-sandbox-ok-'));
+    const project = join(root, 'project');
+    const lib = join(project, 'lib');
+    mkdirSync(lib, { recursive: true });
+    writeFileSync(join(project, 'local.asm'), 'LOCAL EQU 0x11\n');
+    writeFileSync(join(lib, 'shared.asm'), 'SHARED EQU 0x22\n');
+    writeFileSync(
+      join(project, 'main.asm'),
+      ['    ORG 0x8000', '    INCLUDE "local.asm"', '    INCLUDE <shared.asm>', '    db LOCAL, SHARED', ''].join('\n')
+    );
+
+    const result = assembleFile(join(project, 'main.asm'), { cwd: project, includePaths: [lib], sandbox: true });
+    expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+    expect(hex(result.bytes)).toBe('1122');
+  });
+
   it('reports malformed SAVEBIN directives', () => {
     const noDevice = assemble(['    ORG 0x8000', 'start: db 1', '    SAVEBIN "part.bin", start, 1', ''].join('\n'), {
       entryPath: 'savebin-no-device.asm',

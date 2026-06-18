@@ -4,7 +4,7 @@ import {
   readFileSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 export interface Diagnostic {
   file: string;
@@ -20,6 +20,13 @@ export interface AssembleOptions {
   cwd?: string;
   includePaths?: string[];
   defines?: Record<string, string | number | boolean>;
+  /**
+   * When true, INCLUDE/INCBIN/INSERT may only read files inside the sandbox
+   * roots (cwd + includePaths). Off by default to preserve existing behavior;
+   * turn it on when assembling untrusted source. SAVEBIN output is always
+   * confined to the output directory regardless of this flag.
+   */
+  sandbox?: boolean;
 }
 
 export interface SymbolDef {
@@ -91,6 +98,9 @@ interface EvalContext {
   warnings: Diagnostic[];
   loc: SourceLine;
   strict: boolean;
+  /** Sandbox config for INCBIN/INSERT; absent = unrestricted (default). */
+  sandbox?: boolean;
+  roots?: string[];
 }
 
 interface EmitContext extends EvalContext {
@@ -126,6 +136,8 @@ interface LoadContext {
   expansionDepth: number;
   modules: ModuleFrame[];
   terminated: boolean;
+  sandbox: boolean;
+  roots: string[];
 }
 
 interface ConditionalFrame {
@@ -315,6 +327,8 @@ function assembleLines(sourceLines: SourceLine[], opts: AssembleOptions): Assemb
   const warnings = [...layout.warnings];
   const cwd = resolve(opts.cwd ?? process.cwd());
   const includePaths = normalizeIncludePaths(opts.includePaths ?? [], cwd);
+  const sandbox = opts.sandbox ?? false;
+  const roots = sandboxRoots(cwd, includePaths);
   const deviceEnabled = layout.lines.some((line) => line.op === 'DEVICE');
   const emitSymbols = new Map(layout.symbols);
   const apiDefineValues = new Map(
@@ -347,6 +361,8 @@ function assembleLines(sourceLines: SourceLine[], opts: AssembleOptions): Assemb
       warnings,
       loc: line.loc,
       strict: true,
+      sandbox,
+      roots,
       sourceMap,
     };
     if (!line.op) continue;
@@ -395,6 +411,8 @@ function computeLayout(sourceLines: SourceLine[], opts: AssembleOptions): Layout
   seedDefines(opts.defines ?? {}, symbols, definitions);
   const cwd = resolve(opts.cwd ?? process.cwd());
   const includePaths = normalizeIncludePaths(opts.includePaths ?? [], cwd);
+  const sandbox = opts.sandbox ?? false;
+  const roots = sandboxRoots(cwd, includePaths);
   const seen = new Set<string>(symbols.keys());
   const apiDefineValues = new Map(
     Object.entries(opts.defines ?? {}).map(([name, raw]) => [name, defineValue(raw) & 0xffff])
@@ -446,6 +464,8 @@ function computeLayout(sourceLines: SourceLine[], opts: AssembleOptions): Layout
         warnings: pass === 4 ? warnings : [],
         loc: line.loc,
         strict: pass === 4,
+        sandbox,
+        roots,
       };
 
       if (line.equ && line.labelKey) {
@@ -1164,10 +1184,23 @@ function parseIncludeTarget(text: string): IncludeTarget | undefined {
 function resolveIncludeFile(loc: SourceLine, target: IncludeTarget, ctx: LoadContext): string | undefined {
   const candidates = target.searchOnly ? [] : [resolve(dirname(loc.file), target.path)];
   candidates.push(...ctx.includePaths.map((dir) => resolve(dir, target.path)));
+  let blocked = false;
   for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
+    if (!existsSync(candidate)) continue;
+    if (ctx.sandbox && !isWithinRoots(candidate, ctx.roots)) {
+      blocked = true;
+      continue;
+    }
+    return candidate;
   }
-  ctx.diagnostics.push(diag(loc, `INCLUDE file not found: ${target.path}`));
+  ctx.diagnostics.push(
+    diag(
+      loc,
+      blocked
+        ? `INCLUDE path is outside the sandbox roots: ${target.path}`
+        : `INCLUDE file not found: ${target.path}`
+    )
+  );
   return undefined;
 }
 
@@ -1175,13 +1208,24 @@ function normalizeIncludePaths(paths: string[], cwd: string): string[] {
   return paths.map((path) => resolve(cwd, path));
 }
 
+/** Allowed read roots in sandbox mode: the working dir plus the include paths. */
+function sandboxRoots(cwd: string, includePaths: string[]): string[] {
+  return [resolve(cwd), ...includePaths.map((p) => resolve(p))];
+}
+
+function isWithinRoots(candidate: string, roots: string[]): boolean {
+  const resolved = resolve(candidate);
+  return roots.some((root) => resolved === root || resolved.startsWith(root + sep));
+}
+
 function makeLoadContext(opts: AssembleOptions, cwd: string, diagnostics: Diagnostic[]): LoadContext {
   const symbols = new Map<string, number>();
   const definitions = new Map<string, SymbolDef>();
   seedDefines(opts.defines ?? {}, symbols, definitions);
+  const includePaths = normalizeIncludePaths(opts.includePaths ?? [], cwd);
   return {
     cwd,
-    includePaths: normalizeIncludePaths(opts.includePaths ?? [], cwd),
+    includePaths,
     diagnostics,
     active: new Set(),
     symbols,
@@ -1193,6 +1237,8 @@ function makeLoadContext(opts: AssembleOptions, cwd: string, diagnostics: Diagno
     expansionDepth: 0,
     modules: [],
     terminated: false,
+    sandbox: opts.sandbox ?? false,
+    roots: sandboxRoots(cwd, includePaths),
   };
 }
 
@@ -2233,10 +2279,23 @@ function memorySlice(bytes: number[], origin: number, start: number, length: num
 function resolveDataFile(loc: SourceLine, target: IncludeTarget, ctx: EvalContext, op = 'INCBIN'): string | undefined {
   const candidates = target.searchOnly ? [] : [resolve(dirname(loc.file), target.path)];
   candidates.push(...ctx.includePaths.map((dir) => resolve(dir, target.path)));
+  let blocked = false;
   for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
+    if (!existsSync(candidate)) continue;
+    if (ctx.sandbox && ctx.roots && !isWithinRoots(candidate, ctx.roots)) {
+      blocked = true;
+      continue;
+    }
+    return candidate;
   }
-  if (ctx.strict) fail(ctx, `${op} file not found: ${target.path}`);
+  if (ctx.strict) {
+    fail(
+      ctx,
+      blocked
+        ? `${op} path is outside the sandbox roots: ${target.path}`
+        : `${op} file not found: ${target.path}`
+    );
+  }
   return undefined;
 }
 
