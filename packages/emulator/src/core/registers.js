@@ -32,6 +32,9 @@ class Registers {
       SP: 0xffff,
       PC: 0x0000,
     };
+    // "Q" latch: the flags value left by the last instruction that modified F
+    // (0 if it did not). Used only by SCF/CCF for their undocumented bits 3/5.
+    this.q = 0;
   }
 
   // 8-bit register access

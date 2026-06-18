@@ -80,36 +80,45 @@ class LogicalInstructions {
    * SCF (Set Carry Flag)
    */
   scf() {
-    let newF = this.registers.get('F');
+    const a = this.registers.get('A');
+    const f = this.registers.get('F');
+    let newF = f;
     newF = this.flags.setFlag(newF, this.flags.masks.C, true);
     newF = this.flags.setFlag(newF, this.flags.masks.H, false);
     newF = this.flags.setFlag(newF, this.flags.masks.N, false);
 
-    // Undocumented flags from A
-    const a = this.registers.get('A');
-    newF = this.flags.setFlag(newF, this.flags.masks.F5, (a & 0x20) !== 0);
-    newF = this.flags.setFlag(newF, this.flags.masks.F3, (a & 0x08) !== 0);
+    // Undocumented bits 3/5 on the NMOS Z80: ((Q ^ F) | A). The Q latch holds
+    // the flags left by the last flag-modifying instruction (0 otherwise), so
+    // this is `A` right after an ALU op and `F | A` after a non-flag op.
+    newF = this.applyScfCcfUndocumented(newF, f, a);
 
     this.registers.set('F', newF);
 
     return 4; // cycles
   }
 
+  /** Shared SCF/CCF bit 3/5 derivation (see scf for the rationale). */
+  applyScfCcfUndocumented(newF, f, a) {
+    const xy = this.flags.masks.F5 | this.flags.masks.F3;
+    const q = this.registers.q || 0;
+    return (newF & ~xy) | (((q ^ f) | a) & xy);
+  }
+
   /**
    * CCF (Complement Carry Flag)
    */
   ccf() {
-    const oldCarry = this.flags.getFlag(this.registers.get('F'), this.flags.masks.C);
+    const a = this.registers.get('A');
+    const f = this.registers.get('F');
+    const oldCarry = this.flags.getFlag(f, this.flags.masks.C);
 
-    let newF = this.registers.get('F');
+    let newF = f;
     newF = this.flags.setFlag(newF, this.flags.masks.H, oldCarry);
     newF = this.flags.setFlag(newF, this.flags.masks.C, !oldCarry);
     newF = this.flags.setFlag(newF, this.flags.masks.N, false);
 
-    // Undocumented flags from A
-    const a = this.registers.get('A');
-    newF = this.flags.setFlag(newF, this.flags.masks.F5, (a & 0x20) !== 0);
-    newF = this.flags.setFlag(newF, this.flags.masks.F3, (a & 0x08) !== 0);
+    // Undocumented bits 3/5: ((Q ^ F) | A) — same NMOS rule as SCF.
+    newF = this.applyScfCcfUndocumented(newF, f, a);
 
     this.registers.set('F', newF);
 

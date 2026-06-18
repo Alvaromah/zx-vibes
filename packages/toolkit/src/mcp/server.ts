@@ -310,6 +310,9 @@ export function createServer(options: McpServerOptions = {}): McpServer {
           outDir: outDirPath.absolute,
           assembler: effectiveAssembler,
           cwd: projectRoot,
+          // Agent-driven builds are untrusted: confine INCLUDE/INCBIN reads to
+          // the project root (spectral backend only).
+          sandbox: true,
         });
         if (result.ok && result.outputs.sld) {
           session.symbols = SymbolTable.parse(readFileSync(result.outputs.sld, 'utf8'));

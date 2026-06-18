@@ -32,6 +32,12 @@ export interface BuildOptions {
    * Assembler backend. Default is the embedded @zx-vibes/asm backend.
    */
   assembler?: 'sjasmplus' | 'spectral';
+  /**
+   * Confine INCLUDE/INCBIN reads to the project (cwd + include paths). Only the
+   * embedded `spectral` backend honors this; the external sjasmplus binary does
+   * not. Used by the MCP server to sandbox agent-driven builds.
+   */
+  sandbox?: boolean;
 }
 
 export interface BuildResult {
@@ -61,7 +67,7 @@ interface SpectralAsmResult {
 }
 
 interface SpectralAsmModule {
-  assembleFile(entry: string, opts?: { cwd?: string }): SpectralAsmResult;
+  assembleFile(entry: string, opts?: { cwd?: string; sandbox?: boolean }): SpectralAsmResult;
   writeAssemblyOutputs(
     result: SpectralAsmResult,
     opts: { entry: string; outDir: string }
@@ -181,7 +187,10 @@ async function buildWithSpectralAsm(entry: string, opts: BuildOptions): Promise<
   mkdirSync(outDir, { recursive: true });
 
   const { assembleFile, writeAssemblyOutputs } = await loadSpectralAsm();
-  const result = assembleFile(entry, opts.cwd !== undefined ? { cwd: opts.cwd } : {});
+  const result = assembleFile(entry, {
+    ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
+    ...(opts.sandbox !== undefined ? { sandbox: opts.sandbox } : {}),
+  });
   const outputs = result.ok ? writeAssemblyOutputs(result, { entry, outDir }) : {};
   return {
     ok: result.ok,
