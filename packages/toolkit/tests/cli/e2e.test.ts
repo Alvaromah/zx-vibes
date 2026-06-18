@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -82,6 +82,26 @@ describe('zxs e2e (session + exit codes)', () => {
     const mem = zxs(cwd, 'mem', 'read', '0x8012', '--len', '9', '--json');
     expect(mem.status).toBe(0);
     expect(mem.json!['hex']).toBe(Buffer.from('HELLO ZX\0').toString('hex'));
+  });
+
+  it('build --sandbox blocks an INCLUDE that escapes the project, but not by default', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'zxs-sandbox-'));
+    const project = join(projectRoot, 'project');
+    mkdirSync(project);
+    writeFileSync(join(projectRoot, 'secret.asm'), 'SECRET EQU 0x42\n'); // outside the project
+    writeFileSync(join(project, 'main.asm'), '    ORG 0x8000\n    INCLUDE "../secret.asm"\n');
+
+    // Run with cwd = project so the sandbox root is the project directory.
+    const blocked = zxs(project, 'build', 'main.asm', '--out-dir', project, '--sandbox', '--json');
+    expect(blocked.status).toBe(1);
+    expect(blocked.json).toMatchObject({ ok: false });
+    const errors = blocked.json!['errors'] as Array<{ message: string }>;
+    expect(errors.some((e) => /outside the sandbox roots/.test(e.message))).toBe(true);
+
+    // Without --sandbox the same source assembles fine (backward compatible).
+    const allowed = zxs(project, 'build', 'main.asm', '--out-dir', project, '--json');
+    expect(allowed.status).toBe(0);
+    expect(allowed.json).toMatchObject({ ok: true });
   });
 
   it('run JSON reports beeper activity', () => {

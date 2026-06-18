@@ -93,12 +93,14 @@ program
   .argument('[file]', 'entry .asm file (defaults to zx.config.json entry)')
   .option('--out-dir <dir>', 'output directory', 'build')
   .option('--assembler <name>', 'assembler backend: spectral or sjasmplus')
+  .option('--sandbox', 'confine INCLUDE/INCBIN reads to the project (spectral backend only)', false)
   .option(...jsonOpt)
   .action(async (file: string | undefined, opts) => {
     process.exitCode = await buildCommand(file, {
       outDir: opts.outDir,
       json: opts.json,
       assembler: opts.assembler,
+      sandbox: opts.sandbox,
     });
   });
 
