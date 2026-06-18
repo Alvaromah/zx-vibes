@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { Machine } from '../../src/core/machine.js';
-import { writeZ80v1 } from '../../src/core/state.js';
+import { applyState, writeZ80v1 } from '../../src/core/state.js';
 
 function fingerprint(m: Machine): string {
   const h = createHash('sha256');
@@ -45,6 +45,34 @@ describe('.zxstate round-trip', () => {
     const restored = Machine.fromState(m.saveState());
     expect(restored.tStatesIntoFrame).toBe(m.tStatesIntoFrame);
     expect(restored.frameCount).toBe(m.frameCount);
+  });
+});
+
+describe('.zxstate malformed input', () => {
+  const validState = () => Machine.boot().saveState();
+
+  it('rejects a RAM field of the wrong length (no RangeError / silent corruption)', () => {
+    const state = validState();
+    state.ram = Buffer.from(new Uint8Array(100)).toString('base64');
+    expect(() => applyState(Machine.boot(), state)).toThrow(/ram is 100 bytes \(expected 49152\)/);
+  });
+
+  it('rejects a scanlineBorderColors field of the wrong length', () => {
+    const state = validState();
+    state.ula.scanlineBorderColors = Buffer.from(new Uint8Array(10)).toString('base64');
+    expect(() => applyState(Machine.boot(), state)).toThrow(/scanlineBorderColors/);
+  });
+
+  it('rejects a keyboardMatrix of the wrong length', () => {
+    const state = validState();
+    state.ula.keyboardMatrix = [0, 0, 0];
+    expect(() => applyState(Machine.boot(), state)).toThrow(/keyboardMatrix has 3 entries/);
+  });
+
+  it('rejects a state missing the cpu or ula section', () => {
+    const state = validState();
+    delete (state as Partial<typeof state>).cpu;
+    expect(() => applyState(Machine.boot(), state)).toThrow(/missing cpu or ula/);
   });
 });
 

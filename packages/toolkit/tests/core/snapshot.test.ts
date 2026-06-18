@@ -68,5 +68,23 @@ describe('.z80 snapshot inspection', () => {
     expect(machine.getRegisters().pc).toBe(0x8890);
     expect(machine.readMemory(0x8000, 4)).toEqual(new Uint8Array([0x22, 0x22, 0x22, 0x33]));
   });
+
+  it('tolerates a truncated compressed v1 stream without throwing or over-reading', () => {
+    const header = new Uint8Array(30);
+    header[7] = 0x80; // PC = 0x8000 → v1 (not extended)
+    header[12] = 0x20; // compression flag set
+    // Compressed body ends mid-end-marker (00 ED ED <missing 00>).
+    const body = new Uint8Array([0xaa, 0x00, 0xed, 0xed]);
+    const data = new Uint8Array(header.length + body.length);
+    data.set(header, 0);
+    data.set(body, header.length);
+
+    let ram!: Uint8Array;
+    expect(() => {
+      ram = snapshotRam('game.z80', data);
+    }).not.toThrow();
+    expect(ram.length).toBe(49152);
+    expect(ram[0]).toBe(0xaa);
+  });
 });
 
