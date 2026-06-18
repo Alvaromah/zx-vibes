@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EXIT, emit, envError, userError } from '../output.js';
@@ -30,9 +30,16 @@ function copyTemplate(src: string, dest: string, name: string): void {
   }
 }
 
+/** Reserved device basenames on Windows — creating files/dirs with these names
+ * fails or behaves abnormally, so reject them even though the regex allows them. */
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
 export function newCommand(name: string, opts: { json: boolean; template?: string; install?: boolean }): number {
   if (!/^[a-z0-9][a-z0-9-_]*$/i.test(name)) {
     throw userError(`Invalid project name '${name}' (use letters, digits, - and _)`, 'new');
+  }
+  if (process.platform === 'win32' && WINDOWS_RESERVED_NAME.test(name)) {
+    throw userError(`Invalid project name '${name}': reserved device name on Windows`, 'new');
   }
   const dest = join(process.cwd(), name);
   if (existsSync(dest)) {
@@ -41,6 +48,11 @@ export function newCommand(name: string, opts: { json: boolean; template?: strin
 
   const root = toolkitRoot();
   const template = opts.template ?? 'game';
+  // Validate the template name like the project name so it cannot escape the
+  // templates/ directory via path separators or '..'.
+  if (!/^[a-z0-9][a-z0-9-_]*$/i.test(template)) {
+    throw userError(`Invalid template name '${template}' (use letters, digits, - and _)`, 'new');
+  }
   const templateDir = join(root, 'templates', template);
   if (!existsSync(templateDir)) {
     const templatesDir = join(root, 'templates');
@@ -49,23 +61,30 @@ export function newCommand(name: string, opts: { json: boolean; template?: strin
       .sort();
     throw userError(`Unknown template '${template}'. Available: ${available.join(', ')}`, 'new');
   }
-  copyTemplate(templateDir, dest, name);
+  // Scaffold transactionally: roll back a partially-created directory on failure
+  // so the existsSync guard does not block a retry.
+  try {
+    copyTemplate(templateDir, dest, name);
 
-  const agentPlaybook = readFileSync(join(templateDir, 'AGENT_PLAYBOOK.md'), 'utf8').replaceAll('__NAME__', name);
-  writeFileSync(join(dest, 'AGENTS.md'), agentPlaybook);
-  writeFileSync(join(dest, 'CLAUDE.md'), agentPlaybook);
-  writeFileSync(join(dest, '.mcp.json'), `${claudeMcpJson()}\n`);
-  mkdirSync(join(dest, 'docs', 'agents'), { recursive: true });
-  writeFileSync(join(dest, 'docs', 'agents', 'codex-mcp.toml'), `${codexToml()}\n`);
+    const agentPlaybook = readFileSync(join(templateDir, 'AGENT_PLAYBOOK.md'), 'utf8').replaceAll('__NAME__', name);
+    writeFileSync(join(dest, 'AGENTS.md'), agentPlaybook);
+    writeFileSync(join(dest, 'CLAUDE.md'), agentPlaybook);
+    writeFileSync(join(dest, '.mcp.json'), `${claudeMcpJson()}\n`);
+    mkdirSync(join(dest, 'docs', 'agents'), { recursive: true });
+    writeFileSync(join(dest, 'docs', 'agents', 'codex-mcp.toml'), `${codexToml()}\n`);
 
-  // Local copy of the reference docs so the agent reads files, not URLs.
-  const docsSrc = join(root, 'docs', 'reference');
-  if (existsSync(docsSrc)) {
-    cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
-  }
-  const skillsSrc = join(root, 'docs', 'agents', 'skills');
-  if (existsSync(skillsSrc)) {
-    cpSync(skillsSrc, join(dest, 'docs', 'agents', 'skills'), { recursive: true });
+    // Local copy of the reference docs so the agent reads files, not URLs.
+    const docsSrc = join(root, 'docs', 'reference');
+    if (existsSync(docsSrc)) {
+      cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
+    }
+    const skillsSrc = join(root, 'docs', 'agents', 'skills');
+    if (existsSync(skillsSrc)) {
+      cpSync(skillsSrc, join(dest, 'docs', 'agents', 'skills'), { recursive: true });
+    }
+  } catch (err) {
+    rmSync(dest, { recursive: true, force: true });
+    throw err;
   }
 
   const shouldInstall = opts.install ?? true;

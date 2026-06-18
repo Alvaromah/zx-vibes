@@ -12,6 +12,11 @@ const targets = [
 ];
 
 const rollupBin = join(emulator, 'node_modules', 'rollup', 'dist', 'bin', 'rollup');
+if (!existsSync(rollupBin)) {
+  throw new Error(
+    `rollup not found at ${rollupBin}. Run "pnpm install" so @zx-vibes/emulator's dependencies are present.`
+  );
+}
 const emulatorPackage = JSON.parse(readFileSync(join(emulator, 'package.json'), 'utf8'));
 
 execFileSync(process.execPath, [rollupBin, '-c'], {

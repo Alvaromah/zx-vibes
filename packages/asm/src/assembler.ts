@@ -4,7 +4,7 @@ import {
   readFileSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 export interface Diagnostic {
   file: string;
@@ -285,6 +285,12 @@ export function writeAssemblyOutputs(
   const artifacts: string[] = [];
   for (const artifact of result.artifacts) {
     const target = resolve(outDir, artifact.path);
+    // Final containment guard: never write an artifact outside outDir, even if
+    // the path slipped past the assembler-time SAVEBIN validation.
+    const rel = relative(outDir, target);
+    if (rel.startsWith('..') || isAbsolute(rel)) {
+      throw new Error(`Refusing to write artifact outside the output directory: ${artifact.path}`);
+    }
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, artifact.bytes);
     artifacts.push(target);
@@ -815,8 +821,19 @@ function repeatCount(loc: SourceLine, op: string, expr: string, ctx: LoadContext
     ctx.diagnostics.push(diag(loc, `${op} repeat count must be positive or zero: ${expr}`));
     return undefined;
   }
-  return Math.trunc(value);
+  const count = Math.trunc(value);
+  if (count > MAX_REPEAT_COUNT) {
+    ctx.diagnostics.push(
+      diag(loc, `${op} repeat count too large: ${count} (max ${MAX_REPEAT_COUNT})`)
+    );
+    return undefined;
+  }
+  return count;
 }
+
+/** Upper bound on REPT/DUP iterations — far above any legitimate program (the
+ * address space is 64KB) but low enough to prevent runaway memory growth. */
+const MAX_REPEAT_COUNT = 1 << 20;
 
 function substituteRepeatCounter(line: SourceLine, counter: string, value: number): SourceLine {
   return { ...line, text: replaceIdentifierOutsideStrings(line.text, counter, String(value)) };
@@ -1331,9 +1348,23 @@ function seedDefines(
 function defineValue(raw: string | number | boolean): number {
   if (typeof raw === 'number') return raw;
   if (typeof raw === 'boolean') return raw ? 1 : 0;
-  if (raw.trim() === '') return 1;
-  const token = tokenizeExpr(raw.trim())[0];
-  return token?.kind === 'num' ? token.value : 1;
+  const trimmed = raw.trim();
+  if (trimmed === '') return 1;
+  // Evaluate the full expression (e.g. -5, 1+1, 1<<8) rather than only the
+  // first token, which silently collapsed any compound/negative define to 1.
+  const value = evalExpr(trimmed, {
+    symbols: new Map(),
+    currentGlobal: '',
+    moduleScope: '',
+    pc: 0,
+    cwd: process.cwd(),
+    includePaths: [],
+    diagnostics: [],
+    warnings: [],
+    loc: { file: '<define>', line: 1, text: trimmed },
+    strict: false,
+  });
+  return value ?? 1;
 }
 
 function isDirective(op: string): boolean {
@@ -2167,6 +2198,12 @@ function parseSavebin(
     fail(ctx, 'SAVEBIN expects a quoted file path');
     return undefined;
   }
+  // The artifact path is written relative to the output directory; reject
+  // absolute paths and '..' escapes so an untrusted source cannot write outside it.
+  if (isAbsolute(target.path) || /^[A-Za-z]:/.test(target.path) || target.path.split(/[\\/]+/).includes('..')) {
+    fail(ctx, `SAVEBIN path must stay within the output directory: ${target.path}`);
+    return undefined;
+  }
   const start = evalExpr(parts[1]!, ctx);
   if (start === undefined) return undefined;
   const length = parts[2] !== undefined ? evalExpr(parts[2]!, ctx) : 0x10000 - start;
@@ -2521,8 +2558,15 @@ class ExprParser {
       if (parsedRight === undefined) this.syntaxErrors.push(`Missing right operand after '${op}'`);
       const right = parsedRight ?? 0;
       if (op === '*') left = (left ?? 0) * right;
-      else if (op === '/') left = right === 0 ? 0 : Math.trunc((left ?? 0) / right);
-      else left = right === 0 ? 0 : (left ?? 0) % right;
+      else if (op === '/') {
+        // Flag in strict mode (the final emit pass); stay lenient (0) during
+        // non-strict layout passes where a forward reference may still be 0.
+        if (right === 0) this.syntaxErrors.push('Division by zero');
+        left = right === 0 ? 0 : Math.trunc((left ?? 0) / right);
+      } else {
+        if (right === 0) this.syntaxErrors.push('Modulo by zero');
+        left = right === 0 ? 0 : (left ?? 0) % right;
+      }
     }
     return left;
   }

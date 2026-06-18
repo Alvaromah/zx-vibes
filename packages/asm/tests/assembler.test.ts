@@ -599,6 +599,27 @@ describe('assemble', () => {
     expect(hex(new Uint8Array(readFileSync(join(dir, 'build', 'nested', 'all.bin'))))).toBe('01020304');
   });
 
+  it('rejects SAVEBIN paths that escape the output directory', () => {
+    for (const path of ['../evil.bin', '/tmp/evil.bin', 'nested/../../evil.bin']) {
+      const result = assemble(
+        ['    DEVICE ZXSPECTRUM48', '    ORG 0x8000', 'start: db 1', `    SAVEBIN "${path}", start, 1`, ''].join('\n'),
+        { entryPath: 'main.asm' }
+      );
+      expect(result.ok, `expected '${path}' to be rejected`).toBe(false);
+      expect(result.errors.some((e) => /SAVEBIN path must stay within/.test(e.message))).toBe(true);
+    }
+  });
+
+  it('evaluates compound and shifted command-line defines (not just the first token)', () => {
+    const result = assemble(['    ORG 0x8000', '    db SUM, SHIFTED', ''].join('\n'), {
+      entryPath: 'main.asm',
+      defines: { SUM: '1+2', SHIFTED: '1<<4' },
+    });
+    expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+    // SUM = 1+2 = 0x03, SHIFTED = 1<<4 = 0x10 (previously both collapsed to 0x01).
+    expect(hex(result.bytes)).toBe('0310');
+  });
+
   it('reports malformed SAVEBIN directives', () => {
     const noDevice = assemble(['    ORG 0x8000', 'start: db 1', '    SAVEBIN "part.bin", start, 1', ''].join('\n'), {
       entryPath: 'savebin-no-device.asm',

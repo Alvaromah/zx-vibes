@@ -1,8 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
+
+/** Reserved device basenames on Windows — reject even though the regex allows them. */
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
 const program = new Command();
 program.exitOverride();
@@ -23,8 +26,13 @@ program
   });
 
 program.parseAsync().catch((err: unknown) => {
-  if (typeof err === 'object' && err !== null && 'exitCode' in err && err.exitCode === 0) {
-    process.exitCode = 0;
+  // commander throws CommanderError for --help/--version (exitCode 0) and for
+  // parse errors (non-zero). Stderr is suppressed, so print parse-error messages.
+  if (err instanceof CommanderError) {
+    if (err.exitCode !== 0) {
+      console.error(`error: ${err.message.replace(/^error:\s*/i, '')}`);
+    }
+    process.exitCode = err.exitCode;
     return;
   }
   const message = err instanceof Error ? err.message.replace(/^error:\s*/i, '') : String(err);
@@ -45,6 +53,13 @@ function createProject(name: string, template: string, install: boolean): void {
   if (!/^[a-z0-9][a-z0-9-_]*$/i.test(name)) {
     throw new Error(`Invalid project name '${name}' (use letters, digits, - and _)`);
   }
+  if (process.platform === 'win32' && WINDOWS_RESERVED_NAME.test(name)) {
+    throw new Error(`Invalid project name '${name}': reserved device name on Windows`);
+  }
+  // Validate the template like the project name so it cannot escape starters/.
+  if (!/^[a-z0-9][a-z0-9-_]*$/i.test(template)) {
+    throw new Error(`Invalid template name '${template}' (use letters, digits, - and _)`);
+  }
   const root = packageRoot();
   const src = join(root, 'starters', template);
   if (!existsSync(src)) {
@@ -54,19 +69,28 @@ function createProject(name: string, template: string, install: boolean): void {
 
   const dest = resolve(process.cwd(), name);
   if (existsSync(dest)) throw new Error(`Directory already exists: ${dest}`);
-  copyTemplate(src, dest, name);
-  const agentPlaybook = readFileSync(join(src, 'AGENT_PLAYBOOK.md'), 'utf8').replaceAll('__NAME__', name);
-  writeFileSync(join(dest, 'AGENTS.md'), agentPlaybook);
-  writeFileSync(join(dest, 'CLAUDE.md'), agentPlaybook);
-  writeFileSync(join(dest, '.mcp.json'), `${claudeMcpJson()}\n`);
-  mkdirSync(join(dest, 'docs', 'agents'), { recursive: true });
-  writeFileSync(join(dest, 'docs', 'agents', 'codex-mcp.toml'), `${codexToml()}\n`);
+  // Scaffold transactionally: if any write fails, remove the partially-created
+  // directory so the user can retry (otherwise the existsSync guard blocks them).
+  try {
+    copyTemplate(src, dest, name);
+    const agentPlaybook = readFileSync(join(src, 'AGENT_PLAYBOOK.md'), 'utf8').replaceAll('__NAME__', name);
+    writeFileSync(join(dest, 'AGENTS.md'), agentPlaybook);
+    writeFileSync(join(dest, 'CLAUDE.md'), agentPlaybook);
+    writeFileSync(join(dest, '.mcp.json'), `${claudeMcpJson()}\n`);
+    mkdirSync(join(dest, 'docs', 'agents'), { recursive: true });
+    writeFileSync(join(dest, 'docs', 'agents', 'codex-mcp.toml'), `${codexToml()}\n`);
 
-  const docsSrc = join(root, 'docs', 'reference');
-  if (existsSync(docsSrc)) cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
-  const skillsSrc = join(root, 'docs', 'agents', 'skills');
-  if (existsSync(skillsSrc)) cpSync(skillsSrc, join(dest, 'docs', 'agents', 'skills'), { recursive: true });
+    const docsSrc = join(root, 'docs', 'reference');
+    if (existsSync(docsSrc)) cpSync(docsSrc, join(dest, 'docs', 'reference'), { recursive: true });
+    const skillsSrc = join(root, 'docs', 'agents', 'skills');
+    if (existsSync(skillsSrc)) cpSync(skillsSrc, join(dest, 'docs', 'agents', 'skills'), { recursive: true });
+  } catch (err) {
+    rmSync(dest, { recursive: true, force: true });
+    throw err;
+  }
 
+  // Install runs after the files exist; a failed install keeps the scaffold so
+  // the user can simply re-run npm install rather than re-scaffolding.
   if (install) {
     installDependencies(dest);
   }

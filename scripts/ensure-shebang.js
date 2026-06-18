@@ -7,13 +7,16 @@ const shebang = '#!/usr/bin/env node\n';
 
 if (files.length === 0) {
   console.error('usage: node scripts/ensure-shebang.js [--silent] <file> [...]');
-  process.exitCode = 1;
+  process.exit(1);
 }
 
 for (const file of files) {
   const current = readFileSync(file, 'utf8');
-  if (!current.startsWith(shebang)) {
-    writeFileSync(file, shebang + current);
+  // Strip a leading BOM (U+FEFF) and match any node shebang regardless of CRLF/LF
+  // so we don't prepend a second shebang to a file that already has one.
+  const withoutBom = current.charCodeAt(0) === 0xfeff ? current.slice(1) : current;
+  if (!/^#!.*\bnode\b/.test(withoutBom)) {
+    writeFileSync(file, shebang + withoutBom);
     if (!silent) console.log(`added shebang: ${file}`);
   }
   try {

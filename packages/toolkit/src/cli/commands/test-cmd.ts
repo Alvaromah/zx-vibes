@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { build } from '../../build/sjasmplus.js';
@@ -149,6 +149,7 @@ async function runSpec(specPath: string): Promise<TestResult> {
     ...(assembler ? { assembler } : {}),
   });
   if (!result.ok || !result.outputs.bin) {
+    rmSync(outDir, { recursive: true, force: true });
     return {
       spec: specPath,
       ok: false,
@@ -255,6 +256,7 @@ async function runSpec(specPath: string): Promise<TestResult> {
     }
   }
 
+  rmSync(outDir, { recursive: true, force: true });
   return { spec: specPath, ok: failures.length === 0, failures };
 }
 

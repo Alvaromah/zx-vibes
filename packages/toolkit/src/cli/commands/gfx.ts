@@ -7,10 +7,26 @@ import {
   spectrumScreenPng,
 } from '../../core/gfx.js';
 import { loadMachineFromSource, type MachineSourceOptions } from '../machine-source.js';
-import { EXIT, emit, ensureParentDir, hex, parseAddress, parseCount, parseInteger } from '../output.js';
+import { EXIT, emit, ensureParentDir, hex, parseAddress, parseCount, parseInteger, userError } from '../output.js';
 
 interface GfxSourceOptions extends MachineSourceOptions {
   json: boolean;
+}
+
+const ADDRESS_SPACE = 0x10000;
+
+/**
+ * Guards the bytes-to-read against the 64KB address space. The per-field caps
+ * (width-bytes/height/stride/count) multiply to ~512MB, but readMemory wraps at
+ * 0x10000 so anything larger is redundant — and would allocate a huge buffer.
+ */
+function assertWithinAddressSpace(len: number): void {
+  if (len > ADDRESS_SPACE) {
+    throw userError(
+      `requested region is ${len} bytes, larger than the 64KB address space; ` +
+        'reduce --width-bytes/--height/--stride/--count'
+    );
+  }
 }
 
 export function gfxScreenCommand(opts: GfxSourceOptions & { out: string; scale: string }): number {
@@ -65,6 +81,7 @@ export function gfxLinearCommand(
   const stride = opts.stride ? parseCount(opts.stride, 'stride', 1024) : widthBytes;
   const count = parseCount(opts.count, 'count', 1024);
   const len = stride * height * count;
+  assertWithinAddressSpace(len);
   const data = loaded.machine.readMemory(start, len);
   const renderOpts: Parameters<typeof linearBitmapPng>[1] = {
     widthBytes,
@@ -146,7 +163,9 @@ export function gfxBlitLinearCommand(
   const widthBytes = parseCount(opts.widthBytes, 'width-bytes', 64);
   const height = parseCount(opts.height, 'height', 512);
   const stride = opts.stride ? parseCount(opts.stride, 'stride', 1024) : widthBytes;
-  const data = loaded.machine.readMemory(start, stride * height);
+  const blitLen = stride * height;
+  assertWithinAddressSpace(blitLen);
+  const data = loaded.machine.readMemory(start, blitLen);
   const blitOpts: Parameters<typeof blitLinearToScreen>[2] = {
     x: parseInteger(opts.x, 'x', { min: 0, max: 255 }),
     y: parseInteger(opts.y, 'y', { min: 0, max: 191 }),

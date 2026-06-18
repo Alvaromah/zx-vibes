@@ -190,7 +190,14 @@ export class Z80SnapshotLoader {
     let i = 0;
     while (i < data.length && ptr < result.length) {
       const b = data[i++];
-      if (stopAtEndMarker && b === 0x00 && data[i] === 0xed && data[i + 1] === 0xed && data[i + 2] === 0x00) {
+      if (
+        stopAtEndMarker &&
+        b === 0x00 &&
+        i + 2 < data.length &&
+        data[i] === 0xed &&
+        data[i + 1] === 0xed &&
+        data[i + 2] === 0x00
+      ) {
         break;
       }
       if (b === 0xed && i < data.length && data[i] === 0xed) {

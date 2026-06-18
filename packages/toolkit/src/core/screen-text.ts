@@ -45,6 +45,19 @@ function charForCode(code: number): string {
   return String.fromCharCode(code);
 }
 
+/** The font table only depends on the (immutable) ROM, so cache it per ROM
+ * instance instead of rebuilding all 192 glyph keys on every screenText call. */
+const fontTableCache = new WeakMap<Uint8Array, Map<string, string>>();
+
+function getFontTable(rom: Uint8Array): Map<string, string> {
+  let table = fontTableCache.get(rom);
+  if (table === undefined) {
+    table = buildFontTable(rom);
+    fontTableCache.set(rom, table);
+  }
+  return table;
+}
+
 function buildFontTable(rom: Uint8Array): Map<string, string> {
   const table = new Map<string, string>();
   for (let i = 0; i < FONT_CHARS; i++) {
@@ -88,7 +101,7 @@ function densityGlyph(pixels: number): string {
 }
 
 export function screenText(m: Machine): ScreenText {
-  const font = buildFontTable(m.memory.rom);
+  const font = getFontTable(m.memory.rom);
   const screen = m.memory.getScreenMemory();
   const attrMem = m.memory.getAttributeMemory();
 

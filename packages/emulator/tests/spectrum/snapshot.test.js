@@ -126,6 +126,19 @@ describe('Z80SnapshotLoader', () => {
             expect(memory.read(0x4001)).toBe(0xbb);
             expect(memory.read(0x4002)).not.toBe(0xcc);
         });
+
+        it('tolerates a truncated compressed stream without throwing or reading past the buffer', () => {
+            const header = makeSnapshot({ 12: 0x20 }).subarray(0, 30);
+            // Stream that ends mid-end-marker (00 ED ED <missing 00>): the marker
+            // check must be bounds-guarded rather than reading data[i+2] = undefined.
+            const compressed = new Uint8Array([0xaa, 0x00, 0xed, 0xed]);
+            const data = new Uint8Array(header.length + compressed.length);
+            data.set(header, 0);
+            data.set(compressed, header.length);
+
+            expect(() => loader.load(data)).not.toThrow();
+            expect(memory.read(0x4000)).toBe(0xaa);
+        });
     });
 
     describe('extended .z80 snapshots', () => {

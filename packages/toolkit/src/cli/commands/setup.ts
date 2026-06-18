@@ -29,11 +29,39 @@ export function setupCommand(opts: SetupCommandOptions): number {
   }
 
   if (opts.agent === 'claude') {
-    writeFileSync('.mcp.json', `${snippet}\n`);
-    return ok(opts, snippet, '.mcp.json');
+    const configPath = '.mcp.json';
+    if (existsSync(configPath)) {
+      // Back up and merge instead of clobbering a hand-edited .mcp.json
+      // (mirrors the Codex branch, which preserves an existing config.toml).
+      const backup = `${configPath}.bak-zx-vibes-${timestamp()}`;
+      copyFileSync(configPath, backup);
+      writeFileSync(configPath, `${mergeClaudeConfig(readFileSync(configPath, 'utf8'))}\n`);
+      return ok(opts, snippet, configPath, backup);
+    }
+    writeFileSync(configPath, `${snippet}\n`);
+    return ok(opts, snippet, configPath);
   }
 
   return ok(opts, snippet);
+}
+
+/** Merge the zx_vibes server into an existing .mcp.json, preserving any other
+ * servers and top-level keys. Invalid JSON is replaced (the original survives
+ * in the .bak file written by the caller). */
+function mergeClaudeConfig(current: string): string {
+  let parsed: Record<string, unknown> = {};
+  try {
+    const doc = JSON.parse(current) as unknown;
+    if (doc && typeof doc === 'object') parsed = doc as Record<string, unknown>;
+  } catch {
+    parsed = {};
+  }
+  const servers =
+    parsed['mcpServers'] && typeof parsed['mcpServers'] === 'object'
+      ? (parsed['mcpServers'] as Record<string, unknown>)
+      : {};
+  parsed['mcpServers'] = { ...servers, zx_vibes: zxVibesServerEntry() };
+  return JSON.stringify(parsed, null, 2);
 }
 
 function ok(opts: SetupCommandOptions, snippet: string, written?: string, backup?: string): number {
@@ -58,19 +86,12 @@ function codexToml(): string {
   ].join('\n');
 }
 
+function zxVibesServerEntry(): { command: string; args: string[] } {
+  return { command: 'pnpm', args: ['exec', 'zxs-mcp'] };
+}
+
 function claudeJson(): string {
-  return JSON.stringify(
-    {
-      mcpServers: {
-        zx_vibes: {
-          command: 'pnpm',
-          args: ['exec', 'zxs-mcp'],
-        },
-      },
-    },
-    null,
-    2
-  );
+  return JSON.stringify({ mcpServers: { zx_vibes: zxVibesServerEntry() } }, null, 2);
 }
 
 function timestamp(): string {
