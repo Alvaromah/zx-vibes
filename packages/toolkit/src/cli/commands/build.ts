@@ -15,6 +15,8 @@ export interface BuildCommandOptions {
   outDir?: string;
   json: boolean;
   assembler?: string;
+  /** Confine INCLUDE/INCBIN reads to the project (spectral backend only). */
+  sandbox?: boolean;
 }
 
 export async function buildCommand(entryArg: string | undefined, opts: BuildCommandOptions): Promise<number> {
@@ -52,7 +54,11 @@ export async function buildCommand(entryArg: string | undefined, opts: BuildComm
     return EXIT.USER_ERROR;
   }
 
-  const result = await build(resolveProjectPath(entry), { outDir, assembler });
+  const result = await build(resolveProjectPath(entry), {
+    outDir,
+    assembler,
+    ...(opts.sandbox !== undefined ? { sandbox: opts.sandbox } : {}),
+  });
 
   // Record the SLD path so break/disasm/trace can resolve labels and lines.
   if (result.ok && result.outputs.sld) {
