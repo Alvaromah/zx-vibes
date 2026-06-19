@@ -7,6 +7,9 @@ import { describe, expect, it } from 'vitest';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const cliPath = join(root, 'dist', 'cli', 'index.js');
+const expectedZxVibesRange = `^${
+  (JSON.parse(readFileSync(join(root, '..', 'zx-vibes', 'package.json'), 'utf8')) as { version: string }).version
+}`;
 
 function zxs(cwd: string, ...args: string[]) {
   const res = spawnSync('node', [cliPath, ...args], { cwd, encoding: 'utf8' });
@@ -57,7 +60,7 @@ describe('zxs new (scaffold)', () => {
     };
     expect(packageJson.scripts.build).toBe('zxs build');
     expect(packageJson.scripts.test).toBe('zxs test tests');
-    expect(packageJson.devDependencies['zx-vibes']).toBe('^0.2.0');
+    expect(packageJson.devDependencies['zx-vibes']).toBe(expectedZxVibesRange);
 
     // The skeleton must build, run HALT-synced, and move under scheduled keys.
     const test = zxs(project, 'test', 'tests', '--json');

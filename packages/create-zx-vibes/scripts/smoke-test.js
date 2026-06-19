@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const cli = join(process.cwd(), 'dist', 'index.js');
+const expectedZxVibesRange = `^${JSON.parse(readFileSync(join(process.cwd(), '..', 'zx-vibes', 'package.json'), 'utf8')).version}`;
 
 const help = run(process.cwd(), '--help');
 assert.equal(help.status, 0, help.stderr);
@@ -26,7 +27,7 @@ assert.equal(existsSync(join(project, 'docs', 'agents', 'skills', 'INDEX.md')), 
 assert.equal(existsSync(join(project, 'docs', 'reference', 'screen-layout.md')), true);
 
 const metadata = JSON.parse(readFileSync(join(project, 'package.json'), 'utf8'));
-assert.equal(metadata.devDependencies['zx-vibes'], '^0.2.0');
+assert.equal(metadata.devDependencies['zx-vibes'], expectedZxVibesRange);
 
 function run(cwd, ...args) {
   const res = spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8' });
