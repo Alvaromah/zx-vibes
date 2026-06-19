@@ -1,5 +1,22 @@
 # zx-vibes
 
+## 0.2.0
+
+### Minor Changes
+
+- SCF/CCF undocumented-flag accuracy (Q register) and an opt-in INCLUDE/INCBIN sandbox.
+
+  - **emulator:** model the Z80 "Q" latch so `SCF`/`CCF` derive their undocumented bits 3/5 as `((Q ^ F) | A)` — i.e. from `A` right after a flag-modifying instruction and from `F | A` otherwise.
+  - **asm:** new opt-in `sandbox` assemble option (and `zxasm --sandbox`) that confines `INCLUDE`/`INCBIN`/`INSERT` reads to the project (cwd + include paths); absolute paths and `../` escapes are rejected. `SAVEBIN` output was already confined.
+  - **toolkit:** `zxs build --sandbox`, and the MCP server sandboxes agent-driven builds by default (spectral backend).
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @zx-vibes/asm@0.2.0
+  - @zx-vibes/toolkit@0.3.0
+
 ## 0.1.4
 
 ### Patch Changes
