@@ -541,6 +541,19 @@ export class ZXSpectrum {
     return portValue;
   }
 
+  _updateTapeInput() {
+    const tapeInputBit = this.tape.update(this.cpu.cycles);
+    this.ula.setTapeInput(tapeInputBit);
+    // Make the tape loading signal audible like real hardware: the ULA mixes the
+    // EAR input into the speaker output, so emit an audio edge on each tape flip.
+    if (tapeInputBit !== this._prevTapeBit) {
+      this._prevTapeBit = tapeInputBit;
+      if (this.sound && this.sound.enabled && this.useAudioWorklet && this.tape.playing) {
+        this.sound.setBeeperState(this._mixTapeAudio(this.ula.lastPortFE), this.cpu.cycles - this.frameStartCycles);
+      }
+    }
+  }
+
   runFrame() {
     let tStates = 0;
 
@@ -555,20 +568,17 @@ export class ZXSpectrum {
       const cyclesExecuted = this.cpu.cycles - beforeCycles;
 
       this.ula.addCycles(cyclesExecuted);
-
-      const tapeInputBit = this.tape.update(this.cpu.cycles);
-      this.ula.setTapeInput(tapeInputBit);
-      // Make the tape loading signal audible like real hardware: the ULA mixes the
-      // EAR input into the speaker output, so emit an audio edge on each tape flip.
-      if (tapeInputBit !== this._prevTapeBit) {
-        this._prevTapeBit = tapeInputBit;
-        if (this.sound && this.sound.enabled && this.useAudioWorklet && this.tape.playing) {
-          this.sound.setBeeperState(this._mixTapeAudio(this.ula.lastPortFE), this.cpu.cycles - this.frameStartCycles);
-        }
-      }
+      this._updateTapeInput();
 
       if (this.ula.shouldGenerateInterrupt()) {
+        const beforeInterruptCycles = this.cpu.cycles;
         this.cpu.interrupt();
+        const interruptCycles = this.cpu.cycles - beforeInterruptCycles;
+        if (interruptCycles > 0) {
+          this.ula.addCycles(interruptCycles);
+          this._updateTapeInput();
+          tStates += interruptCycles;
+        }
       }
 
       tStates += cyclesExecuted;

@@ -39,6 +39,34 @@ describe('Machine.boot', () => {
     };
     expect(runOnce()).toBe(runOnce());
   });
+
+  it('advances ULA and run budgets for accepted interrupt acknowledge cycles', () => {
+    const m = Machine.boot();
+    const rom = new Uint8Array(16384);
+    rom[0x0038] = 0xfb; // EI
+    rom[0x0039] = 0xc9; // RET
+    m.memory.loadROM(rom);
+
+    // EI ; HALT ; JR HALT. The IM 1 handler returns to the loop and re-enables
+    // interrupts so each frame accepts the next INT.
+    const program = new Uint8Array([0xfb, 0x76, 0x18, 0xfd]);
+    m.loadBinary(program, 0x8000);
+    m.cpu.interruptMode = 1;
+
+    let ulaCycles = 0;
+    const addCycles = m.ula.addCycles.bind(m.ula);
+    m.ula.addCycles = (cycles: number): void => {
+      ulaCycles += cycles;
+      addCycles(cycles);
+    };
+
+    const beforeCycles = m.cpu.cycles;
+    const outcome = m.run({ frames: 1 });
+    const cpuCycles = m.cpu.cycles - beforeCycles;
+
+    expect(outcome.tstatesRun).toBe(cpuCycles);
+    expect(ulaCycles).toBe(cpuCycles);
+  });
 });
 
 describe('Machine.loadBinary', () => {

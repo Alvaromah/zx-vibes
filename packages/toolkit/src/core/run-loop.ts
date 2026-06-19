@@ -52,9 +52,8 @@ export interface RunOutcome {
 const DEFAULT_MAX_FRAMES = 5000;
 
 /**
- * Drives the machine exactly like ZXSpectrum.runFrame() does
- * (zx-generation@1.0.1 src/spectrum/spectrum.js:466), minus sound:
- * execute -> ula.addCycles -> tape.update -> setTapeInput -> interrupt.
+ * Drives the machine like ZXSpectrum.runFrame() does, minus sound:
+ * execute -> advance ULA/tape -> interrupt -> advance accepted interrupt cycles.
  *
  * Unlike upstream, this loop can stop mid-frame (untilPC, hang verdicts);
  * the partial-frame position is kept in machine.tStatesIntoFrame so a later
@@ -123,12 +122,19 @@ export function runMachine(m: Machine, opts: RunOptions = {}): RunOutcome {
     }
     opts.onInstruction?.(pc);
 
-    const elapsed = cpu.execute();
+    let elapsed = cpu.execute();
     instructionsRun++;
     ula.addCycles(elapsed);
     ula.setTapeInput(tape.update(cpu.cycles));
     if (ula.shouldGenerateInterrupt()) {
+      const beforeInterruptCycles = cpu.cycles;
       cpu.interrupt();
+      const interruptCycles = cpu.cycles - beforeInterruptCycles;
+      if (interruptCycles > 0) {
+        ula.addCycles(interruptCycles);
+        ula.setTapeInput(tape.update(cpu.cycles));
+        elapsed += interruptCycles;
+      }
     }
     tstatesRun += elapsed;
     m.tStatesIntoFrame += elapsed;
