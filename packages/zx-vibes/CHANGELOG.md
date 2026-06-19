@@ -1,5 +1,12 @@
 # zx-vibes
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [9b9fa51]
+  - @zx-vibes/toolkit@0.3.1
+
 ## 0.2.0
 
 ### Minor Changes

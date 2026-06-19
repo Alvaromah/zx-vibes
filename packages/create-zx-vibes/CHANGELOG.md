@@ -1,5 +1,14 @@
 # create-zx-vibes
 
+## 0.2.2
+
+### Patch Changes
+
+- 9b9fa51: Update generated project starters and toolkit templates to depend on the current
+  `zx-vibes` 0.2 line, and add a root consistency check that keeps starter
+  dependency floors and public package version docs aligned with package
+  manifests.
+
 ## 0.2.1
 
 ### Patch Changes
