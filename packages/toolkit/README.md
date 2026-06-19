@@ -6,7 +6,7 @@ Main implementation package for the zx-vibes ZX Spectrum 48K toolchain.
 templates, recipes, generated-project reference docs, and the headless/browser
 feedback loop used by coding agents and humans.
 
-Current package version in this repository: `0.2.1`.
+Current package version in this repository: `0.3.0`.
 
 ## Install
 

@@ -12,10 +12,12 @@
   "scripts": {
     "check:gallery-bundles": "node scripts/check-gallery-bundles.js",
     "check:starter-templates": "node scripts/check-starter-template-drift.js",
+    "check:versions": "node scripts/check-version-consistency.js",
+    "sync:versions": "node scripts/check-version-consistency.js --write",
     "docs:dev": "vitepress dev docs/manual",
     "docs:build": "vitepress build docs/manual",
     "docs:preview": "vitepress preview docs/manual",
-    "check:drift": "pnpm --filter create-zx-vibes run check:assets && pnpm --filter @zx-vibes/toolkit run check:docs && pnpm run check:starter-templates && pnpm run check:gallery-bundles",
+    "check:drift": "pnpm run check:versions && pnpm --filter create-zx-vibes run check:assets && pnpm --filter @zx-vibes/toolkit run check:docs && pnpm run check:starter-templates && pnpm run check:gallery-bundles",
     "build": "pnpm -r --sort run build",
     "typecheck": "pnpm -r --sort run typecheck",
     "test": "pnpm -r --sort run test",

@@ -74,8 +74,8 @@ The generated project includes:
   `docs/agents/codex-mcp.toml` for Codex.
 - npm scripts for `doctor`, `build`, `run`, `screen`, `test`, `verify`,
   `preview`, and advanced `zxs` passthrough commands.
-- a `zx-vibes` dev dependency floor of `^0.1.3`, which resolves to the current
-  compatible patch release on normal installs.
+- a `zx-vibes` dev dependency floor of `^0.2.0`, which resolves to the current
+  compatible release on normal installs.
 
 `pnpm create zx-vibes` and `zxs new` both install dependencies by default. Use
 `--no-install` for offline work or when testing an unpublished local checkout.
@@ -272,9 +272,10 @@ pnpm run verify
 ```
 
 `pnpm run verify` runs generated-asset drift checks first, then build,
-typecheck, lint, and tests. Drift checks compare root starters with toolkit
-templates, root docs with copied package docs, create-package assets with root
-source assets, and gallery browser bundles with the current emulator bundle.
+typecheck, lint, and tests. Drift checks compare package version surfaces, root
+starters with toolkit templates, root docs with copied package docs,
+create-package assets with root source assets, and gallery browser bundles with
+the current emulator bundle.
 
 ### Local Clone Workflows
 
@@ -336,15 +337,15 @@ starters/                 Source starter projects copied by the generator
 
 ## Published Packages
 
-Current manifests and npm registry versions match as of 2026-06-16:
+Current package manifest versions:
 
 | Package | Version | Public surface |
 | --- | ---: | --- |
-| `zx-vibes` | `0.1.4` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
-| `create-zx-vibes` | `0.2.0` | `create-zx-vibes` bin used by `pnpm create zx-vibes`. |
-| `@zx-vibes/toolkit` | `0.2.1` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
-| `@zx-vibes/asm` | `0.1.2` | `zxasm` bin plus `spectral-asm` compatibility alias; assembler/disassembler API. |
-| `@zx-vibes/emulator` | `0.1.3` | Browser bundle, ROM assets, examples, and JavaScript emulator exports. |
+| `zx-vibes` | `0.2.0` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
+| `create-zx-vibes` | `0.2.1` | `create-zx-vibes` bin used by `pnpm create zx-vibes`. |
+| `@zx-vibes/toolkit` | `0.3.0` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
+| `@zx-vibes/asm` | `0.2.0` | `zxasm` bin plus `spectral-asm` compatibility alias; assembler/disassembler API. |
+| `@zx-vibes/emulator` | `0.2.0` | Browser bundle, ROM assets, examples, and JavaScript emulator exports. |
 
 `zxs --version` reports the toolkit version because the CLI is implemented by
 `@zx-vibes/toolkit`. `zxasm --version` reports the assembler package version.
@@ -369,7 +370,8 @@ Reference docs live in `docs/reference/`; project-local agent skills live in
 `docs/agents/skills/`. Manual, reference, and agent docs are copied into the
 create-package docs, while reference and agent docs are also copied into
 generated projects and toolkit package docs. `pnpm run check:drift` verifies
-those copied docs stay in sync.
+those copied docs stay in sync and that starter `zx-vibes` dependency floors
+track the umbrella package version.
 
 ## Release, CI, and Security
 

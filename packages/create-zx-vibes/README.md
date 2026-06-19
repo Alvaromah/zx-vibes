@@ -2,7 +2,7 @@
 
 Project generator for zx-vibes ZX Spectrum 48K agent projects.
 
-Current package version in this repository: `0.2.0`.
+Current package version in this repository: `0.2.1`.
 
 ## Usage
 
@@ -50,7 +50,7 @@ Generated projects include:
 - local `docs/reference/` and `docs/agents/skills/` copies.
 
 Starter package metadata currently uses a `zx-vibes` dev dependency floor of
-`^0.1.3`, which resolves to the latest compatible patch release during normal
+`^0.2.0`, which resolves to the latest compatible release during normal
 installs.
 
 ## Relationship To `zxs new`

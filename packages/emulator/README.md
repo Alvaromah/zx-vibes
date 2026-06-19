@@ -2,7 +2,7 @@
 
 JavaScript ZX Spectrum 48K emulator package used by zx-vibes.
 
-Current package version in this repository: `0.1.3`.
+Current package version in this repository: `0.2.0`.
 
 The package provides a browser-oriented `ZXSpectrum` facade, lower-level CPU and
 Spectrum components, a distributable browser bundle, examples, and the 48K ROM

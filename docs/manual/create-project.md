@@ -39,8 +39,9 @@ Both templates create the same project contract:
 - `docs/reference/` contains local ZX Spectrum implementation notes.
 - `docs/agents/skills/` contains local topic skills for coding agents.
 
-The starter package metadata uses a `zx-vibes` dev dependency floor that
-resolves to the current compatible patch release during normal installs.
+The starter package metadata currently uses a `zx-vibes` dev dependency floor
+of `^0.2.0`, which resolves to the current compatible release during normal
+installs.
 
 ## Install Behavior
 

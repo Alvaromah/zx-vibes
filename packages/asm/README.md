@@ -2,7 +2,7 @@
 
 TypeScript Z80 assembler/disassembler for zx-vibes ZX Spectrum 48K workflows.
 
-Current package version in this repository: `0.1.2`.
+Current package version in this repository: `0.2.0`.
 
 The package removes the default need for an external assembler in generated
 zx-vibes projects. It targets the current starters, toolkit templates, recipes,
