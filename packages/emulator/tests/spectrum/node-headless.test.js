@@ -21,6 +21,24 @@ function stubCanvas() {
     };
 }
 
+function installInterruptDrivenHaltLoop(spectrum) {
+    const rom = new Uint8Array(16384);
+    rom[0x0038] = 0xfb; // EI
+    rom[0x0039] = 0xc9; // RET
+    spectrum.loadROM(rom);
+
+    const program = [
+        0xfb, // EI
+        0x76, // HALT
+        0x18, 0xfd, // JR 0x8001
+    ];
+    for (let i = 0; i < program.length; i++) {
+        spectrum.memory.write(0x8000 + i, program[i]);
+    }
+    spectrum.cpu.registers.setPC(0x8000);
+    spectrum.cpu.interruptMode = 1;
+}
+
 describe('headless Node environment', () => {
     it('has no DOM globals (sanity)', () => {
         expect(typeof document).toBe('undefined');
@@ -45,6 +63,23 @@ describe('headless Node environment', () => {
         const before = spectrum.cpu.cycles;
         spectrum.runFrame();
         expect(spectrum.cpu.cycles).toBeGreaterThan(before);
+    });
+
+    it('advances ULA time for accepted interrupt acknowledge cycles', () => {
+        const spectrum = new ZXSpectrum(stubCanvas(), { sound: false, rom: null });
+        installInterruptDrivenHaltLoop(spectrum);
+
+        let ulaCycles = 0;
+        const addCycles = spectrum.ula.addCycles.bind(spectrum.ula);
+        spectrum.ula.addCycles = (cycles) => {
+            ulaCycles += cycles;
+            addCycles(cycles);
+        };
+
+        const beforeCycles = spectrum.cpu.cycles;
+        spectrum.runFrame();
+
+        expect(spectrum.cpu.cycles - beforeCycles).toBe(ulaCycles);
     });
 
     it('rejects selector strings with a clear error instead of a ReferenceError', () => {
