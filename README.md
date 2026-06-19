@@ -74,7 +74,7 @@ The generated project includes:
   `docs/agents/codex-mcp.toml` for Codex.
 - npm scripts for `doctor`, `build`, `run`, `screen`, `test`, `verify`,
   `preview`, and advanced `zxs` passthrough commands.
-- a `zx-vibes` dev dependency floor of `^0.2.0`, which resolves to the current
+- a `zx-vibes` dev dependency floor of `^0.2.1`, which resolves to the current
   compatible release on normal installs.
 
 `pnpm create zx-vibes` and `zxs new` both install dependencies by default. Use
@@ -341,9 +341,9 @@ Current package manifest versions:
 
 | Package | Version | Public surface |
 | --- | ---: | --- |
-| `zx-vibes` | `0.2.0` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
-| `create-zx-vibes` | `0.2.1` | `create-zx-vibes` bin used by `pnpm create zx-vibes`. |
-| `@zx-vibes/toolkit` | `0.3.0` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
+| `zx-vibes` | `0.2.1` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
+| `create-zx-vibes` | `0.2.2` | `create-zx-vibes` bin used by `pnpm create zx-vibes`. |
+| `@zx-vibes/toolkit` | `0.3.1` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
 | `@zx-vibes/asm` | `0.2.0` | `zxasm` bin plus `spectral-asm` compatibility alias; assembler/disassembler API. |
 | `@zx-vibes/emulator` | `0.2.0` | Browser bundle, ROM assets, examples, and JavaScript emulator exports. |
 

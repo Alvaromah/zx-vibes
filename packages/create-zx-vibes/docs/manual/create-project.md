@@ -40,7 +40,7 @@ Both templates create the same project contract:
 - `docs/agents/skills/` contains local topic skills for coding agents.
 
 The starter package metadata currently uses a `zx-vibes` dev dependency floor
-of `^0.2.0`, which resolves to the current compatible release during normal
+of `^0.2.1`, which resolves to the current compatible release during normal
 installs.
 
 ## Install Behavior

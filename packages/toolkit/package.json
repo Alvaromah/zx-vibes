@@ -1,6 +1,6 @@
 {
   "name": "@zx-vibes/toolkit",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "zx-vibes toolkit: assemble, run headless, observe, debug, preview, and iterate on ZX Spectrum games.",
   "license": "MIT",
   "author": "Alvaro Mateos",
