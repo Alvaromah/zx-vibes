@@ -14,6 +14,7 @@
     "check:starter-templates": "node scripts/check-starter-template-drift.js",
     "check:versions": "node scripts/check-version-consistency.js",
     "sync:versions": "node scripts/check-version-consistency.js --write",
+    "version:packages": "changeset version && pnpm run sync:versions",
     "docs:dev": "vitepress dev docs/manual",
     "docs:build": "vitepress build docs/manual",
     "docs:preview": "vitepress preview docs/manual",
