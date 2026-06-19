@@ -26,7 +26,7 @@ assert.equal(existsSync(join(project, 'docs', 'agents', 'skills', 'INDEX.md')), 
 assert.equal(existsSync(join(project, 'docs', 'reference', 'screen-layout.md')), true);
 
 const metadata = JSON.parse(readFileSync(join(project, 'package.json'), 'utf8'));
-assert.equal(metadata.devDependencies['zx-vibes'], '^0.1.3');
+assert.equal(metadata.devDependencies['zx-vibes'], '^0.2.0');
 
 function run(cwd, ...args) {
   const res = spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8' });
