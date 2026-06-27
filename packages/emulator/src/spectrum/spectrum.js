@@ -96,6 +96,7 @@ export class ZXSpectrum {
     this.FRAMES_PER_SECOND = this.options.fps;
     this.TSTATES_PER_FRAME = 69888;
     this.INTERRUPT_TSTATES = 32;
+    this.DISPLAY_LATCH_TSTATES = 64 * 224;
 
     // State
     this.running = false;
@@ -556,32 +557,51 @@ export class ZXSpectrum {
 
   runFrame() {
     let tStates = 0;
+    let displayLatched = false;
 
     this.frameStartCycles = this.cpu.cycles;
     if (this.useAudioWorklet && this.sound && this.sound.startFrame) {
       this.sound.startFrame();
     }
 
+    const advanceFrameHardware = (cycles) => {
+      if (cycles <= 0) {
+        return;
+      }
+
+      this.ula.addCycles(cycles);
+      this._updateTapeInput();
+      tStates += cycles;
+
+      // Latch a full-frame display snapshot near the start of the visible
+      // bitmap area. Games often erase/redraw sprites late in the frame after
+      // those scanlines have already been displayed; rendering at frame end
+      // exposes that transient memory state as visible flicker.
+      if (!displayLatched && tStates >= this.DISPLAY_LATCH_TSTATES) {
+        this.renderDisplay();
+        displayLatched = true;
+      }
+    };
+
     while (tStates < this.TSTATES_PER_FRAME) {
       const beforeCycles = this.cpu.cycles;
       this.cpu.execute();
       const cyclesExecuted = this.cpu.cycles - beforeCycles;
 
-      this.ula.addCycles(cyclesExecuted);
-      this._updateTapeInput();
+      advanceFrameHardware(cyclesExecuted);
 
       if (this.ula.shouldGenerateInterrupt()) {
         const beforeInterruptCycles = this.cpu.cycles;
         this.cpu.interrupt();
         const interruptCycles = this.cpu.cycles - beforeInterruptCycles;
         if (interruptCycles > 0) {
-          this.ula.addCycles(interruptCycles);
-          this._updateTapeInput();
-          tStates += interruptCycles;
+          advanceFrameHardware(interruptCycles);
         }
       }
+    }
 
-      tStates += cyclesExecuted;
+    if (!displayLatched) {
+      this.renderDisplay();
     }
 
     if (this.useAudioWorklet && this.sound && this.sound.endFrame) {
@@ -730,7 +750,6 @@ export class ZXSpectrum {
         return;
       }
 
-      this.renderDisplay();
       this.draw();
 
       this.renderAnimationId = requestAnimationFrame(render);
