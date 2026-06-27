@@ -236,7 +236,7 @@ export class SpectrumAudioWorklet {
                     super();
                     this.sr = ${sr};
                     this.samplesPerFrame = Math.round(this.sr / 50);
-                    this.resampler = new BeeperResampler(this.sr, 3500000);
+                    this.resampler = new BeeperResampler(this.sr, ${SpectrumAudioWorklet.CPU_FREQ});
                     this.tmp = new Float32Array(this.samplesPerFrame + 16);
 
                     /* Sample ring buffer: decouples bursty postMessage frame

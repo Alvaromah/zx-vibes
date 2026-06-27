@@ -7,6 +7,12 @@ import { SpectrumAudioWorklet } from './audio-worklet.js';
 import { Z80SnapshotLoader } from './snapshot.js';
 import { Tape } from './tape.js';
 import { TouchKeyboard } from './touch-keyboard.js';
+import {
+  VIDEO_MODE_ACCURATE,
+  VIDEO_MODE_FAST,
+  normalizeVideoMode,
+  normalizeVideoProfile,
+} from './video-timing.js';
 
 /**
  * ZXSpectrum - Main emulator class for the ZX Spectrum 48K
@@ -48,6 +54,8 @@ export class ZXSpectrum {
       handleKeyboard: true,
       touchKeyboard: 'auto', // 'auto', true, false, or custom element/selector
       fps: 50,
+      videoProfile: '48k-pal',
+      videoMode: VIDEO_MODE_FAST,
       onReady: null,
       onError: null,
       ...options,
@@ -61,6 +69,14 @@ export class ZXSpectrum {
     this.memory = new SpectrumMemory();
     this.ula = new SpectrumULA();
     this.display = new SpectrumDisplay();
+    this.videoProfile = normalizeVideoProfile(this.options.videoProfile);
+    this.videoMode = normalizeVideoMode(this.options.videoMode);
+    this.memory.setVideoProfile(this.videoProfile);
+    this.ula.setVideoProfile(this.videoProfile);
+    this.memory.setFrameTimingProvider(() => this.cpu ? this.cpu.cycles - this.frameStartCycles : 0);
+    this.ula.setFrameTimingProvider(() => this.cpu ? this.cpu.cycles - this.frameStartCycles : 0);
+    this.ula.setFloatingBusProvider((tstate) => this.memory.readFloatingBus(tstate));
+    this.setVideoMode(this.videoMode);
 
     // Initialize sound if enabled
     this.useAudioWorklet = this.options.sound && this.options.useAudioWorklet;
@@ -149,6 +165,17 @@ export class ZXSpectrum {
     if (this.options.rom) {
       this._initialize();
     }
+  }
+
+  setVideoMode(mode) {
+    this.videoMode = normalizeVideoMode(mode);
+    const accurate = this.videoMode === VIDEO_MODE_ACCURATE;
+    this.memory.setContentionEnabled(accurate);
+    this.ula.setContentionEnabled(accurate);
+  }
+
+  getVideoMode() {
+    return this.videoMode;
   }
 
   /**
@@ -542,12 +569,27 @@ export class ZXSpectrum {
     return portValue;
   }
 
+  _mixTapeAudioBit(portValue, tapeBit) {
+    return (portValue & 0xef) | (tapeBit ? 0x10 : 0);
+  }
+
   _updateTapeInput() {
     const tapeInputBit = this.tape.update(this.cpu.cycles);
     this.ula.setTapeInput(tapeInputBit);
     // Make the tape loading signal audible like real hardware: the ULA mixes the
     // EAR input into the speaker output, so emit an audio edge on each tape flip.
-    if (tapeInputBit !== this._prevTapeBit) {
+    const edgeEvents = typeof this.tape.consumeEdgeEvents === 'function' ? this.tape.consumeEdgeEvents() : [];
+    if (edgeEvents.length > 0) {
+      for (const edge of edgeEvents) {
+        this._prevTapeBit = edge.bit;
+        if (this.sound && this.sound.enabled && this.useAudioWorklet && this.tape.playing) {
+          this.sound.setBeeperState(
+            this._mixTapeAudioBit(this.ula.lastPortFE, edge.bit),
+            Math.max(0, edge.cycle - this.frameStartCycles),
+          );
+        }
+      }
+    } else if (tapeInputBit !== this._prevTapeBit) {
       this._prevTapeBit = tapeInputBit;
       if (this.sound && this.sound.enabled && this.useAudioWorklet && this.tape.playing) {
         this.sound.setBeeperState(this._mixTapeAudio(this.ula.lastPortFE), this.cpu.cycles - this.frameStartCycles);
@@ -558,8 +600,13 @@ export class ZXSpectrum {
   runFrame() {
     let tStates = 0;
     let displayLatched = false;
+    const accurateVideo = this.videoMode === VIDEO_MODE_ACCURATE;
 
     this.frameStartCycles = this.cpu.cycles;
+    if (accurateVideo) {
+      this.memory.beginVideoTrace();
+      this.ula.beginFrameTrace();
+    }
     if (this.useAudioWorklet && this.sound && this.sound.startFrame) {
       this.sound.startFrame();
     }
@@ -577,7 +624,7 @@ export class ZXSpectrum {
       // bitmap area. Games often erase/redraw sprites late in the frame after
       // those scanlines have already been displayed; rendering at frame end
       // exposes that transient memory state as visible flicker.
-      if (!displayLatched && tStates >= this.DISPLAY_LATCH_TSTATES) {
+      if (!accurateVideo && !displayLatched && tStates >= this.DISPLAY_LATCH_TSTATES) {
         this.renderDisplay();
         displayLatched = true;
       }
@@ -600,7 +647,7 @@ export class ZXSpectrum {
       }
     }
 
-    if (!displayLatched) {
+    if (accurateVideo || !displayLatched) {
       this.renderDisplay();
     }
 
@@ -636,6 +683,7 @@ export class ZXSpectrum {
       if (this.useAudioWorklet) {
         try {
           let success = await this.sound.init();
+          await this.resumeAudio();
 
           if (!success && this.sound.audioContext && this.sound.audioContext.state === 'suspended') {
             try {
@@ -684,12 +732,7 @@ export class ZXSpectrum {
     this._startRenderLoop();
   }
 
-  /**
-   * Stop the emulation
-   */
-  stop() {
-    this.running = false;
-
+  _cancelAnimationLoops() {
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
@@ -699,9 +742,41 @@ export class ZXSpectrum {
       cancelAnimationFrame(this.renderAnimationId);
       this.renderAnimationId = null;
     }
+  }
+
+  /**
+   * Pause emulation without tearing down audio resources.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
+  async pause() {
+    this.running = false;
+    this._cancelAnimationLoops();
+    const context = this.sound?.audioContext;
+    if (context?.state === 'running' && typeof context.suspend === 'function') {
+      await context.suspend();
+    }
+  }
+
+  /**
+   * Resume emulation through the public start path.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
+  async resume() {
+    await this.start();
+  }
+
+  /**
+   * Stop the emulation
+   */
+  async stop() {
+    await this.pause();
 
     if (this.sound && this.sound.stop) {
-      this.sound.stop();
+      await this.sound.stop();
     }
   }
 
@@ -765,10 +840,20 @@ export class ZXSpectrum {
    * @returns {Uint8Array} Display buffer
    */
   renderDisplay() {
+    if (this.videoMode === VIDEO_MODE_ACCURATE) {
+      const videoTrace = this.memory.consumeVideoTrace() ?? {
+        screenMemory: new Uint8Array(this.memory.getScreenMemory()),
+        attributeMemory: new Uint8Array(this.memory.getAttributeMemory()),
+        writes: [],
+      };
+      const borderTimeline = this.ula.getBorderTimeline();
+      this.ula.resetBorderChanged();
+      return this.display.renderAccurate(videoTrace, borderTimeline);
+    }
+
     const screenMemory = this.memory.getScreenMemory();
     const attributeMemory = this.memory.getAttributeMemory();
     const borderColor = this.ula.getBorderColor();
-
     const scanlineBorderColors = this.ula.getScanlineBorderColors();
 
     this.ula.resetBorderChanged();

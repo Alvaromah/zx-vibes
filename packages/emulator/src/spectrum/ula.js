@@ -1,3 +1,8 @@
+import {
+  VIDEO_PROFILE_48K_PAL,
+  contentionDelayForTstate,
+} from './video-timing.js';
+
 /**
  * ZX Spectrum ULA (Uncommitted Logic Array) Emulation
  * Handles I/O ports, keyboard, border color, and speaker
@@ -26,6 +31,7 @@ export class SpectrumULA {
     // Scanline tracking for border effects
     this.scanline = 0;
     this.scanlineBorderColors = new Uint8Array(312).fill(1);
+    this.borderTimeline = [{ tstate: 0, color: this.borderColor }];
     this.borderChanged = false;
 
     // Timing constants
@@ -35,6 +41,50 @@ export class SpectrumULA {
 
     // Interrupt generation
     this.interruptPending = false;
+    this.videoProfile = VIDEO_PROFILE_48K_PAL;
+    this.tstateProvider = () => 0;
+    this.floatingBusProvider = null;
+    this.contentionEnabled = false;
+  }
+
+  setVideoProfile(profile) {
+    this.videoProfile = profile || VIDEO_PROFILE_48K_PAL;
+  }
+
+  setFrameTimingProvider(provider) {
+    this.tstateProvider = typeof provider === 'function' ? provider : () => 0;
+  }
+
+  setFloatingBusProvider(provider) {
+    this.floatingBusProvider = typeof provider === 'function' ? provider : null;
+  }
+
+  setContentionEnabled(enabled) {
+    this.contentionEnabled = Boolean(enabled);
+  }
+
+  getFrameTstate(extraCycles = 0) {
+    return Math.max(0, Math.floor(this.tstateProvider() + extraCycles));
+  }
+
+  beginFrameTrace() {
+    this.borderTimeline = [{ tstate: 0, color: this.borderColor & 0x07 }];
+    this.scanlineBorderColors.fill(this.borderColor & 0x07);
+    this.scanlineBorderColors[this.scanline] = this.borderColor & 0x07;
+    this.borderChanged = false;
+  }
+
+  recordBorderEvent(color) {
+    const tstate = this.getFrameTstate();
+    const normalizedColor = color & 0x07;
+    const previous = this.borderTimeline[this.borderTimeline.length - 1];
+    if (previous && previous.tstate === tstate) {
+      previous.color = normalizedColor;
+      return;
+    }
+    if (!previous || previous.color !== normalizedColor) {
+      this.borderTimeline.push({ tstate, color: normalizedColor });
+    }
   }
 
   readPort(port) {
@@ -63,7 +113,8 @@ export class SpectrumULA {
       return result;
     }
 
-    return 0xff;
+    const floating = this.floatingBusProvider ? this.floatingBusProvider(this.getFrameTstate()) : null;
+    return floating ?? 0xff;
   }
 
   writePort(port, value) {
@@ -84,6 +135,7 @@ export class SpectrumULA {
         this.borderColor = newBorderColor;
         this.borderChanged = true;
         this.scanlineBorderColors[this.scanline] = newBorderColor;
+        this.recordBorderEvent(newBorderColor);
       }
 
       // Notify about port write with the value (for accurate beeper tracking)
@@ -163,6 +215,17 @@ export class SpectrumULA {
     return this.scanlineBorderColors;
   }
 
+  getBorderTimeline() {
+    return this.borderTimeline.map((event) => ({ ...event }));
+  }
+
+  getPortContentionDelay(port, extraCycles = 0) {
+    if (!this.contentionEnabled || (port & 0x0001) !== 0) {
+      return 0;
+    }
+    return contentionDelayForTstate(this.getFrameTstate(extraCycles), this.videoProfile);
+  }
+
   /**
    * Check if border color changed during this frame
    *
@@ -206,6 +269,7 @@ export class SpectrumULA {
     this.borderChanged = true;
     // Update scanline border color for current scanline
     this.scanlineBorderColors[this.scanline] = this.borderColor;
+    this.recordBorderEvent(this.borderColor);
   }
 
   /**

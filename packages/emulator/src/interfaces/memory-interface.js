@@ -5,20 +5,39 @@
 class MemoryInterface {
   constructor(memory) {
     this.memory = memory;
+    this.extraCycles = 0;
+  }
+
+  applyContention(address) {
+    if (!this.memory || typeof this.memory.getContentionDelay !== 'function') {
+      return;
+    }
+    const delay = this.memory.getContentionDelay(address & 0xffff, this.extraCycles);
+    this.extraCycles += delay;
+  }
+
+  consumeExtraCycles() {
+    const cycles = this.extraCycles;
+    this.extraCycles = 0;
+    return cycles;
   }
 
   /**
    * Read a byte from memory
    */
   readByte(address) {
-    return this.memory.read(address & 0xffff);
+    const addr = address & 0xffff;
+    this.applyContention(addr);
+    return this.memory.read(addr);
   }
 
   /**
    * Write a byte to memory
    */
   writeByte(address, value) {
-    this.memory.write(address & 0xffff, value & 0xff);
+    const addr = address & 0xffff;
+    this.applyContention(addr);
+    this.memory.write(addr, value & 0xff);
   }
 
   /**
@@ -26,8 +45,8 @@ class MemoryInterface {
    */
   readWord(address) {
     const addr = address & 0xffff;
-    const low = this.memory.read(addr);
-    const high = this.memory.read((addr + 1) & 0xffff);
+    const low = this.readByte(addr);
+    const high = this.readByte((addr + 1) & 0xffff);
     return low | (high << 8);
   }
 
@@ -37,8 +56,8 @@ class MemoryInterface {
   writeWord(address, value) {
     const addr = address & 0xffff;
     const val = value & 0xffff;
-    this.memory.write(addr, val & 0xff);
-    this.memory.write((addr + 1) & 0xffff, (val >> 8) & 0xff);
+    this.writeByte(addr, val & 0xff);
+    this.writeByte((addr + 1) & 0xffff, (val >> 8) & 0xff);
   }
 
   /**

@@ -60,6 +60,8 @@ declare module '@zx-vibes/emulator/src/core/cpu.js' {
 }
 
 declare module '@zx-vibes/emulator/src/spectrum/memory.js' {
+  import type { VideoMemoryWrite, VideoProfile } from '@zx-vibes/emulator/src/spectrum/video-timing.js';
+
   export class SpectrumMemory {
     rom: Uint8Array;
     ram: Uint8Array;
@@ -72,10 +74,19 @@ declare module '@zx-vibes/emulator/src/spectrum/memory.js' {
     /** View of the 768-byte attribute area (0x5800-0x5AFF). */
     getAttributeMemory(): Uint8Array;
     clearRAM(): void;
+    setVideoProfile(profile: VideoProfile): void;
+    setFrameTimingProvider(provider: () => number): void;
+    setContentionEnabled(enabled: boolean): void;
+    beginVideoTrace(): void;
+    consumeVideoTrace(): { screenMemory: Uint8Array; attributeMemory: Uint8Array; writes: VideoMemoryWrite[] } | null;
+    getContentionDelay(address: number, extraCycles?: number): number;
+    readFloatingBus(tstate: number): number | null;
   }
 }
 
 declare module '@zx-vibes/emulator/src/spectrum/ula.js' {
+  import type { BorderTimelineEvent, VideoProfile } from '@zx-vibes/emulator/src/spectrum/video-timing.js';
+
   export class SpectrumULA {
     borderColor: number;
     speakerBit: number;
@@ -85,6 +96,7 @@ declare module '@zx-vibes/emulator/src/spectrum/ula.js' {
     tapeInputBit: number;
     scanline: number;
     scanlineBorderColors: Uint8Array;
+    borderTimeline: BorderTimelineEvent[];
     borderChanged: boolean;
     cycleCounter: number;
     interruptPending: boolean;
@@ -97,6 +109,13 @@ declare module '@zx-vibes/emulator/src/spectrum/ula.js' {
     getBorderColor(): number;
     addCycles(cycles: number): void;
     getScanlineBorderColors(): Uint8Array;
+    getBorderTimeline(): BorderTimelineEvent[];
+    setVideoProfile(profile: VideoProfile): void;
+    setFrameTimingProvider(provider: () => number): void;
+    setFloatingBusProvider(provider: (tstate: number) => number | null): void;
+    setContentionEnabled(enabled: boolean): void;
+    beginFrameTrace(): void;
+    getPortContentionDelay(port: number, extraCycles?: number): number;
     shouldGenerateInterrupt(): boolean;
     setBorderColor(color: number): void;
     setTapeInput(bit: number): void;
@@ -108,6 +127,8 @@ declare module '@zx-vibes/emulator/src/spectrum/ula.js' {
 }
 
 declare module '@zx-vibes/emulator/src/spectrum/display.js' {
+  import type { BorderTimelineEvent, VideoTrace } from '@zx-vibes/emulator/src/spectrum/video-timing.js';
+
   export class SpectrumDisplay {
     readonly width: number;
     readonly height: number;
@@ -124,6 +145,7 @@ declare module '@zx-vibes/emulator/src/spectrum/display.js' {
       borderColor: number,
       scanlineBorderColors?: Uint8Array | null
     ): Uint8Array;
+    renderAccurate(videoTrace: VideoTrace, borderTimeline?: BorderTimelineEvent[] | null): Uint8Array;
     getDisplaySize(): {
       width: number;
       height: number;
@@ -137,6 +159,59 @@ declare module '@zx-vibes/emulator/src/spectrum/display.js' {
   }
 }
 
+declare module '@zx-vibes/emulator/src/spectrum/video-timing.js' {
+  export type VideoMode = 'fast' | 'accurateVideo';
+  export interface VideoProfile {
+    id: '48k-pal';
+    tstatesPerFrame: number;
+    scanlinesPerFrame: number;
+    tstatesPerScanline: number;
+    screenWidth: number;
+    screenHeight: number;
+    borderTop: number;
+    borderBottom: number;
+    borderLeft: number;
+    borderRight: number;
+    displayedFirstScanline: number;
+    displayWindowStartTstate: number;
+    screenWindowStartTstate: number;
+    screenWindowEndTstate: number;
+  }
+  export interface BorderTimelineEvent {
+    tstate: number;
+    color: number;
+  }
+  export interface VideoMemoryWrite {
+    tstate: number;
+    address: number;
+    value: number;
+  }
+  export interface VideoTrace {
+    screenMemory: Uint8Array;
+    attributeMemory: Uint8Array;
+    writes: VideoMemoryWrite[];
+  }
+  export const VIDEO_MODE_FAST: 'fast';
+  export const VIDEO_MODE_ACCURATE: 'accurateVideo';
+  export const VIDEO_PROFILE_48K_PAL: VideoProfile;
+  export function normalizeVideoMode(mode?: string): VideoMode;
+  export function normalizeVideoProfile(profile?: string): VideoProfile;
+  export function getScreenAddress(xByte: number, y: number): number;
+  export function getAttributeAddress(xByte: number, y: number): number;
+  export function frameTstateToBeam(
+    tstate: number,
+    profile?: VideoProfile
+  ): { frameTstate: number; scanline: number; scanlineTstate: number };
+  export function displayYToScanline(y: number, profile?: VideoProfile): number;
+  export function displayXToScanlineTstate(x: number, profile?: VideoProfile): number;
+  export function displayPixelToFrameTstate(x: number, y: number, profile?: VideoProfile): number;
+  export function bitmapByteBeamTstate(xByte: number, y: number, profile?: VideoProfile): number;
+  export function isContendedAddress(address: number): boolean;
+  export function isActiveDisplayTstate(tstate: number, profile?: VideoProfile): boolean;
+  export function contentionDelayForTstate(tstate: number, profile?: VideoProfile): number;
+  export function floatingBusAddressForTstate(tstate: number, profile?: VideoProfile): number | null;
+}
+
 declare module '@zx-vibes/emulator/src/spectrum/tape.js' {
   /** Only reads .cpu and .ula from the object passed to the constructor. */
   export class Tape {
@@ -148,6 +223,7 @@ declare module '@zx-vibes/emulator/src/spectrum/tape.js' {
     rewind(): void;
     /** Advances tape playback to the given absolute CPU cycle; returns the EAR bit. */
     update(cycles: number): number;
+    consumeEdgeEvents(): Array<{ cycle: number; bit: number }>;
   }
 }
 

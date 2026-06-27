@@ -38,3 +38,51 @@ describe('Tape parsing — malformed input', () => {
     });
   });
 });
+
+describe('Tape edge timing', () => {
+  it('processes multiple pending pure-tone edges from their ideal schedule', () => {
+    const tape = makeTape();
+    tape.blocks = [{ type: tape.BLOCK_PURE_TONE, pulseLength: 10, pulseCount: 5 }];
+    tape.play();
+
+    expect(tape.nextEdgeCycle).toBe(10);
+    tape.update(55);
+
+    expect(tape.consumeEdgeEvents()).toEqual([
+      { cycle: 10, bit: 1 },
+      { cycle: 20, bit: 0 },
+      { cycle: 30, bit: 1 },
+      { cycle: 40, bit: 0 },
+      { cycle: 50, bit: 1 },
+    ]);
+    expect(tape.playing).toBe(false);
+  });
+
+  it('does not accumulate polling jitter into standard pilot timing', () => {
+    const tape = makeTape();
+    tape.blocks = [
+      {
+        type: tape.BLOCK_STANDARD,
+        data: new Uint8Array([0x00]),
+        pilotPulse: 10,
+        sync1Pulse: 7,
+        sync2Pulse: 8,
+        zeroPulse: 5,
+        onePulse: 9,
+        pilotPulses: 3,
+        pause: 0,
+        usedBits: 8,
+      },
+    ];
+    tape.play();
+
+    tape.update(11);
+    tape.update(24);
+    tape.update(39);
+    tape.update(60);
+
+    const events = tape.consumeEdgeEvents();
+    expect(events.slice(0, 8).map((event) => event.cycle)).toEqual([10, 20, 30, 40, 50, 60]);
+    expect(tape.nextEdgeCycle).toBe(67);
+  });
+});

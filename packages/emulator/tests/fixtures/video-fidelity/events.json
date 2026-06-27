@@ -1,0 +1,12 @@
+{
+  "profile": "48k-pal",
+  "description": "Synthetic border and beam events used by emulator tests before external goldens are available.",
+  "borderTimeline": [
+    { "tstate": 0, "color": 1 },
+    { "tstate": 3658, "color": 2 }
+  ],
+  "screenWrites": [
+    { "tstate": 14383, "address": 16384, "value": 255, "expectVisible": true },
+    { "tstate": 14385, "address": 16384, "value": 255, "expectVisible": false }
+  ]
+}

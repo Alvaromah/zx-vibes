@@ -67,6 +67,27 @@ describe('Machine.boot', () => {
     expect(outcome.tstatesRun).toBe(cpuCycles);
     expect(ulaCycles).toBe(cpuCycles);
   });
+
+  it('keeps fast as the default and makes accurateVideo opt-in', () => {
+    const program = new Uint8Array([
+      0x3a, 0x00, 0x40, // LD A,(0x4000)
+    ]);
+
+    const fast = Machine.boot();
+    fast.loadBinary(program, 0x8000);
+    fast.tStatesIntoFrame = 64 * 224 + 48;
+    const fastOutcome = fast.run({ instructions: 1 });
+
+    const accurate = Machine.boot({ videoMode: 'accurateVideo' });
+    accurate.loadBinary(program, 0x8000);
+    accurate.tStatesIntoFrame = 64 * 224 + 48;
+    const accurateOutcome = accurate.run({ instructions: 1 });
+
+    expect(fast.videoMode).toBe('fast');
+    expect(fastOutcome.tstatesRun).toBe(13);
+    expect(accurate.videoMode).toBe('accurateVideo');
+    expect(accurateOutcome.tstatesRun).toBe(19);
+  });
 });
 
 describe('Machine.loadBinary', () => {

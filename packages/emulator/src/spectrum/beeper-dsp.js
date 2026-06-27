@@ -24,10 +24,10 @@
 export class BeeperResampler {
   /**
    * @param {number} sampleRate  output sample rate (Hz)
-   * @param {number} cpuFreq     CPU T-states per second (real Spectrum = 3.5 MHz)
+   * @param {number} cpuFreq     CPU T-states per second (48K PAL frame clock = 3.4944 MHz)
    * @param {number} lpCutoff    one-pole low-pass cutoff (Hz)
    */
-  constructor(sampleRate, cpuFreq = 3500000, lpCutoff = 7000) {
+  constructor(sampleRate, cpuFreq = 3494400, lpCutoff = 7000) {
     this.tps = cpuFreq / sampleRate; // T-states per output sample
     this.level = 0; // carried speaker level (0..~1.2 with mic mix)
     this.windowFilled = 0; // T-states already integrated into the in-progress sample
@@ -59,8 +59,11 @@ export class BeeperResampler {
 
     for (;;) {
       const need = tps - this.windowFilled; // T-states left to finish current sample
-      const end = cur + need;
-      if (end <= frameTStates) {
+      let end = cur + need;
+      if (end <= frameTStates + 1e-6) {
+        if (end > frameTStates) {
+          end = frameTStates;
+        }
         // sample completes inside this frame: integrate [cur, end)
         let area = 0;
         while (eix < count && edges[eix * 2] < end) {

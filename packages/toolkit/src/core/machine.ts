@@ -4,6 +4,12 @@ import { SpectrumULA, SPECTRUM_KEYS } from '@zx-vibes/emulator/src/spectrum/ula.
 import { SpectrumDisplay } from '@zx-vibes/emulator/src/spectrum/display.js';
 import { Tape } from '@zx-vibes/emulator/src/spectrum/tape.js';
 import { Z80SnapshotLoader } from '@zx-vibes/emulator/src/spectrum/snapshot.js';
+import {
+  VIDEO_MODE_ACCURATE,
+  VIDEO_MODE_FAST,
+  normalizeVideoMode,
+  normalizeVideoProfile,
+} from '@zx-vibes/emulator/src/spectrum/video-timing.js';
 
 import { loadRom } from './rom.js';
 import { runMachine, type RunOptions, type RunOutcome } from './run-loop.js';
@@ -16,6 +22,13 @@ export interface LoadBinaryOptions {
   sp?: number;
   /** Disable interrupts before jumping (as if the program started with DI). */
   di?: boolean;
+}
+
+export type VideoMode = 'fast' | 'accurateVideo';
+
+export interface MachineOptions {
+  videoMode?: VideoMode;
+  videoProfile?: '48k-pal';
 }
 
 /** Full register set including shadow registers (which Z80.getState() omits). */
@@ -77,6 +90,7 @@ export class Machine {
   readonly cpu: Z80;
   readonly tape: Tape;
   readonly display: SpectrumDisplay;
+  videoMode: VideoMode;
 
   /** Completed frames since boot/restore. */
   frameCount = 0;
@@ -93,19 +107,27 @@ export class Machine {
   private beeperLevel = 0;
   private audioStartCycles = 0;
 
-  private constructor() {
+  private constructor(options: MachineOptions = {}) {
     this.memory = new SpectrumMemory();
     this.ula = new SpectrumULA();
     this.cpu = new Z80(this.memory, this.ula);
     this.tape = new Tape({ cpu: this.cpu, ula: this.ula });
     this.display = new SpectrumDisplay();
+    const videoProfile = normalizeVideoProfile(options.videoProfile);
+    this.videoMode = normalizeVideoMode(options.videoMode ?? VIDEO_MODE_FAST) as VideoMode;
+    this.memory.setVideoProfile(videoProfile);
+    this.ula.setVideoProfile(videoProfile);
+    this.memory.setFrameTimingProvider(() => this.tStatesIntoFrame);
+    this.ula.setFrameTimingProvider(() => this.tStatesIntoFrame);
+    this.ula.setFloatingBusProvider((tstate: number) => this.memory.readFloatingBus(tstate));
+    this.setVideoMode(this.videoMode);
     this.resetAudioActivity();
     this.ula.setPortWriteCallback((value: number) => this.recordPortFEWrite(value));
   }
 
   /** Fresh machine with the 48K ROM loaded, CPU at the reset vector. */
-  static boot(): Machine {
-    const m = new Machine();
+  static boot(options: MachineOptions = {}): Machine {
+    const m = new Machine(options);
     m.memory.loadROM(loadRom());
     return m;
   }
@@ -115,6 +137,13 @@ export class Machine {
     const m = Machine.boot();
     applyState(m, state);
     return m;
+  }
+
+  setVideoMode(mode: VideoMode): void {
+    this.videoMode = normalizeVideoMode(mode) as VideoMode;
+    const accurate = this.videoMode === VIDEO_MODE_ACCURATE;
+    this.memory.setContentionEnabled(accurate);
+    this.ula.setContentionEnabled(accurate);
   }
 
   saveState(): ZxState {
@@ -213,6 +242,16 @@ export class Machine {
 
   /** Raw RGBA framebuffer, 352x296 (256x192 screen + border). */
   framebufferRGBA(): Uint8Array {
+    if (this.videoMode === VIDEO_MODE_ACCURATE) {
+      return this.display.renderAccurate(
+        {
+          screenMemory: new Uint8Array(this.memory.getScreenMemory()),
+          attributeMemory: new Uint8Array(this.memory.getAttributeMemory()),
+          writes: [],
+        },
+        this.ula.getBorderTimeline()
+      );
+    }
     return this.display.render(
       this.memory.getScreenMemory(),
       this.memory.getAttributeMemory(),

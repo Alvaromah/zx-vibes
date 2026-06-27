@@ -116,6 +116,40 @@ describe('headless Node environment', () => {
         expect(spectrum.display.displayBuffer[offset + 2]).toBe(0xd7);
     });
 
+    it('keeps the latch out of accurateVideo so beam-timed writes can change visible pixels', () => {
+        const spectrum = new ZXSpectrum(stubCanvas(), { sound: false, rom: null, videoMode: 'accurateVideo' });
+        spectrum.reset();
+        spectrum.memory.write(0x5800, 0x07);
+
+        let calls = 0;
+        spectrum.cpu.execute = () => {
+            calls++;
+
+            if (calls === 1) {
+                spectrum.memory.write(0x4000, 0xff);
+                const cycles = spectrum.DISPLAY_LATCH_TSTATES + 1;
+                spectrum.cpu.cycles += cycles;
+                return cycles;
+            }
+
+            spectrum.memory.write(0x4000, 0x00);
+            const cycles = spectrum.TSTATES_PER_FRAME - (spectrum.cpu.cycles - spectrum.frameStartCycles);
+            spectrum.cpu.cycles += cycles;
+            return cycles;
+        };
+
+        spectrum.runFrame();
+
+        const displayX = spectrum.display.borderLeft;
+        const displayY = spectrum.display.borderTop;
+        const offset = (displayY * spectrum.display.totalWidth + displayX) * 4;
+
+        expect(spectrum.getVideoMode()).toBe('accurateVideo');
+        expect(spectrum.display.displayBuffer[offset]).toBe(0x00);
+        expect(spectrum.display.displayBuffer[offset + 1]).toBe(0x00);
+        expect(spectrum.display.displayBuffer[offset + 2]).toBe(0x00);
+    });
+
     it('rejects selector strings with a clear error instead of a ReferenceError', () => {
         expect(() => new ZXSpectrum('#screen', { sound: false, rom: null }))
             .toThrow(/Canvas selectors need a DOM/);

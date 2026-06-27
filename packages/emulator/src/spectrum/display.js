@@ -1,3 +1,11 @@
+import {
+  VIDEO_PROFILE_48K_PAL,
+  bitmapByteBeamTstate,
+  displayPixelToFrameTstate,
+  getAttributeAddress,
+  getScreenAddress,
+} from './video-timing.js';
+
 /**
  * ZX Spectrum Display Renderer
  * Converts screen memory to pixels
@@ -58,6 +66,7 @@ export class SpectrumDisplay {
      * @readonly
      */
     this.borderRight = 48;
+    this.videoProfile = VIDEO_PROFILE_48K_PAL;
 
     /**
      * @property {number} totalWidth - Total display width including border
@@ -242,18 +251,126 @@ export class SpectrumDisplay {
    * const addr = this.getScreenAddress(0, 64);  // Returns 2048
    */
   getScreenAddress(x, y) {
-    // Split y into components
-    const y7 = (y >> 7) & 0x01;
-    const y6 = (y >> 6) & 0x01;
-    const y5 = (y >> 5) & 0x01;
-    const y4 = (y >> 4) & 0x01;
-    const y3 = (y >> 3) & 0x01;
-    const y2 = (y >> 2) & 0x01;
-    const y1 = (y >> 1) & 0x01;
-    const y0 = y & 0x01;
+    return getScreenAddress(x, y);
+  }
 
-    // Calculate address
-    return (y7 << 12) | (y6 << 11) | (y2 << 10) | (y1 << 9) | (y0 << 8) | (y5 << 7) | (y4 << 6) | (y3 << 5) | x;
+  getColorFromTimeline(borderTimeline, tstate) {
+    if (!borderTimeline || borderTimeline.length === 0) {
+      return 7;
+    }
+    let color = borderTimeline[0].color & 0x07;
+    for (const event of borderTimeline) {
+      if (event.tstate > tstate) {
+        break;
+      }
+      color = event.color & 0x07;
+    }
+    return color;
+  }
+
+  buildTemporalWriteIndex(writes) {
+    const byAddress = new Map();
+    for (const write of writes) {
+      const address = write.address & 0xffff;
+      if (address < 0x4000 || address > 0x5aff) {
+        continue;
+      }
+      let list = byAddress.get(address);
+      if (!list) {
+        list = [];
+        byAddress.set(address, list);
+      }
+      list.push({ tstate: write.tstate, value: write.value & 0xff });
+    }
+    for (const list of byAddress.values()) {
+      list.sort((a, b) => a.tstate - b.tstate);
+    }
+    return byAddress;
+  }
+
+  getTemporalMemoryValue(baseMemory, writesByAddress, address, beamTstate) {
+    const baseOffset = address >= 0x5800 ? address - 0x5800 : address - 0x4000;
+    let value = baseMemory[baseOffset] ?? 0xff;
+    const writes = writesByAddress.get(address);
+    if (!writes) {
+      return value;
+    }
+
+    let low = 0;
+    let high = writes.length - 1;
+    let found = -1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (writes[mid].tstate <= beamTstate) {
+        found = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return found >= 0 ? writes[found].value : value;
+  }
+
+  setPixel(x, y, colorIndex) {
+    const color = this.palette[colorIndex & 0x0f];
+    const offset = (y * this.totalWidth + x) * 4;
+    this.displayBuffer[offset] = color[0];
+    this.displayBuffer[offset + 1] = color[1];
+    this.displayBuffer[offset + 2] = color[2];
+    this.displayBuffer[offset + 3] = color[3];
+  }
+
+  renderAccurate(videoTrace, borderTimeline = null) {
+    const screenMemory = videoTrace?.screenMemory ?? new Uint8Array(6144);
+    const attributeMemory = videoTrace?.attributeMemory ?? new Uint8Array(768);
+    const writesByAddress = this.buildTemporalWriteIndex(videoTrace?.writes ?? []);
+    const timeline = borderTimeline && borderTimeline.length > 0 ? [...borderTimeline].sort((a, b) => a.tstate - b.tstate) : null;
+    let borderIndex = 0;
+    let borderColor = timeline ? timeline[0].color & 0x07 : 7;
+
+    for (let y = 0; y < this.totalHeight; y++) {
+      for (let x = 0; x < this.totalWidth; x++) {
+        const isScreenPixel =
+          y >= this.borderTop &&
+          y < this.borderTop + this.height &&
+          x >= this.borderLeft &&
+          x < this.borderLeft + this.width;
+
+        if (!isScreenPixel) {
+          const tstate = displayPixelToFrameTstate(x, y, this.videoProfile);
+          while (timeline && borderIndex + 1 < timeline.length && timeline[borderIndex + 1].tstate <= tstate) {
+            borderIndex++;
+            borderColor = timeline[borderIndex].color & 0x07;
+          }
+          this.setPixel(x, y, borderColor);
+          continue;
+        }
+
+        const screenX = x - this.borderLeft;
+        const screenY = y - this.borderTop;
+        const xByte = screenX >> 3;
+        const beamTstate = bitmapByteBeamTstate(xByte, screenY, this.videoProfile);
+        const screenAddr = 0x4000 + getScreenAddress(xByte, screenY);
+        const attrAddr = 0x5800 + getAttributeAddress(xByte, screenY);
+        const pixelByte = this.getTemporalMemoryValue(screenMemory, writesByAddress, screenAddr, beamTstate);
+        const attr = this.getTemporalMemoryValue(attributeMemory, writesByAddress, attrAddr, beamTstate);
+
+        const attrData = this.attributeCache[attr];
+        let inkColor = attrData.ink;
+        let paperColor = attrData.paper;
+        if (attrData.flash && this.flashPhase) {
+          const temp = inkColor;
+          inkColor = paperColor;
+          paperColor = temp;
+        }
+        for (let bit = screenX & 0x07; bit < 8 && x < this.borderLeft + this.width; bit++, x++) {
+          this.setPixel(x, y, ((pixelByte >> (7 - bit)) & 0x01) ? inkColor : paperColor);
+        }
+        x--;
+      }
+    }
+
+    return this.displayBuffer;
   }
 
   /**

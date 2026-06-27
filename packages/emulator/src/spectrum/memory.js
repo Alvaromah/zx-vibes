@@ -1,3 +1,10 @@
+import {
+  VIDEO_PROFILE_48K_PAL,
+  contentionDelayForTstate,
+  floatingBusAddressForTstate,
+  isContendedAddress,
+} from './video-timing.js';
+
 /**
  * ZX Spectrum Memory Implementation
  *
@@ -46,6 +53,56 @@ export class SpectrumMemory {
      * @private
      */
     this.romEnabled = true;
+
+    this.videoProfile = VIDEO_PROFILE_48K_PAL;
+    this.contentionEnabled = false;
+    this.tstateProvider = () => 0;
+    this.videoTraceActive = false;
+    this.videoTrace = null;
+  }
+
+  setVideoProfile(profile) {
+    this.videoProfile = profile || VIDEO_PROFILE_48K_PAL;
+  }
+
+  setFrameTimingProvider(provider) {
+    this.tstateProvider = typeof provider === 'function' ? provider : () => 0;
+  }
+
+  setContentionEnabled(enabled) {
+    this.contentionEnabled = Boolean(enabled);
+  }
+
+  getFrameTstate(extraCycles = 0) {
+    return Math.max(0, Math.floor(this.tstateProvider() + extraCycles));
+  }
+
+  beginVideoTrace() {
+    this.videoTraceActive = true;
+    this.videoTrace = {
+      screenMemory: new Uint8Array(this.getScreenMemory()),
+      attributeMemory: new Uint8Array(this.getAttributeMemory()),
+      writes: [],
+    };
+  }
+
+  consumeVideoTrace() {
+    const trace = this.videoTrace;
+    this.videoTraceActive = false;
+    this.videoTrace = null;
+    return trace;
+  }
+
+  getContentionDelay(address, extraCycles = 0) {
+    if (!this.contentionEnabled || !isContendedAddress(address)) {
+      return 0;
+    }
+    return contentionDelayForTstate(this.getFrameTstate(extraCycles), this.videoProfile);
+  }
+
+  readFloatingBus(tstate) {
+    const address = floatingBusAddressForTstate(tstate, this.videoProfile);
+    return address === null ? null : this.read(address);
   }
 
   /**
@@ -84,10 +141,18 @@ export class SpectrumMemory {
    */
   write(address, value) {
     const addr = address & 0xffff;
+    const val = value & 0xff;
 
     // ROM area is read-only
     if (addr >= 0x4000) {
-      this.ram[addr - 0x4000] = value & 0xff;
+      this.ram[addr - 0x4000] = val;
+      if (this.videoTraceActive && addr >= 0x4000 && addr <= 0x5aff) {
+        this.videoTrace.writes.push({
+          tstate: this.getFrameTstate(),
+          address: addr,
+          value: val,
+        });
+      }
     }
   }
 

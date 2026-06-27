@@ -1,0 +1,10 @@
+{
+  "profile": "48k-pal",
+  "description": "Synthetic ULA read points for floating-bus and contention checks.",
+  "floatingBus": [
+    { "tstate": 14384, "address": 16384, "value": 171 },
+    { "tstate": 14385, "address": 22528, "value": 205 }
+  ],
+  "contentionPattern": [6, 5, 4, 3, 2, 1, 0, 0],
+  "fallback": { "outsideDisplay": 0, "value": 255 }
+}

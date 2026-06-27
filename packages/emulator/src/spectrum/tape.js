@@ -40,6 +40,7 @@ export class Tape {
     // Timing
     this.nextEdgeCycle = 0;
     this.lastUpdateCycle = 0;
+    this.pendingEdges = [];
 
     // Block state machine
     this.state = 'IDLE';
@@ -90,6 +91,17 @@ export class Tape {
     if (this.debug) {
       console.log(...args);
     }
+  }
+
+  emitEdge(edgeCycle) {
+    this.lastEarBit = 1 - this.lastEarBit;
+    this.pendingEdges.push({ cycle: edgeCycle, bit: this.lastEarBit });
+  }
+
+  consumeEdgeEvents() {
+    const events = this.pendingEdges;
+    this.pendingEdges = [];
+    return events;
   }
 
   /**
@@ -540,6 +552,7 @@ export class Tape {
     this.pauseCycles = 0;
     this.pulseIndex = 0;
     this.pulseCycles = 0;
+    this.pendingEdges = [];
   }
 
   /**
@@ -597,7 +610,10 @@ export class Tape {
   nextBlock() {
     if (this.blockIndex >= this.blocks.length) {
       this._log('End of tape reached');
-      this.stop();
+      this.playing = false;
+      this.paused = false;
+      this.currentBlock = null;
+      this.state = 'IDLE';
       return;
     }
 
@@ -651,6 +667,7 @@ export class Tape {
         this.state = 'PULSES';
         if (this.currentBlock.pulses.length > 0) {
           this.nextEdgeCycle = this.cpu.cycles + this.currentBlock.pulses[0];
+          this.pulseIndex = 1;
         }
         break;
 
@@ -716,97 +733,98 @@ export class Tape {
    */
   updateDataBlock(cycles) {
     const block = this.currentBlock;
+    let guard = 0;
 
-    // Check if it's time for next edge
-    if (cycles < this.nextEdgeCycle) {
-      return;
-    }
+    while (this.playing && this.currentBlock === block && this.state !== 'PAUSE' && cycles >= this.nextEdgeCycle) {
+      if (++guard > 10000) {
+        throw new Error('Tape edge scheduler exceeded safety limit');
+      }
+      const edgeCycle = this.nextEdgeCycle;
+      this.emitEdge(edgeCycle);
 
-    // Toggle EAR bit
-    this.lastEarBit = 1 - this.lastEarBit;
+      switch (this.state) {
+        case 'PILOT':
+          // Generate pilot tone
+          this.nextEdgeCycle = edgeCycle + block.pilotPulse;
+          this.edgeCount++;
 
-    switch (this.state) {
-      case 'PILOT':
-        // Generate pilot tone
-        this.nextEdgeCycle += block.pilotPulse;
-        this.edgeCount++;
-
-        // Each pulse consists of 2 edges
-        if (this.edgeCount >= block.pilotPulses * 2) {
-          this._log(`Pilot complete after ${this.edgeCount} edges`);
-          this.state = 'SYNC1';
-          this.nextEdgeCycle = cycles + block.sync1Pulse;
-        }
-        break;
-
-      case 'SYNC1':
-        // First sync pulse
-        this.state = 'SYNC2';
-        this.nextEdgeCycle = cycles + block.sync2Pulse;
-        break;
-
-      case 'SYNC2':
-        // Second sync pulse - prepare for data
-        this.state = 'DATA';
-        this.bytePosition = 0;
-        this.bitPosition = 0;
-        this.pulseCount = 0;
-
-        // Start with first bit
-        if (block.data && block.data.length > 0) {
-          this.currentBit = (block.data[0] >> 7) & 1;
-          const pulseLength = this.currentBit ? block.onePulse : block.zeroPulse;
-          this.nextEdgeCycle = cycles + pulseLength;
-          this._log(`Starting DATA state: ${block.data.length} bytes, first bit=${this.currentBit}`);
-        } else {
-          // No data, move to next block
-          this._log('No data in block, moving to next');
-          this.handleBlockEnd();
-        }
-        break;
-
-      case 'DATA':
-        // Output data bits
-        this.pulseCount++;
-
-        // Each bit consists of 2 pulses (4 edges)
-        if (this.pulseCount < 2) {
-          // Same bit, next pulse
-          const pulseLength = this.currentBit ? block.onePulse : block.zeroPulse;
-          this.nextEdgeCycle = cycles + pulseLength;
-        } else {
-          // Move to next bit
-          this.pulseCount = 0;
-          this.bitPosition++;
-
-          if (this.bitPosition >= 8) {
-            // Move to next byte
-            this.bitPosition = 0;
-            this.bytePosition++;
-
-            if (this.bytePosition >= block.data.length) {
-              // All data sent
-              this.handleBlockEnd();
-              return;
-            }
+          // Each pulse consists of 2 edges
+          if (this.edgeCount >= block.pilotPulses * 2) {
+            this._log(`Pilot complete after ${this.edgeCount} edges`);
+            this.state = 'SYNC1';
+            this.nextEdgeCycle = edgeCycle + block.sync1Pulse;
           }
+          break;
 
-          // Check if this is the last byte and we have limited bits
-          const isLastByte = this.bytePosition === block.data.length - 1;
-          const bitsInByte = isLastByte ? block.usedBits : 8;
+        case 'SYNC1':
+          // First sync pulse
+          this.state = 'SYNC2';
+          this.nextEdgeCycle = edgeCycle + block.sync2Pulse;
+          break;
 
-          if (this.bitPosition < bitsInByte) {
-            // Get next bit
-            const byte = block.data[this.bytePosition];
-            this.currentBit = (byte >> (7 - this.bitPosition)) & 1;
+        case 'SYNC2':
+          // Second sync pulse - prepare for data
+          this.state = 'DATA';
+          this.bytePosition = 0;
+          this.bitPosition = 0;
+          this.pulseCount = 0;
+
+          // Start with first bit
+          if (block.data && block.data.length > 0) {
+            this.currentBit = (block.data[0] >> 7) & 1;
             const pulseLength = this.currentBit ? block.onePulse : block.zeroPulse;
-            this.nextEdgeCycle = cycles + pulseLength;
+            this.nextEdgeCycle = edgeCycle + pulseLength;
+            this._log(`Starting DATA state: ${block.data.length} bytes, first bit=${this.currentBit}`);
           } else {
-            // No more bits in last byte
+            // No data, move to next block
+            this._log('No data in block, moving to next');
             this.handleBlockEnd();
           }
-        }
-        break;
+          break;
+
+        case 'DATA':
+          // Output data bits
+          this.pulseCount++;
+
+          // Each bit consists of 2 pulses (4 edges)
+          if (this.pulseCount < 2) {
+            // Same bit, next pulse
+            const pulseLength = this.currentBit ? block.onePulse : block.zeroPulse;
+            this.nextEdgeCycle = edgeCycle + pulseLength;
+          } else {
+            // Move to next bit
+            this.pulseCount = 0;
+            this.bitPosition++;
+
+            if (this.bitPosition >= 8) {
+              // Move to next byte
+              this.bitPosition = 0;
+              this.bytePosition++;
+
+              if (this.bytePosition >= block.data.length) {
+                // All data sent
+                this.handleBlockEnd();
+                return;
+              }
+            }
+
+            // Check if this is the last byte and we have limited bits
+            const isLastByte = this.bytePosition === block.data.length - 1;
+            const bitsInByte = isLastByte ? block.usedBits : 8;
+
+            if (this.bitPosition < bitsInByte) {
+              // Get next bit
+              const byte = block.data[this.bytePosition];
+              this.currentBit = (byte >> (7 - this.bitPosition)) & 1;
+              const pulseLength = this.currentBit ? block.onePulse : block.zeroPulse;
+              this.nextEdgeCycle = edgeCycle + pulseLength;
+            } else {
+              // No more bits in last byte
+              this.handleBlockEnd();
+            }
+          }
+          break;
+      }
     }
   }
 
@@ -860,9 +878,10 @@ export class Tape {
    * @returns {void}
    */
   updateToneBlock(cycles) {
-    if (cycles >= this.nextEdgeCycle) {
-      this.lastEarBit = 1 - this.lastEarBit;
-      this.nextEdgeCycle += this.currentBlock.pulseLength;
+    while (this.playing && this.currentBlock?.type === this.BLOCK_PURE_TONE && cycles >= this.nextEdgeCycle) {
+      const edgeCycle = this.nextEdgeCycle;
+      this.emitEdge(edgeCycle);
+      this.nextEdgeCycle = edgeCycle + this.currentBlock.pulseLength;
       this.pulseCount++;
 
       if (this.pulseCount >= this.currentBlock.pulseCount) {
@@ -880,11 +899,12 @@ export class Tape {
    * @returns {void}
    */
   updatePulseSequenceBlock(cycles) {
-    if (cycles >= this.nextEdgeCycle) {
-      this.lastEarBit = 1 - this.lastEarBit;
+    while (this.playing && this.currentBlock?.type === this.BLOCK_PULSE_SEQUENCE && cycles >= this.nextEdgeCycle) {
+      const edgeCycle = this.nextEdgeCycle;
+      this.emitEdge(edgeCycle);
 
       if (this.pulseIndex < this.currentBlock.pulses.length) {
-        this.nextEdgeCycle += this.currentBlock.pulses[this.pulseIndex];
+        this.nextEdgeCycle = edgeCycle + this.currentBlock.pulses[this.pulseIndex];
         this.pulseIndex++;
       } else {
         this._log('Pulse sequence complete');
@@ -899,15 +919,20 @@ export class Tape {
   updatePureDataBlock(cycles) {
     const block = this.currentBlock;
 
-    if (cycles >= this.nextEdgeCycle) {
-      this.lastEarBit = 1 - this.lastEarBit;
+    if (this.bytePosition === 0 && this.bitPosition === 0 && this.pulseCount === 0 && block.data?.length > 0) {
+      this.currentBit = (block.data[0] >> 7) & 1;
+    }
+
+    while (this.playing && this.currentBlock === block && this.state !== 'PAUSE' && cycles >= this.nextEdgeCycle) {
+      const edgeCycle = this.nextEdgeCycle;
+      this.emitEdge(edgeCycle);
       this.pulseCount++;
 
       // Each bit consists of 2 pulses
       if (this.pulseCount < 2) {
         // Same bit, next pulse
         const pulseLength = this.currentBit ? block.onePulse : block.zeroPulse;
-        this.nextEdgeCycle = cycles + pulseLength;
+        this.nextEdgeCycle = edgeCycle + pulseLength;
       } else {
         // Move to next bit
         this.pulseCount = 0;
@@ -934,7 +959,7 @@ export class Tape {
           const byte = block.data[this.bytePosition];
           this.currentBit = (byte >> (7 - this.bitPosition)) & 1;
           const pulseLength = this.currentBit ? block.onePulse : block.zeroPulse;
-          this.nextEdgeCycle = cycles + pulseLength;
+          this.nextEdgeCycle = edgeCycle + pulseLength;
         } else {
           // No more bits in last byte
           this.handleBlockEnd();

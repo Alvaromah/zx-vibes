@@ -98,13 +98,16 @@ class Z80 {
     this.registers.incrementR();
 
     const instructionCycles = this.decoder.execute(opcode, this);
-    this.cycles += instructionCycles;
+    const memoryContentionCycles = this.memory.consumeExtraCycles ? this.memory.consumeExtraCycles() : 0;
+    const ioContentionCycles = this.io.consumeExtraCycles ? this.io.consumeExtraCycles() : 0;
+    const elapsedCycles = instructionCycles + memoryContentionCycles + ioContentionCycles;
+    this.cycles += elapsedCycles;
     this.updateInterruptEnableDelay();
     // Maintain the Q latch: F if this instruction changed the flags, else 0.
     // SCF/CCF read it on the *next* instruction to derive bits 3/5.
     const fAfter = this.registers.get('F');
     this.registers.q = fAfter !== fBefore ? fAfter : 0;
-    return instructionCycles;
+    return elapsedCycles;
   }
 
   updateInterruptEnableDelay() {
