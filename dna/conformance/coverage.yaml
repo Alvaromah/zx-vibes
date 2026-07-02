@@ -136,7 +136,7 @@ behaviors:
     behavior: "zexdoc/zexall CP/M COM monitor loads verified COM payloads, handles BDOS console output, and classifies PASS, FAIL, and NOT_RUN transcripts"
     tier: contract
     provenance: decision:ADR-0001
-    fixtures: [conformance/cpu/zex-cpm-adapter.mjs, conformance/cpu/zex-cpm-adapter-self-test.mjs]
+    fixtures: [conformance/cpu/zex-cpm-cpu-adapter.mjs, conformance/cpu/zex-cpm-cpu-adapter-self-test.mjs]
     status: covered
 
   - id: CONF-ORACLE-CAPTURE-001

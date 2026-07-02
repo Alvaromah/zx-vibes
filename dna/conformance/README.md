@@ -140,7 +140,8 @@ the timing runner. This proves the FUSE reference transcript is executable
 conformance data; it still does not cover an emulator timing row until an
 implementation comparison adapter consumes those cases.
 
-`cpu/zex-cpm-adapter.mjs` provides the CP/M COM monitor used by zexdoc/zexall:
+`cpu/zex-cpm-cpu-adapter.mjs` provides the CP/M COM monitor used by
+zexdoc/zexall, driven by the regenerated `@zx-vibes/cpu` core:
 it loads a verified COM payload at `0x0100`, handles BDOS console functions 2
 and 9 at `CALL 5`, and classifies the self-checking transcript as PASS, FAIL, or
 NOT_RUN. The adapter self-test uses tiny COM payloads to prove the monitor

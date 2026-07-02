@@ -32,7 +32,9 @@ The FUSE Z80 manifest has a reference adapter at
 zexdoc/zexall still need a CP/M/Z80 reference adapter before their manifests are
 executable.
 
-The CPU side has a CP/M monitor at `../cpu/zex-cpm-adapter.mjs`. It proves the
-runner can execute COM-style zex payloads and classify the zex console
-transcript, but it is not enough by itself to move zexdoc/zexall fidelity rows to
-`covered`; those rows require a completed run through an accepted CPU reference.
+The CPU side has a CP/M monitor at `../cpu/zex-cpm-cpu-adapter.mjs`, driven by
+the regenerated `@zx-vibes/cpu` core (the legacy-oracle variant was removed with
+the legacy emulator package). It proves the runner can execute COM-style zex
+payloads and classify the zex console transcript, but it is not enough by itself
+to move zexdoc/zexall fidelity rows to `covered`; those rows require a completed
+run through an accepted CPU reference.

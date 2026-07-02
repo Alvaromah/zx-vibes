@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Independent zex CP/M reference adapter for ADR-0006.
 //
-// Same minimal CP/M monitor as zex-cpm-adapter.mjs (load COM at 0x100, trap BDOS
-// at 0x0005 for console output, warm boot at 0x0000), but driven by the
-// REGENERATED, DNA-derived CPU @zx-vibes/cpu (decided by the FUSE oracle) instead
-// of the legacy project emulator. That makes it an independent, repository-
+// Minimal CP/M monitor (load COM at 0x100, trap BDOS at 0x0005 for console
+// output, warm boot at 0x0000) driven by the REGENERATED, DNA-derived CPU
+// @zx-vibes/cpu (decided by the FUSE oracle). It supersedes the legacy-oracle
+// zex-cpm-adapter.mjs, removed together with the legacy emulator package.
+// That makes it an independent, repository-
 // reproducible reference: the acceptance bar ADR-0006 sets for moving
 // CPU-ZEXDOC-001 / CPU-ZEXALL-001 to covered (a COMPLETE passing run that reaches
 // "Tests complete"). It speaks the external-adapter protocol (JSON request on
