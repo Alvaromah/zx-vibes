@@ -1,0 +1,46 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: input
+    id: package
+    attributes:
+      label: Package and version
+      description: e.g. `zx-vibes 0.3.0`, `@zx-vibes/toolkit 0.4.0` (`zxs --version`)
+      placeholder: zx-vibes 0.3.0
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and Node version
+      placeholder: Windows 11 / Node 22.12
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: >
+        Exact commands and minimal input (assembly source, config, or a
+        toolkit-generated .tap/.z80). Please do not attach copyrighted
+        commercial software.
+      placeholder: |
+        1. zxs new demo
+        2. zxs build
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include full command output (`--json` output welcome).
+    validations:
+      required: true
