@@ -1,0 +1,38 @@
+name: Deprecate legacy packages
+
+# One-off maintenance: marks the published-but-retired package lines as
+# deprecated on npm. Safe to re-run; deprecating an already-deprecated
+# version just updates the message.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type "deprecate" to confirm
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deprecate:
+    runs-on: ubuntu-latest
+    if: inputs.confirm == 'deprecate'
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Deprecate create-zx-vibes
+        run: >
+          npm deprecate create-zx-vibes@"*"
+          "Retired: the generator is being folded into zx-vibes. Install zx-vibes and use 'zxs new' instead."
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Deprecate @zx-vibes/emulator
+        run: >
+          npm deprecate @zx-vibes/emulator@"*"
+          "Retired: replaced by @zx-vibes/cpu, @zx-vibes/ula, and @zx-vibes/machine."
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
