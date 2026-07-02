@@ -25,8 +25,17 @@ function replaceKnownPaths(output, paths) {
   const variants = unique(paths.flatMap(pathVariants)).sort((a, b) => b.length - a.length);
   let normalized = output;
 
+  // Consume any trailing path segments after a known prefix so a match
+  // collapses to a single <PATH> token. Without this, a known path that is a
+  // prefix of a longer path (e.g. os.tmpdir() === "/tmp" on Linux inside
+  // "/tmp/project/src/main.asm") leaves a "<PATH>/suffix" remainder that the
+  // later generic path patterns can no longer normalize, making the output
+  // platform-dependent.
   for (const variant of variants) {
-    normalized = normalized.replace(new RegExp(escapeRegExp(variant), "g"), "<PATH>");
+    normalized = normalized.replace(
+      new RegExp(escapeRegExp(variant) + String.raw`(?:[\\/][^\s"'<>|:*?]*)*`, "g"),
+      "<PATH>",
+    );
   }
 
   return normalized;
