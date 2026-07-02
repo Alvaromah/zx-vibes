@@ -9,7 +9,7 @@
 
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { assemble } from '@zx-vibes/asm';
@@ -367,7 +367,10 @@ describe('path sandbox (MCP-PROD-AC-SANDBOX-001)', () => {
     const dotdot = call(tools, 'zx_state', { action: 'save', file: '../escape.zxstate' });
     expect(dotdot.isError).toBe(true);
     expect((dotdot.content[0] as { text: string }).text).toMatch(/error:/);
-    const absolute = call(tools, 'zx_state', { action: 'save', file: 'C:/abs.zxstate' });
+    // resolve('/abs.zxstate') is absolute on every host (drive-prefixed on
+    // Windows); a literal 'C:/...' is only absolute on Windows and resolves
+    // inside the project on POSIX.
+    const absolute = call(tools, 'zx_state', { action: 'save', file: resolve('/abs.zxstate') });
     expect(absolute.isError).toBe(true);
     const binEscape = call(tools, 'zx_run', { bin: '../../etc/passwd' });
     expect(binEscape.isError).toBe(true);
