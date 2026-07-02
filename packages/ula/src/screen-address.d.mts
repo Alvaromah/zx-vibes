@@ -1,0 +1,14 @@
+export function displayByteAddress(x: any, y: any): number;
+export function displayLineAddress(y: any): number;
+export function attributeAddress(x: any, y: any): number;
+export const DISPLAY_FILE_BASE: 16384;
+export const DISPLAY_FILE_END: 22527;
+export const DISPLAY_FILE_SIZE: 6144;
+export const ATTR_FILE_BASE: 22528;
+export const ATTR_FILE_END: 23295;
+export const ATTR_FILE_SIZE: 768;
+export const SCREEN_WIDTH: 256;
+export const SCREEN_HEIGHT: 192;
+export const CHAR_COLS: 32;
+export const CHAR_ROWS: 24;
+export const THIRD_SIZE: 2048;

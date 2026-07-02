@@ -286,8 +286,6 @@ export function step({ registers: reg, memory, io, clock }) {
     if (code === 6) { if (idx) { if (inexact) inexact(); wr(ensureDisp(), v); } else wr(getHL(), v); return; }
     reg[half(code)] = v & 0xff;
   };
-  const idxBase = (base, memT) => (idx ? (zc === 6 || (x === 1 && (y === 6 || zc === 6)) ? memT : base + 4) : base);
-
   let tStates = 4;
   // A redundant DD/FD prefix -- one that does not select an index register half
   // or an (IX+d)/(IY+d) operand -- still costs one extra M1 (4 T). Index-relevant

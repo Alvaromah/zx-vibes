@@ -3,21 +3,57 @@
   "version": "0.1.0",
   "description": "Regenerated 48K ZX Spectrum machine layer for zx-vibes: joins @zx-vibes/cpu and @zx-vibes/ula with interrupt acceptance and per-access memory contention, derived from the DNA and decided by the machine conformance fixtures.",
   "license": "MIT",
+  "author": "Alvaro Mateos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
+    "directory": "packages/machine"
+  },
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
+  "bugs": {
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
+  },
+  "keywords": [
+    "zx-spectrum",
+    "z80",
+    "emulator",
+    "emulation",
+    "snapshot",
+    "tape"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.mjs",
+  "types": "src/index.d.mts",
   "exports": {
-    ".": "./src/index.mjs",
-    "./interrupt": "./src/interrupt.mjs",
-    "./machine": "./src/machine.mjs",
+    ".": {
+      "types": "./src/index.d.mts",
+      "default": "./src/index.mjs"
+    },
+    "./interrupt": {
+      "types": "./src/interrupt.d.mts",
+      "default": "./src/interrupt.mjs"
+    },
+    "./machine": {
+      "types": "./src/machine.d.mts",
+      "default": "./src/machine.mjs"
+    },
     "./package.json": "./package.json"
   },
-  "files": ["src"],
+  "files": [
+    "src",
+    "README.md"
+  ],
   "dependencies": {
     "@zx-vibes/cpu": "workspace:*",
     "@zx-vibes/ula": "workspace:*"
   },
   "scripts": {
-    "test": "node ../../dna/conformance/machine/run-machine-fixtures.mjs"
+    "test": "node ../../dna/conformance/machine/run-machine-fixtures.mjs",
+    "lint": "eslint src",
+    "types:gen": "tsc src/index.mjs --allowJs --declaration --emitDeclarationOnly --outDir src"
   },
   "publishConfig": {
     "access": "public"

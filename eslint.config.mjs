@@ -22,18 +22,16 @@ export default [
       '**/dist/**',
       '**/node_modules/**',
       '**/.packs/**',
-      'packages/create-zx-vibes/docs/**',
-      'packages/create-zx-vibes/starters/**',
     ],
   },
   {
     files: [
-      'packages/emulator/src/**/*.js',
-      'packages/emulator/tests/**/*.js',
       'packages/asm/bin/**/*.js',
       'packages/toolkit/bin/**/*.js',
-      'packages/create-zx-vibes/scripts/**/*.js',
       'packages/zx-vibes/bin/**/*.js',
+      'packages/cpu/src/**/*.mjs',
+      'packages/ula/src/**/*.mjs',
+      'packages/machine/src/**/*.mjs',
     ],
     languageOptions: {
       ecmaVersion: 'latest',
@@ -52,7 +50,6 @@ export default [
       'packages/asm/tests/**/*.ts',
       'packages/toolkit/src/**/*.ts',
       'packages/toolkit/tests/**/*.ts',
-      'packages/create-zx-vibes/src/**/*.ts',
       'packages/zx-vibes/src/**/*.ts',
     ],
     languageOptions: {

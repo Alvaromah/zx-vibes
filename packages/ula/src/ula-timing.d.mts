@@ -1,0 +1,13 @@
+export function interruptActive(t: any): boolean;
+export function isContendedAddress(address: any): boolean;
+export function contentionDelay(t: any): number;
+export const SCAN_LINES: 312;
+export const T_STATES_PER_LINE: 224;
+export const FRAME_T_STATES: number;
+export const INTERRUPT_T_STATES: 32;
+export const CONTENDED_LOW: 16384;
+export const CONTENDED_HIGH: 32767;
+export const CONTENTION_PATTERN: number[];
+export const CONTENTION_START_T: 14335;
+export const DISPLAY_LINES: 192;
+export const CONTENDED_T_PER_LINE: 128;

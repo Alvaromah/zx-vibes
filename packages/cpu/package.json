@@ -3,16 +3,48 @@
   "version": "0.1.0",
   "description": "Regenerated Z80 CPU core for zx-vibes, derived from the DNA and decided by the FUSE conformance oracle.",
   "license": "MIT",
+  "author": "Alvaro Mateos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
+    "directory": "packages/cpu"
+  },
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
+  "bugs": {
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
+  },
+  "keywords": [
+    "zx-spectrum",
+    "z80",
+    "cpu",
+    "emulator",
+    "emulation"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.mjs",
+  "types": "src/index.d.mts",
   "exports": {
-    ".": "./src/index.mjs",
-    "./step": "./src/z80-step.mjs",
+    ".": {
+      "types": "./src/index.d.mts",
+      "default": "./src/index.mjs"
+    },
+    "./step": {
+      "types": "./src/z80-step.d.mts",
+      "default": "./src/z80-step.mjs"
+    },
     "./package.json": "./package.json"
   },
-  "files": ["src"],
+  "files": [
+    "src",
+    "README.md"
+  ],
   "scripts": {
-    "test": "node ../../dna/conformance/cpu/run-fuse-suite.mjs"
+    "test": "node ../../dna/conformance/cpu/run-fuse-suite.mjs",
+    "lint": "eslint src",
+    "types:gen": "tsc src/index.mjs --allowJs --declaration --emitDeclarationOnly --outDir src"
   },
   "publishConfig": {
     "access": "public"

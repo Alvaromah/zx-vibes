@@ -3,16 +3,48 @@
   "version": "0.1.0",
   "description": "Regenerated 48K ZX Spectrum ULA timing model for zx-vibes, derived from the DNA and decided by the timing conformance fixtures.",
   "license": "MIT",
+  "author": "Alvaro Mateos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
+    "directory": "packages/ula"
+  },
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
+  "bugs": {
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
+  },
+  "keywords": [
+    "zx-spectrum",
+    "ula",
+    "emulator",
+    "emulation",
+    "timing"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.mjs",
+  "types": "src/index.d.mts",
   "exports": {
-    ".": "./src/index.mjs",
-    "./timing": "./src/ula-timing.mjs",
+    ".": {
+      "types": "./src/index.d.mts",
+      "default": "./src/index.mjs"
+    },
+    "./timing": {
+      "types": "./src/ula-timing.d.mts",
+      "default": "./src/ula-timing.mjs"
+    },
     "./package.json": "./package.json"
   },
-  "files": ["src"],
+  "files": [
+    "src",
+    "README.md"
+  ],
   "scripts": {
-    "test": "node ../../dna/conformance/timing/run-timing-fixtures.mjs"
+    "test": "node ../../dna/conformance/timing/run-timing-fixtures.mjs",
+    "lint": "eslint src",
+    "types:gen": "tsc src/index.mjs --allowJs --declaration --emitDeclarationOnly --outDir src"
   },
   "publishConfig": {
     "access": "public"
