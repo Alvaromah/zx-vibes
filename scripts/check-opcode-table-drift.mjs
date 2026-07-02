@@ -3,7 +3,7 @@
 // Regenerates the projection of dna/domain/z80-opcodes.yaml in memory and compares
 // it byte-for-byte against the committed packages/asm/src/generated/z80-opcodes-table.ts.
 // Fails red if they disagree so the committed table cannot drift from the DNA — the
-// same anti-rot device as check-emulator-env-template.mjs / check-starter-template-drift.
+// same anti-rot device as check-emulator-env-template.mjs.
 //
 //   node scripts/check-opcode-table-drift.mjs        (run by `pnpm check:drift`)
 //

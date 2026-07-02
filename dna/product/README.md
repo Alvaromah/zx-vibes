@@ -6,7 +6,8 @@ oracle becomes disposable for this knowledge.
 
 Authoring rules (`../../specs-plan.md` §5.2):
 
-- Produced by a single extraction pass over the oracle (`../../../zx-vibes`).
+- Produced by a single extraction pass over the oracle (the original zx-vibes
+  implementation repo, not part of this tree).
 - Reuse the existing tests, `golden/`, and `fixtures/` as the primary source of
   observable behavior; port them, do not reinvent from memory.
 - Contract-tier behavior (flags, formats, exit codes, schemas) MUST be captured

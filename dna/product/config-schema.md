@@ -3,7 +3,7 @@
 The per-project configuration the toolkit reads to build/run/verify a project.
 Consumed by the runtime (`toolkit-runtime.md` RT-PROD-CONFIG) and the CLI/MCP
 build path. Mined once from the oracle
-(`../../../zx-vibes/packages/toolkit/src/cli/config.ts`); contract-tier (fields,
+(`packages/toolkit/src/cli/config.ts` in the legacy oracle repo); contract-tier (fields,
 defaults, resolution precedence, validation) captured exactly.
 
 ## Purpose

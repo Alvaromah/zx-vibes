@@ -100,3 +100,8 @@ snapshot codec (`@zx-vibes/machine` `writeZ80`/`readZ80`):
 
 `build` (tsup) · `typecheck` (`tsc --noEmit`) · `lint` (eslint) · `test`
 (`vitest run`) · `check:docs` (drift placeholder).
+
+## License
+
+MIT. See `LICENSE`. The package ships a ZX Spectrum 48K ROM (`assets/48k.rom`)
+under the separate Amstrad redistribution notice in `assets/ROM-NOTICE.md`.

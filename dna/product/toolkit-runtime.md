@@ -3,7 +3,7 @@
 The orchestration engine under the `zxs` CLI (`cli.md`) and the MCP server
 (`mcp-tools.md`): the session machine, build orchestration, the run loop, the
 verify pipeline, the preview server, and the declarative test runner. Mined once
-from the oracle (`../../../zx-vibes/packages/toolkit/src/cli/` —
+from the oracle (`packages/toolkit/src/cli/` in the legacy oracle repo —
 `session.ts`, `machine-source.ts`, `config.ts`, `commands/{run,verify,preview,
 test-cmd}.ts`). This spec fixes the runtime *contract*; the command-surface view
 is in `cli.md`, the project-config schema in `config-schema.md`.

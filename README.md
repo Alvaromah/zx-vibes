@@ -269,7 +269,6 @@ packages/toolkit/   @zx-vibes/toolkit zxs CLI, MCP server, preview player
 packages/zx-vibes/  zx-vibes umbrella package and bin shims
 examples/           Browser demos of the machine core (prebuilt bundle)
 starters/           Starter projects reserved for the future generator slice
-tapes/              Sample .tap/.tzx/.z80 images for manual testing
 scripts/            Drift checks and generators for the root gates
 ```
 

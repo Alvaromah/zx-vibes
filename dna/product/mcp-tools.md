@@ -3,7 +3,7 @@
 The `zxs-mcp` Model Context Protocol server: the agent-native surface over the
 toolkit runtime (`toolkit-runtime.md`), exposing a curated subset of the `zxs`
 CLI (`cli.md`) as MCP tools over stdio. Mined once from the oracle
-(`../../../zx-vibes/packages/toolkit/src/mcp/server.ts`); contract-tier behavior
+(`packages/toolkit/src/mcp/server.ts` in the legacy oracle repo); contract-tier behavior
 (server identity, tool catalog, input schemas, result shapes) captured exactly.
 
 ## Purpose

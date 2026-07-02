@@ -5,7 +5,7 @@ reconstructed assembler and emulator cores (build, run, observe, debug, verify,
 preview, scaffold). **v2 is a product redesign** ratified by `decisions.md`
 ADR-0027 — *a knowledge pack + a tight, idempotent, JSON-first loop* re-based on
 `@zx-vibes/{cpu,ula,machine,asm}`. The surface KEPT from the legacy oracle
-(`../../../zx-vibes/packages/toolkit`, `src/cli/`) stays `contract`; the v2
+(`packages/toolkit`, `src/cli/` in the legacy oracle repo) stays `contract`; the v2
 re-scope (stateless-default, the verb collapses, the additions, the demotions)
 is `decision:ADR-0027`. The clean-room-implementer rule (read `dna/` only) applies
 to the regeneration slices, not to this re-author phase.

@@ -4,7 +4,7 @@ The declarative test/recipe DSL run by `zxs test` (`cli.md`) and `verify`'s test
 stage (`toolkit-runtime.md`): a JSON spec that assembles a program, runs it under a
 fixed budget with scheduled input, and asserts observable machine state. The core
 schema + assertions were mined once from the oracle
-(`../../../zx-vibes/packages/toolkit/src/cli/commands/test-cmd.ts` and `recipes/`)
+(`packages/toolkit/src/cli/commands/test-cmd.ts` in the legacy oracle repo and `recipes/`)
 and stay `contract`; the **v2 additions** (temporal/checkpoint assertions, memory
 delta/range assertions, `screenDiff` visual regression, the Kempston `joy` input
 schedule, and the dropped `coloredCells` alias) are `decision:ADR-0027`.

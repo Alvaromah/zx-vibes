@@ -36,8 +36,8 @@ pnpm exec zxs build
 pnpm exec zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png
 pnpm exec zxs verify
 pnpm exec zxs preview --watch
-pnpm exec zxs boot
-pnpm exec zxs play game.z80
+pnpm exec zxs preview --blank
+pnpm exec zxs preview game.z80
 pnpm exec zxasm assemble src/main.asm -I lib --out-dir build
 ```
 

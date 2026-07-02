@@ -1,8 +1,9 @@
 # DNA — the project genome
 
 This directory is the **source of truth** for zx-vibes. An implementation is a
-regenerable phenotype; it is correct iff it passes `conformance/`. See
-`../specs-plan.md` (§3-4) for the model and authoring rules.
+regenerable phenotype; it is correct iff it passes `conformance/`. The model and
+authoring rules come from `specs-plan.md`, an internal factory document that is
+not part of this repository; `§` citations in these docs refer to it.
 
 ## Layers
 
@@ -24,8 +25,8 @@ regenerable phenotype; it is correct iff it passes `conformance/`. See
 
 `hardware | z80-spec | zexall | zexdoc | fuse | contract | manual |
 decision:<id> | UNKNOWN`. Every normative claim and fixture is tagged. `UNKNOWN`
-behavior is a backlog item (see `../.harness/decisions.md`), never a shipped
-default.
+behavior is a backlog item (tracked in the internal decisions log), never a
+shipped default.
 
 Authored `domain/` and `product/` Markdown claims use explicit claim markers:
 `[id: ...] [provenance: z80-spec]`. A preceding

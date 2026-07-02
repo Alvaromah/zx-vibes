@@ -14,6 +14,10 @@ temp/
 # Local agent instructions and operational harness
 /AGENTS.md
 /.harness/
+/.claude/
+
+# Local game images for manual testing (not redistributable)
+/tapes/
 
 # The `build/` rule above (generated assembler output) would also swallow the
 # toolkit's build-service SOURCE directory; re-include it explicitly.
