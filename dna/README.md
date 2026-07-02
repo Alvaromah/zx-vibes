@@ -25,7 +25,7 @@ not part of this repository; `§` citations in these docs refer to it.
 
 `hardware | z80-spec | zexall | zexdoc | fuse | contract | manual |
 decision:<id> | UNKNOWN`. Every normative claim and fixture is tagged. `UNKNOWN`
-behavior is a backlog item (tracked in the internal decisions log), never a
+behavior is a backlog item (tracked in `../.harness/decisions.md`), never a
 shipped default.
 
 Authored `domain/` and `product/` Markdown claims use explicit claim markers:

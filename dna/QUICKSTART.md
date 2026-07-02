@@ -42,9 +42,10 @@ your-repo/
 
 Copy `dna/` whole (it is self-contained — no network, the FUSE suite is committed
 JSON, runners use only `node:` builtins). Do **not** copy `AGENTS.md`,
-`specs-plan.md`, or `.harness/` — those are factory scaffolding, not the DNA. (The
-exact core-vs-emulator file split is in `.harness/migration-w7.md` if you want to
-slim `dna/`; copying it whole needs nothing else.)
+`specs-plan.md`, or `.harness/` — those are factory scaffolding, not the DNA —
+with one exception: `.harness/decisions.md` is the ADR/provenance log that
+`conformance/provenance-lint.mjs` validates `decision:<id>` references against,
+so bring it along if you keep the provenance gate.
 
 ### 2. The import surface the runners expect (this is the contract)
 

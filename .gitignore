@@ -11,9 +11,12 @@ tmp/
 temp/
 .feedback/
 
-# Local agent instructions and operational harness
+# Local agent instructions and operational harness. decisions.md is tracked:
+# it is the ADR/provenance log that dna/conformance/provenance-lint.mjs
+# validates decision references against.
 /AGENTS.md
-/.harness/
+/.harness/*
+!/.harness/decisions.md
 /.claude/
 
 # Local game images for manual testing (not redistributable)
