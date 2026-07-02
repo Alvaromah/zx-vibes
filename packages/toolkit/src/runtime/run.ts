@@ -280,6 +280,10 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   let framesRun = 0;
   for (let f = 0; !stopped && f < budget; f += 1) {
     io.setInput(keysPressedAt(keys, f), joyByteAt(joy, f));
+    // Whether THIS frame's interrupt resumed the CPU from HALT — the healthy
+    // HALT-synced cadence the hang stats must count as progress (an idle HALT
+    // loop looks byte-identical at every pinned frame boundary).
+    let haltResumed = false;
     stopped = runFrameObserved(
       machine,
       observe,
@@ -288,13 +292,16 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
         params.onStep?.(m);
       },
       (wasHalted) => {
-        if (wasHalted) haltedInterruptFrames += 1;
+        if (wasHalted) {
+          haltedInterruptFrames += 1;
+          haltResumed = true;
+        }
       },
     );
     framesRun = f + 1;
     params.onFrame?.(f, machine, io);
     if (stopped) break;
-    if (detectHangs) updateHangStats(stats, machine);
+    if (detectHangs) updateHangStats(stats, machine, haltResumed);
   }
 
   // A run that reached its budget with no early stop may still be a PROBABLE hang

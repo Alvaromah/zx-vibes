@@ -216,10 +216,14 @@ export class Machine {
     let accepted = 0;
     let intTaken = false;
 
-    // The frame ends when the running clock would wrap. Because the clock is kept
-    // modulo the frame length, we track elapsed T-states for this frame directly.
+    // The frame ends when the running clock crosses the frame boundary: the
+    // budget is the distance from the current clock to the boundary, so any
+    // overrun carried in from the previous frame's final instruction shortens
+    // this frame instead of accumulating (MACHINE-FRAME-LOOP-001) — the frame
+    // edge a caller observes between runFrame() calls never drifts.
+    const budget = FRAME_T_STATES - this.clock;
     let elapsed = 0;
-    while (elapsed < FRAME_T_STATES) {
+    while (elapsed < budget) {
       if (!intTaken && this._interruptArmed() && interruptActive(this.clock)) {
         const before = this.tStatesTotal;
         this._acceptInterrupt(dataBus);

@@ -165,9 +165,15 @@ class HostKeyboard {
 const EI_OPCODE = 0xfb;
 
 function stepFrame(m, trap) {
+  // Run to the frame boundary (not a fixed quantum): any overrun carried in from
+  // the previous frame's final instruction shortens this frame, mirroring
+  // Machine.runFrame. This pins the render point (renderInto samples memory
+  // between stepFrame calls) at the top of the frame — a drifting sample point
+  // catches HALT-synced games mid-erase and sprites visibly dissolve.
+  const budget = FRAME_T_STATES - m.clock;
   let elapsed = 0;
   let intTaken = false;
-  while (elapsed < FRAME_T_STATES) {
+  while (elapsed < budget) {
     if (!intTaken && Boolean(m.registers.iff1) && m.eiDelay === 0 && interruptActive(m.clock)) {
       const before = m.tStatesTotal;
       const r = acceptInterrupt({

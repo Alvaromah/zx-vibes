@@ -66,11 +66,24 @@ function fingerprint(machine: Machine): number {
   return sum >>> 0;
 }
 
-/** Fold one frame-boundary observation into the progress statistics. */
-export function updateHangStats(stats: HangStats, machine: Machine): void {
+/**
+ * Fold one frame-boundary observation into the progress statistics.
+ *
+ * `haltResumed` = this frame's once-per-frame interrupt resumed the CPU from a
+ * HALT wait. That is the healthy HALT-synced game-loop cadence (an idle loop
+ * waiting on input, the ISR still bumping FRAMES/KSTATE), so it counts as
+ * progress even when the strided fingerprint misses the sysvar writes. Without
+ * this, a boundary-pinned frame loop samples an idle `EI / HALT / JR` loop in
+ * the identical waiting state every frame and the static-fingerprint heuristic
+ * would misread the healthiest program shape as a tight-loop hang. A genuine
+ * busy loop (`DI` or never halting) never resumes from HALT, so tight-loop
+ * detection for it is unaffected (thresholds stay Incidental,
+ * ERR-PROD-HANG-HEUR-001).
+ */
+export function updateHangStats(stats: HangStats, machine: Machine, haltResumed = false): void {
   const pc = (machine.registers.pc as number) & 0xffff;
   const fp = fingerprint(machine);
-  if (stats.started && fp === stats.fingerprint) {
+  if (!haltResumed && stats.started && fp === stats.fingerprint) {
     stats.staticFrames += 1;
     stats.pcMin = Math.min(stats.pcMin, pc);
     stats.pcMax = Math.max(stats.pcMax, pc);

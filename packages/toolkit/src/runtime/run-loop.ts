@@ -68,10 +68,14 @@ export function runFrameObserved(
   beforeStep?: BeforeStep,
   onInterrupt?: InterruptObserver,
 ): boolean {
+  // Run to the frame boundary (not a fixed quantum): any overrun carried in from
+  // the previous frame's final instruction shortens this frame, mirroring
+  // Machine.runFrame, so the frame edge observed between calls never drifts.
+  const budget = FRAME_T_STATES - machine.clock;
   let elapsed = 0;
   let intTaken = false;
 
-  while (elapsed < FRAME_T_STATES) {
+  while (elapsed < budget) {
     if (!intTaken && interruptArmed(machine) && interruptActive(machine.clock)) {
       // Capture the HALT-wait state BEFORE acceptance clears it — the HALT-sync signal.
       const wasHalted = machine.halted;
