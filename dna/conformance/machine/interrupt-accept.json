@@ -1,0 +1,28 @@
+{
+  "id": "MACHINE-INT-ACCEPT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "machine-interrupt",
+    "note": "Maskable interrupt acceptance: IM 0/1/2 dispatch, IFF/R/SP/PC effects, pushed return address, HALT-exit adjustment, masked no-accept, and data-bus override (MACHINE-INT-ACCEPT-001 / -IM-001 / -DATABUS-001 / -SAMPLE-001).",
+    "cases": [
+      { "name": "im1-accept", "registers": { "sp": "0xff00", "pc": "0x1234", "iff1": 1, "iff2": 1, "im": 1, "r": "0x10" } },
+      { "name": "im0-accept-as-rst38", "registers": { "sp": "0xff00", "pc": "0x4321", "iff1": 1, "iff2": 1, "im": 0, "r": "0x00" } },
+      { "name": "im2-vector", "registers": { "sp": "0x8000", "pc": "0xabcd", "iff1": 1, "iff2": 1, "im": 2, "i": "0xfe", "r": "0x20" }, "memory": { "0xfeff": "0090" } },
+      { "name": "masked-iff1-clear", "registers": { "sp": "0xff00", "pc": "0x1234", "iff1": 0, "im": 1 } },
+      { "name": "halt-exit-return-after-halt", "registers": { "sp": "0xff00", "pc": "0x8000", "iff1": 1, "iff2": 1, "im": 1, "r": "0x05" }, "halted": true },
+      { "name": "im2-databus-override", "registers": { "sp": "0x8000", "pc": "0x0000", "iff1": 1, "iff2": 1, "im": 2, "i": "0xfe", "r": "0x00" }, "memory": { "0xfe00": "3412" }, "dataBus": "0x00" }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "im1-accept", "registers": { "pc": "0x0038", "sp": "0xfefe", "iff1": 0, "iff2": 0, "r": "0x11" }, "memory": { "0xfefe": "3412" }, "tStates": 13, "accepted": true },
+      { "name": "im0-accept-as-rst38", "registers": { "pc": "0x0038", "sp": "0xfefe", "iff1": 0, "iff2": 0, "r": "0x01" }, "memory": { "0xfefe": "2143" }, "tStates": 13, "accepted": true },
+      { "name": "im2-vector", "registers": { "pc": "0x9000", "sp": "0x7ffe", "iff1": 0, "iff2": 0, "r": "0x21" }, "memory": { "0x7ffe": "cdab", "0xfeff": "0090" }, "tStates": 19, "accepted": true },
+      { "name": "masked-iff1-clear", "registers": { "pc": "0x1234", "sp": "0xff00", "iff1": 0 }, "tStates": 0, "accepted": false },
+      { "name": "halt-exit-return-after-halt", "registers": { "pc": "0x0038", "sp": "0xfefe", "iff1": 0, "iff2": 0, "r": "0x06" }, "memory": { "0xfefe": "0180" }, "tStates": 13, "accepted": true },
+      { "name": "im2-databus-override", "registers": { "pc": "0x1234", "sp": "0x7ffe", "iff1": 0, "iff2": 0, "r": "0x01" }, "memory": { "0x7ffe": "0000", "0xfe00": "3412" }, "tStates": 19, "accepted": true }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

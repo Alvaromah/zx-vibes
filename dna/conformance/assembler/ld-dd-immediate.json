@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-LD-DD-NN-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-register-pair-immediate-family",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld bc, 0x1234",
+          "    ld de, 0x5678",
+          "    ld hl, 0x9ABC",
+          "    ld sp, 0xFF00",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-register-pair-immediate.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-register-pair-immediate-family",
+        "ok": true,
+        "bytesHex": "01341211785621BC9A3100FF"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

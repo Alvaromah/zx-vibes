@@ -1,0 +1,38 @@
+{
+  "id": "ASM-EMIT-LD-DD-NN-IND-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-dd-absolute-word-transfers",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld bc,(0x1234)",
+          "    ld de,(0x1234)",
+          "    ld sp,(0x1234)",
+          "    ld (0x5678),bc",
+          "    ld (0x5678),de",
+          "    ld (0x5678),sp",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-dd-absolute.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-dd-absolute-word-transfers",
+        "ok": true,
+        "bytesHex": "ED4B3412ED5B3412ED7B3412ED437856ED537856ED737856"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

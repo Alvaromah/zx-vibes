@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-ALU-OR-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "alu-or-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    or b",
+          "    or c",
+          "    or d",
+          "    or e",
+          "    or h",
+          "    or l",
+          "    or (hl)",
+          "    or a",
+          "    or 0x12",
+          ""
+        ],
+        "options": {
+          "entryPath": "alu-or-source.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "alu-or-source",
+        "ok": true,
+        "bytesHex": "B0B1B2B3B4B5B6B7F612"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

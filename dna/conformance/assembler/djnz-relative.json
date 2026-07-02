@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-DJNZ-E-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "djnz-forward-relative-displacement",
+        "sourceLines": ["    ORG 0x8000", "    djnz target", "    nop", "target:", "    nop", ""],
+        "options": {
+          "entryPath": "djnz-forward.asm"
+        }
+      },
+      {
+        "name": "djnz-backward-relative-displacement",
+        "sourceLines": ["    ORG 0x8000", "target:", "    nop", "    djnz target", ""],
+        "options": {
+          "entryPath": "djnz-backward.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "djnz-forward-relative-displacement",
+        "ok": true,
+        "bytesHex": "10010000"
+      },
+      {
+        "name": "djnz-backward-relative-displacement",
+        "ok": true,
+        "bytesHex": "0010FD"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

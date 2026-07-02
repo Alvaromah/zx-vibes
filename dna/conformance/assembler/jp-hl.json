@@ -1,0 +1,29 @@
+{
+  "id": "ASM-EMIT-JP-HL-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "jp-hl-indirect",
+        "sourceLines": ["    ORG 0x8000", "    jp (hl)", ""],
+        "options": {
+          "entryPath": "jp-hl.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "jp-hl-indirect",
+        "ok": true,
+        "bytesHex": "E9"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

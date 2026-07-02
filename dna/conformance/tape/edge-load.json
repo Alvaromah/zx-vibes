@@ -1,0 +1,44 @@
+[
+  {
+    "id": "TAPE-EDGE-LOAD-001",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "tape-edge-load-query",
+      "note": "CI smoke (tape-loading.md TAPE-EDGE-*): a short DATA block (flag 0xFF) edge-loaded through the real ROM LD-BYTES (0x0556, ROM-ARTIFACT-001). 24 source data bytes -> body [0xFF, ...data, XOR checksum] -> blockToPulses (3223-pilot data leader + sync + 16 pulses/byte + closing edge) -> port 0xFE b6 edge stream -> RAM at 0x8000. Fabrication-free: expected.ram IS the source bytes. The load is ~7.5M T-states; budget 12,000,000 bounds it for CI.",
+      "flag": 255,
+      "ix": 32768,
+      "data": "030a11181f262d343b424950575e656c737a81888f969da4",
+      "tStateBudget": 12000000
+    },
+    "expected": {
+      "ok": true,
+      "bytesLoaded": 24,
+      "ram": "030a11181f262d343b424950575e656c737a81888f969da4",
+      "withinBudget": true
+    },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "TAPE-EDGE-LOAD-HEADER",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "tape-edge-load-query",
+      "note": "CI smoke, HEADER flag (0x00 < 0x80 -> the 8063-pilot ~5 s leader), exercising the pilot-by-flag path through the real ROM. 8 source data bytes -> body [0x00, ...data, checksum]. The load is ~17.6M T-states; budget 25,000,000.",
+      "flag": 0,
+      "ix": 32768,
+      "data": "0003414243440080",
+      "tStateBudget": 25000000
+    },
+    "expected": {
+      "ok": true,
+      "bytesLoaded": 8,
+      "ram": "0003414243440080",
+      "withinBudget": true
+    },
+    "normalization": { "profile": "custom" }
+  }
+]

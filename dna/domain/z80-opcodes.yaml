@@ -1,0 +1,1749 @@
+# Z80 opcode domain table (assembler-visible encodings, timing, and flags).
+#
+# Compressed schema: one terse row per encoding. Derived fields are NOT written
+# here -- the conformance loader (z80-opcodes-check.mjs `normalizeTable`) fills them:
+#   - encoding.lengthBytes  = bytes.length
+#   - flags (default)        = affected: [], unchanged: all 8  (only the ~11 rows that
+#                              change flags carry an explicit `flags:` clause)
+#   - caseInsensitive=true, provenance=z80-spec  (file-level defaults below)
+#   - byte values            = hex string -> { value, hex }; non-hex token -> parameter
+#   - timing                 = t/m scalars, or [taken, notTaken] for conditional forms
+# Operand semantics (roles, widths, cycle breakdown) live in z80-opcodes.md prose.
+schemaVersion: 1
+status: partial
+purpose: "Assembler-visible Z80 opcode encodings, lengths, flags, and timing."
+defaults:
+  caseInsensitive: true
+  provenance: z80-spec
+  flags: { affected: [], unchanged: [S, Z, "5", H, "3", PV, N, C] }
+sources:
+  z80-spec:
+    title: "Zilog Z80 CPU User Manual UM0080"
+    url: "https://www.zilog.com/docs/z80/um0080.pdf"
+    usedFor:
+      - "LD r,n operation"
+      - "LD r,r' operation"
+      - "LD dd,nn operation"
+      - "LD IX,nn operation"
+      - "LD IY,nn operation"
+      - "LD A,(BC) operation"
+      - "LD A,(DE) operation"
+      - "LD (BC),A operation"
+      - "LD (DE),A operation"
+      - "LD A,(nn) operation"
+      - "LD (nn),A operation"
+      - "LD HL,(nn) operation"
+      - "LD (nn),HL operation"
+      - "LD IX,(nn) operation"
+      - "LD IY,(nn) operation"
+      - "LD (nn),IX operation"
+      - "LD (nn),IY operation"
+      - "LD dd,(nn) ED-prefixed operation"
+      - "LD (nn),dd ED-prefixed operation"
+      - "LD SP,HL operation"
+      - "LD SP,IX operation"
+      - "LD SP,IY operation"
+      - "INC ss operation"
+      - "DEC ss operation"
+      - "INC IX/IY operation"
+      - "DEC IX/IY operation"
+      - "INC r operation"
+      - "PUSH qq operation"
+      - "PUSH IX operation"
+      - "PUSH IY operation"
+      - "POP qq operation"
+      - "POP IX operation"
+      - "POP IY operation"
+      - "LD (HL),n operation"
+      - "LD r,(HL) operation"
+      - "LD (HL),r operation"
+      - "JP nn operation"
+      - "JP cc,nn operation"
+      - "JP (HL) operation"
+      - "JP (IX) operation"
+      - "JP (IY) operation"
+      - "EX AF,AF' operation"
+      - "EX DE,HL operation"
+      - "EXX operation"
+      - "EX (SP),HL operation"
+      - "EX (SP),IX operation"
+      - "EX (SP),IY operation"
+      - "CALL nn operation"
+      - "CALL cc,nn operation"
+      - "RET operation"
+      - "RET cc operation"
+      - "RETN operation"
+      - "RETI operation"
+      - "RST p operation"
+      - "NOP operation"
+      - "HALT operation"
+      - "DI operation"
+      - "EI operation"
+      - "IM 0 operation"
+      - "IM 1 operation"
+      - "IM 2 operation"
+      - "LD I,A operation"
+      - "LD R,A operation"
+      - "LD A,I operation"
+      - "LD A,R operation"
+      - "OUT (n),A operation"
+      - "IN A,(n) operation"
+      - "OUT (C),r operation"
+      - "IN r,(C) operation"
+      - "JR e operation"
+      - "JR cc,e operation"
+      - "DJNZ e operation"
+      - "ADC HL,ss operation"
+      - "SBC HL,ss operation"
+      - "NEG operation"
+      - "RRD operation"
+      - "RLD operation"
+      - "LDI / LDD / LDIR / LDDR block-transfer operation"
+      - "CPI / CPD / CPIR / CPDR block-compare operation"
+      - "INI / IND / OUTI / OUTD / INIR / INDR / OTIR / OTDR block-I/O operation"
+      - "A register code"
+      - "register-pair code"
+      - "HL memory operand code"
+      - "base opcode pattern"
+      - "16-bit immediate byte order"
+      - "absolute address byte order"
+      - "condition-bit effect"
+      - "machine-cycle and T-state timing"
+
+# --- Single-encoding rows --------------------------------------------------
+instructions:
+  # ASM-EMIT-LD-R-N-001
+  - { id: Z80-OPC-LD-B-N-001, syntax: "LD B,n", bytes: ["06", "n"], t: 7, m: 2, conformance: [ASM-EMIT-LD-R-N-001] }
+  - { id: Z80-OPC-LD-C-N-001, syntax: "LD C,n", bytes: ["0E", "n"], t: 7, m: 2, conformance: [ASM-EMIT-LD-R-N-001] }
+  - { id: Z80-OPC-LD-D-N-001, syntax: "LD D,n", bytes: ["16", "n"], t: 7, m: 2, conformance: [ASM-EMIT-LD-R-N-001] }
+  - { id: Z80-OPC-LD-E-N-001, syntax: "LD E,n", bytes: ["1E", "n"], t: 7, m: 2, conformance: [ASM-EMIT-LD-R-N-001] }
+  - { id: Z80-OPC-LD-H-N-001, syntax: "LD H,n", bytes: ["26", "n"], t: 7, m: 2, conformance: [ASM-EMIT-LD-R-N-001] }
+  - { id: Z80-OPC-LD-L-N-001, syntax: "LD L,n", bytes: ["2E", "n"], t: 7, m: 2, conformance: [ASM-EMIT-LD-R-N-001] }
+  # ASM-EMIT-001
+  - { id: Z80-OPC-LD-A-N-001, syntax: "LD A,n", bytes: ["3E", "n"], t: 7, m: 2, conformance: [ASM-EMIT-001, ASM-EMIT-LD-R-N-001] }
+  # ASM-EMIT-LD-ACC-BCDE-IND-001
+  - { id: Z80-OPC-LD-A-BC-IND-001, syntax: "LD A,(BC)", bytes: ["0A"], t: 7, m: 2, conformance: [ASM-EMIT-LD-ACC-BCDE-IND-001] }
+  - { id: Z80-OPC-LD-A-DE-IND-001, syntax: "LD A,(DE)", bytes: ["1A"], t: 7, m: 2, conformance: [ASM-EMIT-LD-ACC-BCDE-IND-001] }
+  - { id: Z80-OPC-LD-BC-IND-A-001, syntax: "LD (BC),A", bytes: ["02"], t: 7, m: 2, conformance: [ASM-EMIT-LD-ACC-BCDE-IND-001] }
+  - { id: Z80-OPC-LD-DE-IND-A-001, syntax: "LD (DE),A", bytes: ["12"], t: 7, m: 2, conformance: [ASM-EMIT-LD-ACC-BCDE-IND-001] }
+  # ASM-EMIT-LD-ACC-NN-IND-001
+  - { id: Z80-OPC-LD-A-NN-IND-001, syntax: "LD A,(nn)", bytes: ["3A", "nn-low", "nn-high"], t: 13, m: 4, conformance: [ASM-EMIT-LD-ACC-NN-IND-001] }
+  - { id: Z80-OPC-LD-NN-IND-A-001, syntax: "LD (nn),A", bytes: ["32", "nn-low", "nn-high"], t: 13, m: 4, conformance: [ASM-EMIT-LD-ACC-NN-IND-001] }
+  # ASM-EMIT-LD-HL-NN-IND-001
+  - { id: Z80-OPC-LD-HL-NN-IND-001, syntax: "LD HL,(nn)", bytes: ["2A", "nn-low", "nn-high"], t: 16, m: 5, conformance: [ASM-EMIT-LD-HL-NN-IND-001] }
+  - { id: Z80-OPC-LD-NN-IND-HL-001, syntax: "LD (nn),HL", bytes: ["22", "nn-low", "nn-high"], t: 16, m: 5, conformance: [ASM-EMIT-LD-HL-NN-IND-001] }
+  # ASM-EMIT-LD-IXIY-NN-IND-001
+  - { id: Z80-OPC-LD-IX-NN-IND-001, syntax: "LD IX,(nn)", bytes: ["DD", "2A", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-IXIY-NN-IND-001] }
+  - { id: Z80-OPC-LD-IY-NN-IND-001, syntax: "LD IY,(nn)", bytes: ["FD", "2A", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-IXIY-NN-IND-001] }
+  - { id: Z80-OPC-LD-NN-IND-IX-001, syntax: "LD (nn),IX", bytes: ["DD", "22", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-IXIY-NN-IND-001] }
+  - { id: Z80-OPC-LD-NN-IND-IY-001, syntax: "LD (nn),IY", bytes: ["FD", "22", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-IXIY-NN-IND-001] }
+  # ASM-EMIT-LD-DD-NN-IND-001
+  - { id: Z80-OPC-LD-BC-NN-IND-001, syntax: "LD BC,(nn)", bytes: ["ED", "4B", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-DD-NN-IND-001] }
+  - { id: Z80-OPC-LD-DE-NN-IND-001, syntax: "LD DE,(nn)", bytes: ["ED", "5B", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-DD-NN-IND-001] }
+  - { id: Z80-OPC-LD-SP-NN-IND-001, syntax: "LD SP,(nn)", bytes: ["ED", "7B", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-DD-NN-IND-001] }
+  - { id: Z80-OPC-LD-NN-IND-BC-001, syntax: "LD (nn),BC", bytes: ["ED", "43", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-DD-NN-IND-001] }
+  - { id: Z80-OPC-LD-NN-IND-DE-001, syntax: "LD (nn),DE", bytes: ["ED", "53", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-DD-NN-IND-001] }
+  - { id: Z80-OPC-LD-NN-IND-SP-001, syntax: "LD (nn),SP", bytes: ["ED", "73", "nn-low", "nn-high"], t: 20, m: 6, conformance: [ASM-EMIT-LD-DD-NN-IND-001] }
+  # ASM-EMIT-LD-SP-HL-001
+  - { id: Z80-OPC-LD-SP-HL-001, syntax: "LD SP,HL", bytes: ["F9"], t: 6, m: 1, conformance: [ASM-EMIT-LD-SP-HL-001] }
+  # ASM-EMIT-LD-SP-IXIY-001
+  - { id: Z80-OPC-LD-SP-IX-001, syntax: "LD SP,IX", bytes: ["DD", "F9"], t: 10, m: 2, conformance: [ASM-EMIT-LD-SP-IXIY-001] }
+  - { id: Z80-OPC-LD-SP-IY-001, syntax: "LD SP,IY", bytes: ["FD", "F9"], t: 10, m: 2, conformance: [ASM-EMIT-LD-SP-IXIY-001] }
+  # ASM-EMIT-INC-DEC-SS-001
+  - { id: Z80-OPC-INC-BC-001, syntax: "INC BC", bytes: ["03"], t: 6, m: 1, conformance: [ASM-EMIT-INC-DEC-SS-001] }
+  - { id: Z80-OPC-INC-DE-001, syntax: "INC DE", bytes: ["13"], t: 6, m: 1, conformance: [ASM-EMIT-INC-DEC-SS-001] }
+  - { id: Z80-OPC-INC-HL-001, syntax: "INC HL", bytes: ["23"], t: 6, m: 1, conformance: [ASM-EMIT-INC-DEC-SS-001] }
+  - { id: Z80-OPC-INC-SP-001, syntax: "INC SP", bytes: ["33"], t: 6, m: 1, conformance: [ASM-EMIT-INC-DEC-SS-001] }
+  - { id: Z80-OPC-DEC-BC-001, syntax: "DEC BC", bytes: ["0B"], t: 6, m: 1, conformance: [ASM-EMIT-INC-DEC-SS-001] }
+  - { id: Z80-OPC-DEC-DE-001, syntax: "DEC DE", bytes: ["1B"], t: 6, m: 1, conformance: [ASM-EMIT-INC-DEC-SS-001] }
+  - { id: Z80-OPC-DEC-HL-001, syntax: "DEC HL", bytes: ["2B"], t: 6, m: 1, conformance: [ASM-EMIT-INC-DEC-SS-001] }
+  - { id: Z80-OPC-DEC-SP-001, syntax: "DEC SP", bytes: ["3B"], t: 6, m: 1, conformance: [ASM-EMIT-INC-DEC-SS-001] }
+  # ASM-EMIT-INC-DEC-IXIY-001
+  - { id: Z80-OPC-INC-IX-001, syntax: "INC IX", bytes: ["DD", "23"], t: 10, m: 2, conformance: [ASM-EMIT-INC-DEC-IXIY-001] }
+  - { id: Z80-OPC-INC-IY-001, syntax: "INC IY", bytes: ["FD", "23"], t: 10, m: 2, conformance: [ASM-EMIT-INC-DEC-IXIY-001] }
+  - { id: Z80-OPC-DEC-IX-001, syntax: "DEC IX", bytes: ["DD", "2B"], t: 10, m: 2, conformance: [ASM-EMIT-INC-DEC-IXIY-001] }
+  - { id: Z80-OPC-DEC-IY-001, syntax: "DEC IY", bytes: ["FD", "2B"], t: 10, m: 2, conformance: [ASM-EMIT-INC-DEC-IXIY-001] }
+  # ASM-EMIT-PUSH-QQ-001
+  - { id: Z80-OPC-PUSH-BC-001, syntax: "PUSH BC", bytes: ["C5"], t: 11, m: 3, conformance: [ASM-EMIT-PUSH-QQ-001] }
+  - { id: Z80-OPC-PUSH-DE-001, syntax: "PUSH DE", bytes: ["D5"], t: 11, m: 3, conformance: [ASM-EMIT-PUSH-QQ-001] }
+  - { id: Z80-OPC-PUSH-HL-001, syntax: "PUSH HL", bytes: ["E5"], t: 11, m: 3, conformance: [ASM-EMIT-PUSH-QQ-001] }
+  - { id: Z80-OPC-PUSH-AF-001, syntax: "PUSH AF", bytes: ["F5"], t: 11, m: 3, conformance: [ASM-EMIT-PUSH-QQ-001] }
+  # ASM-EMIT-PUSH-IXIY-001
+  - { id: Z80-OPC-PUSH-IX-001, syntax: "PUSH IX", bytes: ["DD", "E5"], t: 15, m: 4, conformance: [ASM-EMIT-PUSH-IXIY-001] }
+  - { id: Z80-OPC-PUSH-IY-001, syntax: "PUSH IY", bytes: ["FD", "E5"], t: 15, m: 4, conformance: [ASM-EMIT-PUSH-IXIY-001] }
+  # ASM-EMIT-POP-QQ-001
+  - { id: Z80-OPC-POP-BC-001, syntax: "POP BC", bytes: ["C1"], t: 10, m: 3, conformance: [ASM-EMIT-POP-QQ-001] }
+  - { id: Z80-OPC-POP-DE-001, syntax: "POP DE", bytes: ["D1"], t: 10, m: 3, conformance: [ASM-EMIT-POP-QQ-001] }
+  - { id: Z80-OPC-POP-HL-001, syntax: "POP HL", bytes: ["E1"], t: 10, m: 3, conformance: [ASM-EMIT-POP-QQ-001] }
+  - { id: Z80-OPC-POP-AF-001, syntax: "POP AF", bytes: ["F1"], t: 10, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }, conformance: [ASM-EMIT-POP-QQ-001] }
+  # ASM-EMIT-POP-IXIY-001
+  - { id: Z80-OPC-POP-IX-001, syntax: "POP IX", bytes: ["DD", "E1"], t: 14, m: 4, conformance: [ASM-EMIT-POP-IXIY-001] }
+  - { id: Z80-OPC-POP-IY-001, syntax: "POP IY", bytes: ["FD", "E1"], t: 14, m: 4, conformance: [ASM-EMIT-POP-IXIY-001] }
+  # ASM-EMIT-LD-DD-NN-001
+  - { id: Z80-OPC-LD-BC-NN-001, syntax: "LD BC,nn", bytes: ["01", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-LD-DD-NN-001] }
+  - { id: Z80-OPC-LD-DE-NN-001, syntax: "LD DE,nn", bytes: ["11", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-LD-DD-NN-001] }
+  - { id: Z80-OPC-LD-HL-NN-001, syntax: "LD HL,nn", bytes: ["21", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-LD-DD-NN-001] }
+  - { id: Z80-OPC-LD-SP-NN-001, syntax: "LD SP,nn", bytes: ["31", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-LD-DD-NN-001] }
+  # ASM-EMIT-LD-IXIY-NN-001
+  - { id: Z80-OPC-LD-IX-NN-001, syntax: "LD IX,nn", bytes: ["DD", "21", "nn-low", "nn-high"], t: 14, m: 4, conformance: [ASM-EMIT-LD-IXIY-NN-001] }
+  - { id: Z80-OPC-LD-IY-NN-001, syntax: "LD IY,nn", bytes: ["FD", "21", "nn-low", "nn-high"], t: 14, m: 4, conformance: [ASM-EMIT-LD-IXIY-NN-001] }
+  # ASM-EMIT-JP-NN-001
+  - { id: Z80-OPC-JP-NN-001, syntax: "JP nn", bytes: ["C3", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-JP-NN-001] }
+  # ASM-EMIT-JP-CC-NN-001
+  - { id: Z80-OPC-JP-NZ-NN-001, syntax: "JP NZ,nn", bytes: ["C2", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-JP-CC-NN-001] }
+  - { id: Z80-OPC-JP-Z-NN-001, syntax: "JP Z,nn", bytes: ["CA", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-JP-CC-NN-001] }
+  - { id: Z80-OPC-JP-NC-NN-001, syntax: "JP NC,nn", bytes: ["D2", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-JP-CC-NN-001] }
+  - { id: Z80-OPC-JP-C-NN-001, syntax: "JP C,nn", bytes: ["DA", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-JP-CC-NN-001] }
+  - { id: Z80-OPC-JP-PO-NN-001, syntax: "JP PO,nn", bytes: ["E2", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-JP-CC-NN-001] }
+  - { id: Z80-OPC-JP-PE-NN-001, syntax: "JP PE,nn", bytes: ["EA", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-JP-CC-NN-001] }
+  - { id: Z80-OPC-JP-P-NN-001, syntax: "JP P,nn", bytes: ["F2", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-JP-CC-NN-001] }
+  - { id: Z80-OPC-JP-M-NN-001, syntax: "JP M,nn", bytes: ["FA", "nn-low", "nn-high"], t: 10, m: 3, conformance: [ASM-EMIT-JP-CC-NN-001] }
+  # ASM-EMIT-JP-HL-001
+  - { id: Z80-OPC-JP-HL-001, syntax: "JP (HL)", bytes: ["E9"], t: 4, m: 1, conformance: [ASM-EMIT-JP-HL-001] }
+  # ASM-EMIT-JP-IXIY-001
+  - { id: Z80-OPC-JP-IX-001, syntax: "JP (IX)", bytes: ["DD", "E9"], t: 8, m: 2, conformance: [ASM-EMIT-JP-IXIY-001] }
+  - { id: Z80-OPC-JP-IY-001, syntax: "JP (IY)", bytes: ["FD", "E9"], t: 8, m: 2, conformance: [ASM-EMIT-JP-IXIY-001] }
+  # ASM-EMIT-EX-AF-AF-PRIME-001
+  - { id: Z80-OPC-EX-AF-AF-PRIME-001, syntax: "EX AF,AF'", bytes: ["08"], t: 4, m: 1, flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }, conformance: [ASM-EMIT-EX-AF-AF-PRIME-001] }
+  # ASM-EMIT-EX-DE-HL-001
+  - { id: Z80-OPC-EX-DE-HL-001, syntax: "EX DE,HL", bytes: ["EB"], t: 4, m: 1, conformance: [ASM-EMIT-EX-DE-HL-001] }
+  # ASM-EMIT-EXX-001
+  - { id: Z80-OPC-EXX-001, syntax: "EXX", bytes: ["D9"], t: 4, m: 1, conformance: [ASM-EMIT-EXX-001] }
+  # ASM-EMIT-EX-SP-HL-IXIY-001
+  - { id: Z80-OPC-EX-SP-HL-001, syntax: "EX (SP),HL", bytes: ["E3"], t: 19, m: 5, conformance: [ASM-EMIT-EX-SP-HL-IXIY-001] }
+  - { id: Z80-OPC-EX-SP-IX-001, syntax: "EX (SP),IX", bytes: ["DD", "E3"], t: 23, m: 6, conformance: [ASM-EMIT-EX-SP-HL-IXIY-001] }
+  - { id: Z80-OPC-EX-SP-IY-001, syntax: "EX (SP),IY", bytes: ["FD", "E3"], t: 23, m: 6, conformance: [ASM-EMIT-EX-SP-HL-IXIY-001] }
+  # ASM-EMIT-CALL-NN-001
+  - { id: Z80-OPC-CALL-NN-001, syntax: "CALL nn", bytes: ["CD", "nn-low", "nn-high"], t: 17, m: 5, conformance: [ASM-EMIT-CALL-NN-001] }
+  # ASM-EMIT-CALL-CC-NN-001
+  - { id: Z80-OPC-CALL-NZ-NN-001, syntax: "CALL NZ,nn", bytes: ["C4", "nn-low", "nn-high"], t: [17, 10], m: [5, 3], conformance: [ASM-EMIT-CALL-CC-NN-001] }
+  - { id: Z80-OPC-CALL-Z-NN-001, syntax: "CALL Z,nn", bytes: ["CC", "nn-low", "nn-high"], t: [17, 10], m: [5, 3], conformance: [ASM-EMIT-CALL-CC-NN-001] }
+  - { id: Z80-OPC-CALL-NC-NN-001, syntax: "CALL NC,nn", bytes: ["D4", "nn-low", "nn-high"], t: [17, 10], m: [5, 3], conformance: [ASM-EMIT-CALL-CC-NN-001] }
+  - { id: Z80-OPC-CALL-C-NN-001, syntax: "CALL C,nn", bytes: ["DC", "nn-low", "nn-high"], t: [17, 10], m: [5, 3], conformance: [ASM-EMIT-CALL-CC-NN-001] }
+  - { id: Z80-OPC-CALL-PO-NN-001, syntax: "CALL PO,nn", bytes: ["E4", "nn-low", "nn-high"], t: [17, 10], m: [5, 3], conformance: [ASM-EMIT-CALL-CC-NN-001] }
+  - { id: Z80-OPC-CALL-PE-NN-001, syntax: "CALL PE,nn", bytes: ["EC", "nn-low", "nn-high"], t: [17, 10], m: [5, 3], conformance: [ASM-EMIT-CALL-CC-NN-001] }
+  - { id: Z80-OPC-CALL-P-NN-001, syntax: "CALL P,nn", bytes: ["F4", "nn-low", "nn-high"], t: [17, 10], m: [5, 3], conformance: [ASM-EMIT-CALL-CC-NN-001] }
+  - { id: Z80-OPC-CALL-M-NN-001, syntax: "CALL M,nn", bytes: ["FC", "nn-low", "nn-high"], t: [17, 10], m: [5, 3], conformance: [ASM-EMIT-CALL-CC-NN-001] }
+  # ASM-EMIT-RET-001
+  - { id: Z80-OPC-RET-001, syntax: "RET", bytes: ["C9"], t: 10, m: 3, conformance: [ASM-EMIT-RET-001] }
+  # ASM-EMIT-RET-CC-001
+  - { id: Z80-OPC-RET-NZ-001, syntax: "RET NZ", bytes: ["C0"], t: [11, 5], m: [3, 1], conformance: [ASM-EMIT-RET-CC-001] }
+  - { id: Z80-OPC-RET-Z-001, syntax: "RET Z", bytes: ["C8"], t: [11, 5], m: [3, 1], conformance: [ASM-EMIT-RET-CC-001] }
+  - { id: Z80-OPC-RET-NC-001, syntax: "RET NC", bytes: ["D0"], t: [11, 5], m: [3, 1], conformance: [ASM-EMIT-RET-CC-001] }
+  - { id: Z80-OPC-RET-C-001, syntax: "RET C", bytes: ["D8"], t: [11, 5], m: [3, 1], conformance: [ASM-EMIT-RET-CC-001] }
+  - { id: Z80-OPC-RET-PO-001, syntax: "RET PO", bytes: ["E0"], t: [11, 5], m: [3, 1], conformance: [ASM-EMIT-RET-CC-001] }
+  - { id: Z80-OPC-RET-PE-001, syntax: "RET PE", bytes: ["E8"], t: [11, 5], m: [3, 1], conformance: [ASM-EMIT-RET-CC-001] }
+  - { id: Z80-OPC-RET-P-001, syntax: "RET P", bytes: ["F0"], t: [11, 5], m: [3, 1], conformance: [ASM-EMIT-RET-CC-001] }
+  - { id: Z80-OPC-RET-M-001, syntax: "RET M", bytes: ["F8"], t: [11, 5], m: [3, 1], conformance: [ASM-EMIT-RET-CC-001] }
+  # ASM-EMIT-RETN-RETI-001
+  - { id: Z80-OPC-RETN-001, syntax: "RETN", bytes: ["ED", "45"], t: 14, m: 4, conformance: [ASM-EMIT-RETN-RETI-001] }
+  - { id: Z80-OPC-RETI-001, syntax: "RETI", bytes: ["ED", "4D"], t: 14, m: 4, conformance: [ASM-EMIT-RETN-RETI-001] }
+  # ASM-EMIT-RST-P-001
+  - { id: Z80-OPC-RST-00H-001, syntax: "RST 00H", bytes: ["C7"], t: 11, m: 3, conformance: [ASM-EMIT-RST-P-001] }
+  - { id: Z80-OPC-RST-08H-001, syntax: "RST 08H", bytes: ["CF"], t: 11, m: 3, conformance: [ASM-EMIT-RST-P-001] }
+  - { id: Z80-OPC-RST-10H-001, syntax: "RST 10H", bytes: ["D7"], t: 11, m: 3, conformance: [ASM-EMIT-RST-P-001] }
+  - { id: Z80-OPC-RST-18H-001, syntax: "RST 18H", bytes: ["DF"], t: 11, m: 3, conformance: [ASM-EMIT-RST-P-001] }
+  - { id: Z80-OPC-RST-20H-001, syntax: "RST 20H", bytes: ["E7"], t: 11, m: 3, conformance: [ASM-EMIT-RST-P-001] }
+  - { id: Z80-OPC-RST-28H-001, syntax: "RST 28H", bytes: ["EF"], t: 11, m: 3, conformance: [ASM-EMIT-RST-P-001] }
+  - { id: Z80-OPC-RST-30H-001, syntax: "RST 30H", bytes: ["F7"], t: 11, m: 3, conformance: [ASM-EMIT-RST-P-001] }
+  - { id: Z80-OPC-RST-38H-001, syntax: "RST 38H", bytes: ["FF"], t: 11, m: 3, conformance: [ASM-EMIT-RST-P-001] }
+  # ASM-EMIT-NOP-001
+  - { id: Z80-OPC-NOP-001, syntax: "NOP", bytes: ["00"], t: 4, m: 1, conformance: [ASM-EMIT-NOP-001] }
+  # ASM-EMIT-HALT-001
+  - { id: Z80-OPC-HALT-001, syntax: "HALT", bytes: ["76"], t: 4, m: 1, conformance: [ASM-EMIT-HALT-001] }
+  # ASM-EMIT-DI-EI-001
+  - { id: Z80-OPC-DI-001, syntax: "DI", bytes: ["F3"], t: 4, m: 1, conformance: [ASM-EMIT-DI-EI-001] }
+  - { id: Z80-OPC-EI-001, syntax: "EI", bytes: ["FB"], t: 4, m: 1, conformance: [ASM-EMIT-DI-EI-001] }
+  # ASM-EMIT-IM-001
+  - { id: Z80-OPC-IM-0-001, syntax: "IM 0", bytes: ["ED", "46"], t: 8, m: 2, conformance: [ASM-EMIT-IM-001] }
+  - { id: Z80-OPC-IM-1-001, syntax: "IM 1", bytes: ["ED", "56"], t: 8, m: 2, conformance: [ASM-EMIT-IM-001] }
+  - { id: Z80-OPC-IM-2-001, syntax: "IM 2", bytes: ["ED", "5E"], t: 8, m: 2, conformance: [ASM-EMIT-IM-001] }
+  # ASM-EMIT-LD-I-R-A-001
+  - { id: Z80-OPC-LD-I-A-001, syntax: "LD I,A", bytes: ["ED", "47"], t: 9, m: 2, conformance: [ASM-EMIT-LD-I-R-A-001] }
+  - { id: Z80-OPC-LD-R-A-001, syntax: "LD R,A", bytes: ["ED", "4F"], t: 9, m: 2, conformance: [ASM-EMIT-LD-I-R-A-001] }
+  # ASM-EMIT-LD-A-I-R-001
+  - { id: Z80-OPC-LD-A-I-001, syntax: "LD A,I", bytes: ["ED", "57"], t: 9, m: 2, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-LD-A-I-R-001] }
+  - { id: Z80-OPC-LD-A-R-001, syntax: "LD A,R", bytes: ["ED", "5F"], t: 9, m: 2, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-LD-A-I-R-001] }
+  # ASM-EMIT-IO-N-A-001
+  - { id: Z80-OPC-OUT-N-A-001, syntax: "OUT (n),A", bytes: ["D3", "n"], t: 11, m: 3, conformance: [ASM-EMIT-IO-N-A-001] }
+  - { id: Z80-OPC-IN-A-N-001, syntax: "IN A,(n)", bytes: ["DB", "n"], t: 11, m: 3, conformance: [ASM-EMIT-IO-N-A-001] }
+  # ASM-EMIT-OUT-C-R-001
+  - { id: Z80-OPC-OUT-C-B-001, syntax: "OUT (C),B", bytes: ["ED", "41"], t: 12, m: 3, conformance: [ASM-EMIT-OUT-C-R-001] }
+  - { id: Z80-OPC-OUT-C-C-001, syntax: "OUT (C),C", bytes: ["ED", "49"], t: 12, m: 3, conformance: [ASM-EMIT-OUT-C-R-001] }
+  - { id: Z80-OPC-OUT-C-D-001, syntax: "OUT (C),D", bytes: ["ED", "51"], t: 12, m: 3, conformance: [ASM-EMIT-OUT-C-R-001] }
+  - { id: Z80-OPC-OUT-C-E-001, syntax: "OUT (C),E", bytes: ["ED", "59"], t: 12, m: 3, conformance: [ASM-EMIT-OUT-C-R-001] }
+  - { id: Z80-OPC-OUT-C-H-001, syntax: "OUT (C),H", bytes: ["ED", "61"], t: 12, m: 3, conformance: [ASM-EMIT-OUT-C-R-001] }
+  - { id: Z80-OPC-OUT-C-L-001, syntax: "OUT (C),L", bytes: ["ED", "69"], t: 12, m: 3, conformance: [ASM-EMIT-OUT-C-R-001] }
+  - { id: Z80-OPC-OUT-C-A-001, syntax: "OUT (C),A", bytes: ["ED", "79"], t: 12, m: 3, conformance: [ASM-EMIT-OUT-C-R-001] }
+  # ASM-EMIT-IN-R-C-001
+  - { id: Z80-OPC-IN-B-C-001, syntax: "IN B,(C)", bytes: ["ED", "40"], t: 12, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-IN-R-C-001] }
+  - { id: Z80-OPC-IN-C-C-001, syntax: "IN C,(C)", bytes: ["ED", "48"], t: 12, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-IN-R-C-001] }
+  - { id: Z80-OPC-IN-D-C-001, syntax: "IN D,(C)", bytes: ["ED", "50"], t: 12, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-IN-R-C-001] }
+  - { id: Z80-OPC-IN-E-C-001, syntax: "IN E,(C)", bytes: ["ED", "58"], t: 12, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-IN-R-C-001] }
+  - { id: Z80-OPC-IN-H-C-001, syntax: "IN H,(C)", bytes: ["ED", "60"], t: 12, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-IN-R-C-001] }
+  - { id: Z80-OPC-IN-L-C-001, syntax: "IN L,(C)", bytes: ["ED", "68"], t: 12, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-IN-R-C-001] }
+  - { id: Z80-OPC-IN-A-C-001, syntax: "IN A,(C)", bytes: ["ED", "78"], t: 12, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-IN-R-C-001] }
+  # ASM-EMIT-IN-C-001 / ASM-EMIT-OUT-C-0-001 -- the register-code-6 ED I/O slots (ED 70 / ED 71),
+  # promoted from prose to first-class table rows so the assembler<->disassembler bijection is
+  # complete (Phase C prerequisite, ADR-0025/D1). Canonical project syntax = the disassembler's
+  # emitted form (D5): ED 70 -> "IN (C)" (the flags-only input that discards its result; flags
+  # exactly as IN r,(C)); ED 71 -> "OUT (C),0" (the NMOS part writes 0x00; no flags change). Bytes
+  # z80-spec-structural, corroborated by the FUSE ED block (ed70/ed71); 12T/3M like the I/O family.
+  - { id: Z80-OPC-IN-F-C-001, syntax: "IN (C)", bytes: ["ED", "70"], t: 12, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-IN-C-001] }
+  - { id: Z80-OPC-OUT-C-0-001, syntax: "OUT (C),0", bytes: ["ED", "71"], t: 12, m: 3, conformance: [ASM-EMIT-OUT-C-0-001] }
+  # ASM-EMIT-JR-E-001
+  - { id: Z80-OPC-JR-E-001, syntax: "JR e", bytes: ["18", "e"], t: 12, m: 3, conformance: [ASM-EMIT-JR-E-001] }
+  # ASM-EMIT-JR-CC-E-001
+  - { id: Z80-OPC-JR-NZ-E-001, syntax: "JR NZ,e", bytes: ["20", "e"], t: [12, 7], m: [3, 2], conformance: [ASM-EMIT-JR-CC-E-001] }
+  - { id: Z80-OPC-JR-Z-E-001, syntax: "JR Z,e", bytes: ["28", "e"], t: [12, 7], m: [3, 2], conformance: [ASM-EMIT-JR-CC-E-001] }
+  - { id: Z80-OPC-JR-NC-E-001, syntax: "JR NC,e", bytes: ["30", "e"], t: [12, 7], m: [3, 2], conformance: [ASM-EMIT-JR-CC-E-001] }
+  - { id: Z80-OPC-JR-C-E-001, syntax: "JR C,e", bytes: ["38", "e"], t: [12, 7], m: [3, 2], conformance: [ASM-EMIT-JR-CC-E-001] }
+  # ASM-EMIT-DJNZ-E-001
+  - { id: Z80-OPC-DJNZ-E-001, syntax: "DJNZ e", bytes: ["10", "e"], t: [13, 8], m: [3, 2], conformance: [ASM-EMIT-DJNZ-E-001] }
+  # ASM-EMIT-INC-DEC-HL-IND-001 -- INC/DEC (HL); 11T 3M; flags S,Z,5,H,3,PV,N set, C preserved
+  - { id: Z80-OPC-INC-HL-IND-001, syntax: "INC (HL)", bytes: ["34"], t: 11, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-INC-DEC-HL-IND-001] }
+  - { id: Z80-OPC-DEC-HL-IND-001, syntax: "DEC (HL)", bytes: ["35"], t: 11, m: 3, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-INC-DEC-HL-IND-001] }
+  # ASM-EMIT-ROT-A-001 -- accumulator rotates; 4T 1M; flags 5,H(=0),3,N(=0),C(=rotated bit); S,Z,PV preserved
+  - { id: Z80-OPC-RLCA-001, syntax: "RLCA", bytes: ["07"], t: 4, m: 1, flags: { affected: ["5", H, "3", N, C], unchanged: [S, Z, PV] }, conformance: [ASM-EMIT-ROT-A-001] }
+  - { id: Z80-OPC-RRCA-001, syntax: "RRCA", bytes: ["0F"], t: 4, m: 1, flags: { affected: ["5", H, "3", N, C], unchanged: [S, Z, PV] }, conformance: [ASM-EMIT-ROT-A-001] }
+  - { id: Z80-OPC-RLA-001, syntax: "RLA", bytes: ["17"], t: 4, m: 1, flags: { affected: ["5", H, "3", N, C], unchanged: [S, Z, PV] }, conformance: [ASM-EMIT-ROT-A-001] }
+  - { id: Z80-OPC-RRA-001, syntax: "RRA", bytes: ["1F"], t: 4, m: 1, flags: { affected: ["5", H, "3", N, C], unchanged: [S, Z, PV] }, conformance: [ASM-EMIT-ROT-A-001] }
+  # ASM-EMIT-DAA-CPL-SCF-CCF-001 -- accumulator/flag adjust ops; 4T 1M; per-op flag effects (z80-spec UM0080)
+  - { id: Z80-OPC-DAA-001, syntax: "DAA", bytes: ["27"], t: 4, m: 1, flags: { affected: [S, Z, "5", H, "3", PV, C], unchanged: [N] }, conformance: [ASM-EMIT-DAA-CPL-SCF-CCF-001] }
+  - { id: Z80-OPC-CPL-001, syntax: "CPL", bytes: ["2F"], t: 4, m: 1, flags: { affected: ["5", H, "3", N], unchanged: [S, Z, PV, C] }, conformance: [ASM-EMIT-DAA-CPL-SCF-CCF-001] }
+  - { id: Z80-OPC-SCF-001, syntax: "SCF", bytes: ["37"], t: 4, m: 1, flags: { affected: ["5", H, "3", N, C], unchanged: [S, Z, PV] }, conformance: [ASM-EMIT-DAA-CPL-SCF-CCF-001] }
+  - { id: Z80-OPC-CCF-001, syntax: "CCF", bytes: ["3F"], t: 4, m: 1, flags: { affected: ["5", H, "3", N, C], unchanged: [S, Z, PV] }, conformance: [ASM-EMIT-DAA-CPL-SCF-CCF-001] }
+  # --- ED-prefixed NEG / RRD / RLD (Phase B3, ADR-0025) ---
+  # Bytes + canonical syntax from the ratified Phase-A1 generator; timing z80-spec UM0080,
+  # every T cross-checked against the FUSE ED end-state (NEG=8, RRD/RLD=18; all agree).
+  # NEG (0xED 0x44, the canonical encoding) two's-complements A; it changes every flag
+  # (S,Z,H,P/V,N,C and the undocumented 5/3): N=1, C set iff A!=0, P/V set iff A was 0x80.
+  # The seven undocumented duplicate encodings (ED 4C/54/5C/64/6C/74/7C) are decode-only
+  # aliases of this canonical row, not separate rows (OPCODE-DECODE-UNIQUE policy, Phase C).
+  - { id: Z80-OPC-ED-NEG-001, syntax: "NEG", bytes: ["ED", "44"], t: 8, m: 2, flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }, conformance: [ASM-EMIT-ED-NEG-001] }
+  # RRD/RLD rotate one BCD digit between A's low nibble and the (HL) byte; H and N reset,
+  # P/V is the parity of the resulting A, S/Z/5/3 from A, C preserved.
+  - { id: Z80-OPC-ED-RRD-001, syntax: "RRD", bytes: ["ED", "67"], t: 18, m: 5, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-ED-RRD-RLD-001] }
+  - { id: Z80-OPC-ED-RLD-001, syntax: "RLD", bytes: ["ED", "6F"], t: 18, m: 5, flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }, conformance: [ASM-EMIT-ED-RRD-RLD-001] }
+
+# --- Families (templated row sets) -----------------------------------------
+families:
+  # Z80-OPC-LD-R-R-001 -- LD r,r' base register-to-register (7x7; (HL)/110 excluded); 1B; 4T 1M; flags: none
+  - id: Z80-OPC-LD-R-R-001
+    syntax: "LD {d},{s}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    conformance: [ASM-EMIT-LD-R-R-001]
+    rows:
+      - { d: B, s: B, op: "40" }
+      - { d: B, s: C, op: "41" }
+      - { d: B, s: D, op: "42" }
+      - { d: B, s: E, op: "43" }
+      - { d: B, s: H, op: "44" }
+      - { d: B, s: L, op: "45" }
+      - { d: B, s: A, op: "47" }
+      - { d: C, s: B, op: "48" }
+      - { d: C, s: C, op: "49" }
+      - { d: C, s: D, op: "4A" }
+      - { d: C, s: E, op: "4B" }
+      - { d: C, s: H, op: "4C" }
+      - { d: C, s: L, op: "4D" }
+      - { d: C, s: A, op: "4F" }
+      - { d: D, s: B, op: "50" }
+      - { d: D, s: C, op: "51" }
+      - { d: D, s: D, op: "52" }
+      - { d: D, s: E, op: "53" }
+      - { d: D, s: H, op: "54" }
+      - { d: D, s: L, op: "55" }
+      - { d: D, s: A, op: "57" }
+      - { d: E, s: B, op: "58" }
+      - { d: E, s: C, op: "59" }
+      - { d: E, s: D, op: "5A" }
+      - { d: E, s: E, op: "5B" }
+      - { d: E, s: H, op: "5C" }
+      - { d: E, s: L, op: "5D" }
+      - { d: E, s: A, op: "5F" }
+      - { d: H, s: B, op: "60" }
+      - { d: H, s: C, op: "61" }
+      - { d: H, s: D, op: "62" }
+      - { d: H, s: E, op: "63" }
+      - { d: H, s: H, op: "64" }
+      - { d: H, s: L, op: "65" }
+      - { d: H, s: A, op: "67" }
+      - { d: L, s: B, op: "68" }
+      - { d: L, s: C, op: "69" }
+      - { d: L, s: D, op: "6A" }
+      - { d: L, s: E, op: "6B" }
+      - { d: L, s: H, op: "6C" }
+      - { d: L, s: L, op: "6D" }
+      - { d: L, s: A, op: "6F" }
+      - { d: A, s: B, op: "78" }
+      - { d: A, s: C, op: "79" }
+      - { d: A, s: D, op: "7A" }
+      - { d: A, s: E, op: "7B" }
+      - { d: A, s: H, op: "7C" }
+      - { d: A, s: L, op: "7D" }
+      - { d: A, s: A, op: "7F" }
+  # Z80-OPC-LD-HL-MEM-001 -- LD (HL) memory references (register<->(HL) + immediate); excludes 0x76 (HALT)
+  - id: Z80-OPC-LD-HL-MEM-001
+    conformance: [ASM-EMIT-LD-HL-MEM-001]
+    excludes: ["76"]
+    variants:
+      - { syntax: "LD (HL),n", bytes: ["36", "n"], t: 10, m: 3 }
+      - { syntax: "LD B,(HL)", bytes: ["46"], t: 7, m: 2 }
+      - { syntax: "LD C,(HL)", bytes: ["4E"], t: 7, m: 2 }
+      - { syntax: "LD D,(HL)", bytes: ["56"], t: 7, m: 2 }
+      - { syntax: "LD E,(HL)", bytes: ["5E"], t: 7, m: 2 }
+      - { syntax: "LD H,(HL)", bytes: ["66"], t: 7, m: 2 }
+      - { syntax: "LD L,(HL)", bytes: ["6E"], t: 7, m: 2 }
+      - { syntax: "LD A,(HL)", bytes: ["7E"], t: 7, m: 2 }
+      - { syntax: "LD (HL),B", bytes: ["70"], t: 7, m: 2 }
+      - { syntax: "LD (HL),C", bytes: ["71"], t: 7, m: 2 }
+      - { syntax: "LD (HL),D", bytes: ["72"], t: 7, m: 2 }
+      - { syntax: "LD (HL),E", bytes: ["73"], t: 7, m: 2 }
+      - { syntax: "LD (HL),H", bytes: ["74"], t: 7, m: 2 }
+      - { syntax: "LD (HL),L", bytes: ["75"], t: 7, m: 2 }
+      - { syntax: "LD (HL),A", bytes: ["77"], t: 7, m: 2 }
+  # Z80-OPC-INC-R-001 -- INC r 8-bit register increment (B,C,D,E,H,L,A); (HL)/110 not in this family; 1B; 4T 1M
+  # flags: S,Z,5,H,3,PV,N set from result/operand; C preserved (execution rule in dna/domain/z80-cpu-execution.md)
+  - id: Z80-OPC-INC-R-001
+    syntax: "INC {r}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }
+    conformance: [ASM-EMIT-INC-R-001]
+    rows:
+      - { r: B, op: "04" }
+      - { r: C, op: "0C" }
+      - { r: D, op: "14" }
+      - { r: E, op: "1C" }
+      - { r: H, op: "24" }
+      - { r: L, op: "2C" }
+      - { r: A, op: "3C" }
+  # Z80-OPC-DEC-R-001 -- DEC r 8-bit register decrement (B,C,D,E,H,L,A); (HL)/110 carried as
+  # an instruction row above; 1B; 4T 1M; flags S,Z,5,H,3,PV,N set, C preserved (z80-spec UM0080)
+  - id: Z80-OPC-DEC-R-001
+    syntax: "DEC {r}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }
+    conformance: [ASM-EMIT-DEC-R-001]
+    rows:
+      - { r: B, op: "05" }
+      - { r: C, op: "0D" }
+      - { r: D, op: "15" }
+      - { r: E, op: "1D" }
+      - { r: H, op: "25" }
+      - { r: L, op: "2D" }
+      - { r: A, op: "3D" }
+  # Z80-OPC-ADD-HL-SS-001 -- ADD HL,ss 16-bit add (BC,DE,HL,SP); 1B; 11T 3M; flags 5,H,3 from
+  # result MSB, N reset, C from bit-15 carry; S,Z,PV preserved (z80-spec UM0080)
+  - id: Z80-OPC-ADD-HL-SS-001
+    syntax: "ADD HL,{s}"
+    bytes: ["{op}"]
+    t: 11
+    m: 3
+    flags: { affected: ["5", H, "3", N, C], unchanged: [S, Z, PV] }
+    conformance: [ASM-EMIT-ADD-HL-SS-001]
+    rows:
+      - { s: BC, op: "09" }
+      - { s: DE, op: "19" }
+      - { s: HL, op: "29" }
+      - { s: SP, op: "39" }
+  # --- ALU A,r / A,(HL) / A,n (8 operations x 8 register/memory forms + immediate) ---
+  # All eight ALU ops set the full flag set (S,Z,5,H,3,PV,N,C) per z80-spec UM0080:
+  # ADD/ADC/SUB/SBC/CP -> PV=overflow, N from op (0 add / 1 sub); AND/OR/XOR -> PV=parity,
+  # H fixed (AND=1, OR/XOR=0), N=0, C=0. Register forms 4T 1M; (HL) and immediate 7T 2M.
+  # ADD/ADC/SBC use the explicit accumulator syntax "ADD A,s"; SUB/AND/XOR/OR/CP take one operand.
+  - id: Z80-OPC-ALU-ADD-001
+    syntax: "ADD A,{s}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ALU-ADD-001]
+    rows:
+      - { s: B, op: "80" }
+      - { s: C, op: "81" }
+      - { s: D, op: "82" }
+      - { s: E, op: "83" }
+      - { s: H, op: "84" }
+      - { s: L, op: "85" }
+      - { s: A, op: "87" }
+    variants:
+      - { syntax: "ADD A,(HL)", bytes: ["86"], t: 7, m: 2 }
+      - { syntax: "ADD A,n", bytes: ["C6", "n"], t: 7, m: 2 }
+  - id: Z80-OPC-ALU-ADC-001
+    syntax: "ADC A,{s}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ALU-ADC-001]
+    rows:
+      - { s: B, op: "88" }
+      - { s: C, op: "89" }
+      - { s: D, op: "8A" }
+      - { s: E, op: "8B" }
+      - { s: H, op: "8C" }
+      - { s: L, op: "8D" }
+      - { s: A, op: "8F" }
+    variants:
+      - { syntax: "ADC A,(HL)", bytes: ["8E"], t: 7, m: 2 }
+      - { syntax: "ADC A,n", bytes: ["CE", "n"], t: 7, m: 2 }
+  - id: Z80-OPC-ALU-SUB-001
+    syntax: "SUB {s}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ALU-SUB-001]
+    rows:
+      - { s: B, op: "90" }
+      - { s: C, op: "91" }
+      - { s: D, op: "92" }
+      - { s: E, op: "93" }
+      - { s: H, op: "94" }
+      - { s: L, op: "95" }
+      - { s: A, op: "97" }
+    variants:
+      - { syntax: "SUB (HL)", bytes: ["96"], t: 7, m: 2 }
+      - { syntax: "SUB n", bytes: ["D6", "n"], t: 7, m: 2 }
+  - id: Z80-OPC-ALU-SBC-001
+    syntax: "SBC A,{s}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ALU-SBC-001]
+    rows:
+      - { s: B, op: "98" }
+      - { s: C, op: "99" }
+      - { s: D, op: "9A" }
+      - { s: E, op: "9B" }
+      - { s: H, op: "9C" }
+      - { s: L, op: "9D" }
+      - { s: A, op: "9F" }
+    variants:
+      - { syntax: "SBC A,(HL)", bytes: ["9E"], t: 7, m: 2 }
+      - { syntax: "SBC A,n", bytes: ["DE", "n"], t: 7, m: 2 }
+  - id: Z80-OPC-ALU-AND-001
+    syntax: "AND {s}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ALU-AND-001]
+    rows:
+      - { s: B, op: "A0" }
+      - { s: C, op: "A1" }
+      - { s: D, op: "A2" }
+      - { s: E, op: "A3" }
+      - { s: H, op: "A4" }
+      - { s: L, op: "A5" }
+      - { s: A, op: "A7" }
+    variants:
+      - { syntax: "AND (HL)", bytes: ["A6"], t: 7, m: 2 }
+      - { syntax: "AND n", bytes: ["E6", "n"], t: 7, m: 2 }
+  - id: Z80-OPC-ALU-XOR-001
+    syntax: "XOR {s}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ALU-XOR-001]
+    rows:
+      - { s: B, op: "A8" }
+      - { s: C, op: "A9" }
+      - { s: D, op: "AA" }
+      - { s: E, op: "AB" }
+      - { s: H, op: "AC" }
+      - { s: L, op: "AD" }
+      - { s: A, op: "AF" }
+    variants:
+      - { syntax: "XOR (HL)", bytes: ["AE"], t: 7, m: 2 }
+      - { syntax: "XOR n", bytes: ["EE", "n"], t: 7, m: 2 }
+  - id: Z80-OPC-ALU-OR-001
+    syntax: "OR {s}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ALU-OR-001]
+    rows:
+      - { s: B, op: "B0" }
+      - { s: C, op: "B1" }
+      - { s: D, op: "B2" }
+      - { s: E, op: "B3" }
+      - { s: H, op: "B4" }
+      - { s: L, op: "B5" }
+      - { s: A, op: "B7" }
+    variants:
+      - { syntax: "OR (HL)", bytes: ["B6"], t: 7, m: 2 }
+      - { syntax: "OR n", bytes: ["F6", "n"], t: 7, m: 2 }
+  - id: Z80-OPC-ALU-CP-001
+    syntax: "CP {s}"
+    bytes: ["{op}"]
+    t: 4
+    m: 1
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ALU-CP-001]
+    rows:
+      - { s: B, op: "B8" }
+      - { s: C, op: "B9" }
+      - { s: D, op: "BA" }
+      - { s: E, op: "BB" }
+      - { s: H, op: "BC" }
+      - { s: L, op: "BD" }
+      - { s: A, op: "BF" }
+    variants:
+      - { syntax: "CP (HL)", bytes: ["BE"], t: 7, m: 2 }
+      - { syntax: "CP n", bytes: ["FE", "n"], t: 7, m: 2 }
+  # --- CB-prefixed group (256 forms): rotates/shifts + BIT/RES/SET ---
+  # Phase B2 (ADR-0025). Bytes + canonical syntax from the ratified Phase-A1 generator;
+  # timing z80-spec UM0080, every T-state cross-checked against FUSE (all agree): rotate/shift
+  # r = 8T/2M, (HL) = 15T/4M; BIT r = 8T/2M, BIT (HL) = 12T/3M; RES/SET r = 8T/2M, (HL) = 15T/4M.
+  # SLL (CB 30-37) is undocumented -> canonical syntax "SLL r" per ratified decision D1 (full bijection).
+  - id: Z80-OPC-CB-RLC-001
+    syntax: "RLC {r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-CB-ROT-001]
+    rows:
+      - { r: B, op: "00" }
+      - { r: C, op: "01" }
+      - { r: D, op: "02" }
+      - { r: E, op: "03" }
+      - { r: H, op: "04" }
+      - { r: L, op: "05" }
+      - { r: A, op: "07" }
+    variants:
+      - { syntax: "RLC (HL)", bytes: ["CB", "06"], t: 15, m: 4 }
+  - id: Z80-OPC-CB-RRC-001
+    syntax: "RRC {r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-CB-ROT-001]
+    rows:
+      - { r: B, op: "08" }
+      - { r: C, op: "09" }
+      - { r: D, op: "0A" }
+      - { r: E, op: "0B" }
+      - { r: H, op: "0C" }
+      - { r: L, op: "0D" }
+      - { r: A, op: "0F" }
+    variants:
+      - { syntax: "RRC (HL)", bytes: ["CB", "0E"], t: 15, m: 4 }
+  - id: Z80-OPC-CB-RL-001
+    syntax: "RL {r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-CB-ROT-001]
+    rows:
+      - { r: B, op: "10" }
+      - { r: C, op: "11" }
+      - { r: D, op: "12" }
+      - { r: E, op: "13" }
+      - { r: H, op: "14" }
+      - { r: L, op: "15" }
+      - { r: A, op: "17" }
+    variants:
+      - { syntax: "RL (HL)", bytes: ["CB", "16"], t: 15, m: 4 }
+  - id: Z80-OPC-CB-RR-001
+    syntax: "RR {r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-CB-ROT-001]
+    rows:
+      - { r: B, op: "18" }
+      - { r: C, op: "19" }
+      - { r: D, op: "1A" }
+      - { r: E, op: "1B" }
+      - { r: H, op: "1C" }
+      - { r: L, op: "1D" }
+      - { r: A, op: "1F" }
+    variants:
+      - { syntax: "RR (HL)", bytes: ["CB", "1E"], t: 15, m: 4 }
+  - id: Z80-OPC-CB-SLA-001
+    syntax: "SLA {r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-CB-ROT-001]
+    rows:
+      - { r: B, op: "20" }
+      - { r: C, op: "21" }
+      - { r: D, op: "22" }
+      - { r: E, op: "23" }
+      - { r: H, op: "24" }
+      - { r: L, op: "25" }
+      - { r: A, op: "27" }
+    variants:
+      - { syntax: "SLA (HL)", bytes: ["CB", "26"], t: 15, m: 4 }
+  - id: Z80-OPC-CB-SRA-001
+    syntax: "SRA {r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-CB-ROT-001]
+    rows:
+      - { r: B, op: "28" }
+      - { r: C, op: "29" }
+      - { r: D, op: "2A" }
+      - { r: E, op: "2B" }
+      - { r: H, op: "2C" }
+      - { r: L, op: "2D" }
+      - { r: A, op: "2F" }
+    variants:
+      - { syntax: "SRA (HL)", bytes: ["CB", "2E"], t: 15, m: 4 }
+  # undocumented shift-left-logical (a 1 into bit 0); canonical SLL r per D1
+  - id: Z80-OPC-CB-SLL-001
+    syntax: "SLL {r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-CB-ROT-001]
+    rows:
+      - { r: B, op: "30" }
+      - { r: C, op: "31" }
+      - { r: D, op: "32" }
+      - { r: E, op: "33" }
+      - { r: H, op: "34" }
+      - { r: L, op: "35" }
+      - { r: A, op: "37" }
+    variants:
+      - { syntax: "SLL (HL)", bytes: ["CB", "36"], t: 15, m: 4 }
+  - id: Z80-OPC-CB-SRL-001
+    syntax: "SRL {r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-CB-ROT-001]
+    rows:
+      - { r: B, op: "38" }
+      - { r: C, op: "39" }
+      - { r: D, op: "3A" }
+      - { r: E, op: "3B" }
+      - { r: H, op: "3C" }
+      - { r: L, op: "3D" }
+      - { r: A, op: "3F" }
+    variants:
+      - { syntax: "SRL (HL)", bytes: ["CB", "3E"], t: 15, m: 4 }
+  - id: Z80-OPC-CB-BIT-001
+    syntax: "BIT {b},{r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }
+    conformance: [ASM-EMIT-CB-BIT-001]
+    rows:
+      - { b: 0, r: B, op: "40" }
+      - { b: 0, r: C, op: "41" }
+      - { b: 0, r: D, op: "42" }
+      - { b: 0, r: E, op: "43" }
+      - { b: 0, r: H, op: "44" }
+      - { b: 0, r: L, op: "45" }
+      - { b: 0, r: A, op: "47" }
+      - { b: 1, r: B, op: "48" }
+      - { b: 1, r: C, op: "49" }
+      - { b: 1, r: D, op: "4A" }
+      - { b: 1, r: E, op: "4B" }
+      - { b: 1, r: H, op: "4C" }
+      - { b: 1, r: L, op: "4D" }
+      - { b: 1, r: A, op: "4F" }
+      - { b: 2, r: B, op: "50" }
+      - { b: 2, r: C, op: "51" }
+      - { b: 2, r: D, op: "52" }
+      - { b: 2, r: E, op: "53" }
+      - { b: 2, r: H, op: "54" }
+      - { b: 2, r: L, op: "55" }
+      - { b: 2, r: A, op: "57" }
+      - { b: 3, r: B, op: "58" }
+      - { b: 3, r: C, op: "59" }
+      - { b: 3, r: D, op: "5A" }
+      - { b: 3, r: E, op: "5B" }
+      - { b: 3, r: H, op: "5C" }
+      - { b: 3, r: L, op: "5D" }
+      - { b: 3, r: A, op: "5F" }
+      - { b: 4, r: B, op: "60" }
+      - { b: 4, r: C, op: "61" }
+      - { b: 4, r: D, op: "62" }
+      - { b: 4, r: E, op: "63" }
+      - { b: 4, r: H, op: "64" }
+      - { b: 4, r: L, op: "65" }
+      - { b: 4, r: A, op: "67" }
+      - { b: 5, r: B, op: "68" }
+      - { b: 5, r: C, op: "69" }
+      - { b: 5, r: D, op: "6A" }
+      - { b: 5, r: E, op: "6B" }
+      - { b: 5, r: H, op: "6C" }
+      - { b: 5, r: L, op: "6D" }
+      - { b: 5, r: A, op: "6F" }
+      - { b: 6, r: B, op: "70" }
+      - { b: 6, r: C, op: "71" }
+      - { b: 6, r: D, op: "72" }
+      - { b: 6, r: E, op: "73" }
+      - { b: 6, r: H, op: "74" }
+      - { b: 6, r: L, op: "75" }
+      - { b: 6, r: A, op: "77" }
+      - { b: 7, r: B, op: "78" }
+      - { b: 7, r: C, op: "79" }
+      - { b: 7, r: D, op: "7A" }
+      - { b: 7, r: E, op: "7B" }
+      - { b: 7, r: H, op: "7C" }
+      - { b: 7, r: L, op: "7D" }
+      - { b: 7, r: A, op: "7F" }
+    variants:
+      - { syntax: "BIT 0,(HL)", bytes: ["CB", "46"], t: 12, m: 3 }
+      - { syntax: "BIT 1,(HL)", bytes: ["CB", "4E"], t: 12, m: 3 }
+      - { syntax: "BIT 2,(HL)", bytes: ["CB", "56"], t: 12, m: 3 }
+      - { syntax: "BIT 3,(HL)", bytes: ["CB", "5E"], t: 12, m: 3 }
+      - { syntax: "BIT 4,(HL)", bytes: ["CB", "66"], t: 12, m: 3 }
+      - { syntax: "BIT 5,(HL)", bytes: ["CB", "6E"], t: 12, m: 3 }
+      - { syntax: "BIT 6,(HL)", bytes: ["CB", "76"], t: 12, m: 3 }
+      - { syntax: "BIT 7,(HL)", bytes: ["CB", "7E"], t: 12, m: 3 }
+  - id: Z80-OPC-CB-RES-001
+    syntax: "RES {b},{r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    conformance: [ASM-EMIT-CB-RES-SET-001]
+    rows:
+      - { b: 0, r: B, op: "80" }
+      - { b: 0, r: C, op: "81" }
+      - { b: 0, r: D, op: "82" }
+      - { b: 0, r: E, op: "83" }
+      - { b: 0, r: H, op: "84" }
+      - { b: 0, r: L, op: "85" }
+      - { b: 0, r: A, op: "87" }
+      - { b: 1, r: B, op: "88" }
+      - { b: 1, r: C, op: "89" }
+      - { b: 1, r: D, op: "8A" }
+      - { b: 1, r: E, op: "8B" }
+      - { b: 1, r: H, op: "8C" }
+      - { b: 1, r: L, op: "8D" }
+      - { b: 1, r: A, op: "8F" }
+      - { b: 2, r: B, op: "90" }
+      - { b: 2, r: C, op: "91" }
+      - { b: 2, r: D, op: "92" }
+      - { b: 2, r: E, op: "93" }
+      - { b: 2, r: H, op: "94" }
+      - { b: 2, r: L, op: "95" }
+      - { b: 2, r: A, op: "97" }
+      - { b: 3, r: B, op: "98" }
+      - { b: 3, r: C, op: "99" }
+      - { b: 3, r: D, op: "9A" }
+      - { b: 3, r: E, op: "9B" }
+      - { b: 3, r: H, op: "9C" }
+      - { b: 3, r: L, op: "9D" }
+      - { b: 3, r: A, op: "9F" }
+      - { b: 4, r: B, op: "A0" }
+      - { b: 4, r: C, op: "A1" }
+      - { b: 4, r: D, op: "A2" }
+      - { b: 4, r: E, op: "A3" }
+      - { b: 4, r: H, op: "A4" }
+      - { b: 4, r: L, op: "A5" }
+      - { b: 4, r: A, op: "A7" }
+      - { b: 5, r: B, op: "A8" }
+      - { b: 5, r: C, op: "A9" }
+      - { b: 5, r: D, op: "AA" }
+      - { b: 5, r: E, op: "AB" }
+      - { b: 5, r: H, op: "AC" }
+      - { b: 5, r: L, op: "AD" }
+      - { b: 5, r: A, op: "AF" }
+      - { b: 6, r: B, op: "B0" }
+      - { b: 6, r: C, op: "B1" }
+      - { b: 6, r: D, op: "B2" }
+      - { b: 6, r: E, op: "B3" }
+      - { b: 6, r: H, op: "B4" }
+      - { b: 6, r: L, op: "B5" }
+      - { b: 6, r: A, op: "B7" }
+      - { b: 7, r: B, op: "B8" }
+      - { b: 7, r: C, op: "B9" }
+      - { b: 7, r: D, op: "BA" }
+      - { b: 7, r: E, op: "BB" }
+      - { b: 7, r: H, op: "BC" }
+      - { b: 7, r: L, op: "BD" }
+      - { b: 7, r: A, op: "BF" }
+    variants:
+      - { syntax: "RES 0,(HL)", bytes: ["CB", "86"], t: 15, m: 4 }
+      - { syntax: "RES 1,(HL)", bytes: ["CB", "8E"], t: 15, m: 4 }
+      - { syntax: "RES 2,(HL)", bytes: ["CB", "96"], t: 15, m: 4 }
+      - { syntax: "RES 3,(HL)", bytes: ["CB", "9E"], t: 15, m: 4 }
+      - { syntax: "RES 4,(HL)", bytes: ["CB", "A6"], t: 15, m: 4 }
+      - { syntax: "RES 5,(HL)", bytes: ["CB", "AE"], t: 15, m: 4 }
+      - { syntax: "RES 6,(HL)", bytes: ["CB", "B6"], t: 15, m: 4 }
+      - { syntax: "RES 7,(HL)", bytes: ["CB", "BE"], t: 15, m: 4 }
+  - id: Z80-OPC-CB-SET-001
+    syntax: "SET {b},{r}"
+    bytes: ["CB", "{op}"]
+    t: 8
+    m: 2
+    conformance: [ASM-EMIT-CB-RES-SET-001]
+    rows:
+      - { b: 0, r: B, op: "C0" }
+      - { b: 0, r: C, op: "C1" }
+      - { b: 0, r: D, op: "C2" }
+      - { b: 0, r: E, op: "C3" }
+      - { b: 0, r: H, op: "C4" }
+      - { b: 0, r: L, op: "C5" }
+      - { b: 0, r: A, op: "C7" }
+      - { b: 1, r: B, op: "C8" }
+      - { b: 1, r: C, op: "C9" }
+      - { b: 1, r: D, op: "CA" }
+      - { b: 1, r: E, op: "CB" }
+      - { b: 1, r: H, op: "CC" }
+      - { b: 1, r: L, op: "CD" }
+      - { b: 1, r: A, op: "CF" }
+      - { b: 2, r: B, op: "D0" }
+      - { b: 2, r: C, op: "D1" }
+      - { b: 2, r: D, op: "D2" }
+      - { b: 2, r: E, op: "D3" }
+      - { b: 2, r: H, op: "D4" }
+      - { b: 2, r: L, op: "D5" }
+      - { b: 2, r: A, op: "D7" }
+      - { b: 3, r: B, op: "D8" }
+      - { b: 3, r: C, op: "D9" }
+      - { b: 3, r: D, op: "DA" }
+      - { b: 3, r: E, op: "DB" }
+      - { b: 3, r: H, op: "DC" }
+      - { b: 3, r: L, op: "DD" }
+      - { b: 3, r: A, op: "DF" }
+      - { b: 4, r: B, op: "E0" }
+      - { b: 4, r: C, op: "E1" }
+      - { b: 4, r: D, op: "E2" }
+      - { b: 4, r: E, op: "E3" }
+      - { b: 4, r: H, op: "E4" }
+      - { b: 4, r: L, op: "E5" }
+      - { b: 4, r: A, op: "E7" }
+      - { b: 5, r: B, op: "E8" }
+      - { b: 5, r: C, op: "E9" }
+      - { b: 5, r: D, op: "EA" }
+      - { b: 5, r: E, op: "EB" }
+      - { b: 5, r: H, op: "EC" }
+      - { b: 5, r: L, op: "ED" }
+      - { b: 5, r: A, op: "EF" }
+      - { b: 6, r: B, op: "F0" }
+      - { b: 6, r: C, op: "F1" }
+      - { b: 6, r: D, op: "F2" }
+      - { b: 6, r: E, op: "F3" }
+      - { b: 6, r: H, op: "F4" }
+      - { b: 6, r: L, op: "F5" }
+      - { b: 6, r: A, op: "F7" }
+      - { b: 7, r: B, op: "F8" }
+      - { b: 7, r: C, op: "F9" }
+      - { b: 7, r: D, op: "FA" }
+      - { b: 7, r: E, op: "FB" }
+      - { b: 7, r: H, op: "FC" }
+      - { b: 7, r: L, op: "FD" }
+      - { b: 7, r: A, op: "FF" }
+    variants:
+      - { syntax: "SET 0,(HL)", bytes: ["CB", "C6"], t: 15, m: 4 }
+      - { syntax: "SET 1,(HL)", bytes: ["CB", "CE"], t: 15, m: 4 }
+      - { syntax: "SET 2,(HL)", bytes: ["CB", "D6"], t: 15, m: 4 }
+      - { syntax: "SET 3,(HL)", bytes: ["CB", "DE"], t: 15, m: 4 }
+      - { syntax: "SET 4,(HL)", bytes: ["CB", "E6"], t: 15, m: 4 }
+      - { syntax: "SET 5,(HL)", bytes: ["CB", "EE"], t: 15, m: 4 }
+      - { syntax: "SET 6,(HL)", bytes: ["CB", "F6"], t: 15, m: 4 }
+      - { syntax: "SET 7,(HL)", bytes: ["CB", "FE"], t: 15, m: 4 }
+  # --- ED-prefixed 16-bit ADC/SBC HL,ss + block ops (Phase B3, ADR-0025) ------
+  # Bytes + canonical syntax from the ratified Phase-A1 generator; timing z80-spec UM0080,
+  # every T cross-checked against the FUSE ED end-state (all agree).
+  # ADC HL,ss / SBC HL,ss -- 16-bit add/subtract-with-carry into HL (BC,DE,HL,SP); 15T/4M.
+  # Both change the full flag set: S/Z/5/H/3 from the 16-bit result, P/V = signed overflow,
+  # C = carry/borrow out of bit 15, N reset for ADC and set for SBC (the table records the
+  # affected partition, not the values; N is in `affected` for both).
+  - id: Z80-OPC-ED-ADC-HL-SS-001
+    syntax: "ADC HL,{s}"
+    bytes: ["ED", "{op}"]
+    t: 15
+    m: 4
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ED-ADC-SBC-HL-SS-001]
+    rows:
+      - { s: BC, op: "4A" }
+      - { s: DE, op: "5A" }
+      - { s: HL, op: "6A" }
+      - { s: SP, op: "7A" }
+  - id: Z80-OPC-ED-SBC-HL-SS-001
+    syntax: "SBC HL,{s}"
+    bytes: ["ED", "{op}"]
+    t: 15
+    m: 4
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-ED-ADC-SBC-HL-SS-001]
+    rows:
+      - { s: BC, op: "42" }
+      - { s: DE, op: "52" }
+      - { s: HL, op: "62" }
+      - { s: SP, op: "72" }
+  # Block transfer LDI/LDD (single, 16T/4M) and LDIR/LDDR (auto-repeat: 21T/5M while BC!=0
+  # after the step, else 16T/4M -- the [taken, notTaken] conditional-timing pair, like JR cc).
+  # Flags: H and N reset, P/V = (BC != 0 after the step), 5/3 are the undocumented bits the
+  # CPU derives from A + the transferred byte (FUSE-witnessed); S/Z/C are preserved.
+  # NOTE: LDIR/LDDR (ED B0/B8) are NOT in the FUSE seed, so their rows are z80-spec-authored
+  # and assembler/disassembler-proven (they round-trip) but not FUSE-execution-witnessed --
+  # a recorded FUSE seed gap analogous to DJNZ e (see report / Phase A1 finding 1).
+  - id: Z80-OPC-ED-BLOCK-TRANSFER-001
+    conformance: [ASM-EMIT-ED-BLOCK-TRANSFER-001]
+    flags: { affected: ["5", H, "3", PV, N], unchanged: [S, Z, C] }
+    variants:
+      - { syntax: "LDI",  bytes: ["ED", "A0"], t: 16, m: 4 }
+      - { syntax: "LDD",  bytes: ["ED", "A8"], t: 16, m: 4 }
+      - { syntax: "LDIR", bytes: ["ED", "B0"], t: [21, 16], m: [5, 4] }
+      - { syntax: "LDDR", bytes: ["ED", "B8"], t: [21, 16], m: [5, 4] }
+  # Block compare CPI/CPD (single, 16T/4M) and CPIR/CPDR (auto-repeat: 21T/5M while BC!=0 and
+  # no match after the step, else 16T/4M). Flags: S/Z/H/5/3 from A - (HL) (5/3 undocumented,
+  # CPU-derived), P/V = (BC != 0 after), N set; C preserved.
+  - id: Z80-OPC-ED-BLOCK-COMPARE-001
+    conformance: [ASM-EMIT-ED-BLOCK-COMPARE-001]
+    flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }
+    variants:
+      - { syntax: "CPI",  bytes: ["ED", "A1"], t: 16, m: 4 }
+      - { syntax: "CPD",  bytes: ["ED", "A9"], t: 16, m: 4 }
+      - { syntax: "CPIR", bytes: ["ED", "B1"], t: [21, 16], m: [5, 4] }
+      - { syntax: "CPDR", bytes: ["ED", "B9"], t: [21, 16], m: [5, 4] }
+  # Block I/O INI/IND/OUTI/OUTD (single, 16T/4M) and INIR/INDR/OTIR/OTDR (auto-repeat:
+  # 21T/5M while B!=0 after the step, else 16T/4M). Block I/O changes ALL eight flags
+  # (affected partition = all): Z = (B-1 == 0) and N = bit 7 of the transferred byte are
+  # documented; S/5/3 follow B; H, C and P/V have intricate UNDOCUMENTED definitions the CPU
+  # owns and FUSE witnesses (see z80-opcodes.md note + Z80-EXEC-BIT-UNDOC-53-001 for the
+  # 5/3 precedent). The table records only that all eight are affected, not their values.
+  - id: Z80-OPC-ED-BLOCK-IO-001
+    conformance: [ASM-EMIT-ED-BLOCK-IO-001]
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    variants:
+      - { syntax: "INI",  bytes: ["ED", "A2"], t: 16, m: 4 }
+      - { syntax: "IND",  bytes: ["ED", "AA"], t: 16, m: 4 }
+      - { syntax: "OUTI", bytes: ["ED", "A3"], t: 16, m: 4 }
+      - { syntax: "OUTD", bytes: ["ED", "AB"], t: 16, m: 4 }
+      - { syntax: "INIR", bytes: ["ED", "B2"], t: [21, 16], m: [5, 4] }
+      - { syntax: "INDR", bytes: ["ED", "BA"], t: [21, 16], m: [5, 4] }
+      - { syntax: "OTIR", bytes: ["ED", "B3"], t: [21, 16], m: [5, 4] }
+      - { syntax: "OTDR", bytes: ["ED", "BB"], t: [21, 16], m: [5, 4] }
+  # --- DD/FD index (IX/IY) + index-half group (Phase B4, ADR-0025) ------------
+  # Bytes + canonical syntax from the ratified Phase-A1 generator (FUSE-seeded);
+  # timing z80-spec UM0080, every T-state cross-checked against the FUSE dd/fd
+  # end-state (all agree): the DD/FD prefix adds 4T/1M to the base op. Flags are
+  # the base op's: LD = none; ALU A,(IX+d)/IXH = the full ALU set; INC/DEC the
+  # INC/DEC r partition; ADD IX,pp the ADD HL,ss partition. The `(IX+d)`/`(IY+d)`
+  # displacement byte uses the `d` slot token (Z80-OPC-SLOT-TOKENS-001). The
+  # undocumented index-half registers IXH/IXL/IYH/IYL get canonical project syntax
+  # per the ratified bijection decision (D1); they round-trip.
+  # ADD IX,pp / ADD IY,pp (pp = BC,DE,IX|IY,SP); 15T/4M; flags as ADD HL,ss.
+  - id: Z80-OPC-ADD-IXIY-PP-001
+    syntax: "ADD {ix},{pp}"
+    bytes: ["{pfx}", "{op}"]
+    t: 15
+    m: 4
+    flags: { affected: ["5", H, "3", N, C], unchanged: [S, Z, PV] }
+    conformance: [ASM-EMIT-INDEX-ADD-001]
+    rows:
+      - { ix: IX, pp: BC, pfx: DD, op: "09" }
+      - { ix: IX, pp: DE, pfx: DD, op: "19" }
+      - { ix: IX, pp: IX, pfx: DD, op: "29" }
+      - { ix: IX, pp: SP, pfx: DD, op: "39" }
+      - { ix: IY, pp: BC, pfx: FD, op: "09" }
+      - { ix: IY, pp: DE, pfx: FD, op: "19" }
+      - { ix: IY, pp: IY, pfx: FD, op: "29" }
+      - { ix: IY, pp: SP, pfx: FD, op: "39" }
+  # INC/DEC index-half register (IXH/IXL/IYH/IYL); 8T/2M; flags as INC/DEC r.
+  - id: Z80-OPC-INC-DEC-IDXHALF-001
+    syntax: "{mn} {reg}"
+    bytes: ["{pfx}", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }
+    conformance: [ASM-EMIT-INDEX-HALF-INC-DEC-001]
+    rows:
+      - { mn: INC, reg: IXH, pfx: DD, op: "24" }
+      - { mn: DEC, reg: IXH, pfx: DD, op: "25" }
+      - { mn: INC, reg: IXL, pfx: DD, op: "2C" }
+      - { mn: DEC, reg: IXL, pfx: DD, op: "2D" }
+      - { mn: INC, reg: IYH, pfx: FD, op: "24" }
+      - { mn: DEC, reg: IYH, pfx: FD, op: "25" }
+      - { mn: INC, reg: IYL, pfx: FD, op: "2C" }
+      - { mn: DEC, reg: IYL, pfx: FD, op: "2D" }
+  # LD index-half register immediate (LD IXH/IXL/IYH/IYL,n); 11T/3M; flags: none.
+  - id: Z80-OPC-LD-IDXHALF-N-001
+    syntax: "LD {reg},n"
+    bytes: ["{pfx}", "{op}", "n"]
+    t: 11
+    m: 3
+    conformance: [ASM-EMIT-INDEX-HALF-LD-N-001]
+    rows:
+      - { reg: IXH, pfx: DD, op: "26" }
+      - { reg: IXL, pfx: DD, op: "2E" }
+      - { reg: IYH, pfx: FD, op: "26" }
+      - { reg: IYL, pfx: FD, op: "2E" }
+  # INC/DEC indexed memory (INC/DEC (IX+d)/(IY+d)); 23T/6M; flags as INC/DEC (HL).
+  - id: Z80-OPC-INC-DEC-IDX-IND-001
+    syntax: "{mn} ({ix}+d)"
+    bytes: ["{pfx}", "{op}", "d"]
+    t: 23
+    m: 6
+    flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }
+    conformance: [ASM-EMIT-INDEX-INC-DEC-001]
+    rows:
+      - { mn: INC, ix: IX, pfx: DD, op: "34" }
+      - { mn: DEC, ix: IX, pfx: DD, op: "35" }
+      - { mn: INC, ix: IY, pfx: FD, op: "34" }
+      - { mn: DEC, ix: IY, pfx: FD, op: "35" }
+  # LD indexed memory immediate (LD (IX+d),n / (IY+d),n); byte order pfx op d n;
+  # 19T/5M; flags: none.
+  - id: Z80-OPC-LD-IDX-IND-N-001
+    syntax: "LD ({ix}+d),n"
+    bytes: ["{pfx}", "{op}", "d", "n"]
+    t: 19
+    m: 5
+    conformance: [ASM-EMIT-INDEX-LD-MEM-N-001]
+    rows:
+      - { ix: IX, pfx: DD, op: "36" }
+      - { ix: IY, pfx: FD, op: "36" }
+  # LD r,(IX+d) / r,(IY+d) for r = B,C,D,E,H,L,A; 19T/5M; flags: none.
+  - id: Z80-OPC-LD-R-IDX-IND-001
+    syntax: "LD {r},({ix}+d)"
+    bytes: ["{pfx}", "{op}", "d"]
+    t: 19
+    m: 5
+    conformance: [ASM-EMIT-INDEX-LD-R-001]
+    rows:
+      - { r: B, ix: IX, pfx: DD, op: "46" }
+      - { r: C, ix: IX, pfx: DD, op: "4E" }
+      - { r: D, ix: IX, pfx: DD, op: "56" }
+      - { r: E, ix: IX, pfx: DD, op: "5E" }
+      - { r: H, ix: IX, pfx: DD, op: "66" }
+      - { r: L, ix: IX, pfx: DD, op: "6E" }
+      - { r: A, ix: IX, pfx: DD, op: "7E" }
+      - { r: B, ix: IY, pfx: FD, op: "46" }
+      - { r: C, ix: IY, pfx: FD, op: "4E" }
+      - { r: D, ix: IY, pfx: FD, op: "56" }
+      - { r: E, ix: IY, pfx: FD, op: "5E" }
+      - { r: H, ix: IY, pfx: FD, op: "66" }
+      - { r: L, ix: IY, pfx: FD, op: "6E" }
+      - { r: A, ix: IY, pfx: FD, op: "7E" }
+  # LD (IX+d),r / (IY+d),r for r = B,C,D,E,H,L,A; 19T/5M; flags: none.
+  - id: Z80-OPC-LD-IDX-IND-R-001
+    syntax: "LD ({ix}+d),{r}"
+    bytes: ["{pfx}", "{op}", "d"]
+    t: 19
+    m: 5
+    conformance: [ASM-EMIT-INDEX-LD-MEM-R-001]
+    rows:
+      - { r: B, ix: IX, pfx: DD, op: "70" }
+      - { r: C, ix: IX, pfx: DD, op: "71" }
+      - { r: D, ix: IX, pfx: DD, op: "72" }
+      - { r: E, ix: IX, pfx: DD, op: "73" }
+      - { r: H, ix: IX, pfx: DD, op: "74" }
+      - { r: L, ix: IX, pfx: DD, op: "75" }
+      - { r: A, ix: IX, pfx: DD, op: "77" }
+      - { r: B, ix: IY, pfx: FD, op: "70" }
+      - { r: C, ix: IY, pfx: FD, op: "71" }
+      - { r: D, ix: IY, pfx: FD, op: "72" }
+      - { r: E, ix: IY, pfx: FD, op: "73" }
+      - { r: H, ix: IY, pfx: FD, op: "74" }
+      - { r: L, ix: IY, pfx: FD, op: "75" }
+      - { r: A, ix: IY, pfx: FD, op: "77" }
+  # ALU A,(IX+d) / A,(IY+d): ADD/ADC/SUB/SBC/AND/XOR/OR/CP; 19T/5M; full ALU flags.
+  - id: Z80-OPC-ALU-IDX-IND-001
+    syntax: "{pre}({ix}+d)"
+    bytes: ["{pfx}", "{op}", "d"]
+    t: 19
+    m: 5
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-INDEX-ALU-001]
+    rows:
+      - { pre: "ADD A,", ix: IX, pfx: DD, op: "86" }
+      - { pre: "ADC A,", ix: IX, pfx: DD, op: "8E" }
+      - { pre: "SUB ", ix: IX, pfx: DD, op: "96" }
+      - { pre: "SBC A,", ix: IX, pfx: DD, op: "9E" }
+      - { pre: "AND ", ix: IX, pfx: DD, op: "A6" }
+      - { pre: "XOR ", ix: IX, pfx: DD, op: "AE" }
+      - { pre: "OR ", ix: IX, pfx: DD, op: "B6" }
+      - { pre: "CP ", ix: IX, pfx: DD, op: "BE" }
+      - { pre: "ADD A,", ix: IY, pfx: FD, op: "86" }
+      - { pre: "ADC A,", ix: IY, pfx: FD, op: "8E" }
+      - { pre: "SUB ", ix: IY, pfx: FD, op: "96" }
+      - { pre: "SBC A,", ix: IY, pfx: FD, op: "9E" }
+      - { pre: "AND ", ix: IY, pfx: FD, op: "A6" }
+      - { pre: "XOR ", ix: IY, pfx: FD, op: "AE" }
+      - { pre: "OR ", ix: IY, pfx: FD, op: "B6" }
+      - { pre: "CP ", ix: IY, pfx: FD, op: "BE" }
+  # LD between an 8-bit register and an index-half register (the DD/FD 44-7D block
+  # excluding the (IX+d) memory column); 8T/2M; flags: none. IXH/IXL/IYH/IYL are
+  # the undocumented index halves; H/L stay plain registers only when no index
+  # half is present (a row with H or L here would be the (IX+d) memory form, not
+  # an index-half form, so those opcodes live in the LD-R-IDX-IND families above).
+  - id: Z80-OPC-LD-IDXHALF-R-001
+    syntax: "LD {dst},{src}"
+    bytes: ["{pfx}", "{op}"]
+    t: 8
+    m: 2
+    conformance: [ASM-EMIT-INDEX-HALF-LD-R-001]
+    rows:
+      - { dst: B, src: IXH, pfx: DD, op: "44" }
+      - { dst: B, src: IXL, pfx: DD, op: "45" }
+      - { dst: C, src: IXH, pfx: DD, op: "4C" }
+      - { dst: C, src: IXL, pfx: DD, op: "4D" }
+      - { dst: D, src: IXH, pfx: DD, op: "54" }
+      - { dst: D, src: IXL, pfx: DD, op: "55" }
+      - { dst: E, src: IXH, pfx: DD, op: "5C" }
+      - { dst: E, src: IXL, pfx: DD, op: "5D" }
+      - { dst: IXH, src: B, pfx: DD, op: "60" }
+      - { dst: IXH, src: C, pfx: DD, op: "61" }
+      - { dst: IXH, src: D, pfx: DD, op: "62" }
+      - { dst: IXH, src: E, pfx: DD, op: "63" }
+      - { dst: IXH, src: IXH, pfx: DD, op: "64" }
+      - { dst: IXH, src: IXL, pfx: DD, op: "65" }
+      - { dst: IXH, src: A, pfx: DD, op: "67" }
+      - { dst: IXL, src: B, pfx: DD, op: "68" }
+      - { dst: IXL, src: C, pfx: DD, op: "69" }
+      - { dst: IXL, src: D, pfx: DD, op: "6A" }
+      - { dst: IXL, src: E, pfx: DD, op: "6B" }
+      - { dst: IXL, src: IXH, pfx: DD, op: "6C" }
+      - { dst: IXL, src: IXL, pfx: DD, op: "6D" }
+      - { dst: IXL, src: A, pfx: DD, op: "6F" }
+      - { dst: A, src: IXH, pfx: DD, op: "7C" }
+      - { dst: A, src: IXL, pfx: DD, op: "7D" }
+      - { dst: B, src: IYH, pfx: FD, op: "44" }
+      - { dst: B, src: IYL, pfx: FD, op: "45" }
+      - { dst: C, src: IYH, pfx: FD, op: "4C" }
+      - { dst: C, src: IYL, pfx: FD, op: "4D" }
+      - { dst: D, src: IYH, pfx: FD, op: "54" }
+      - { dst: D, src: IYL, pfx: FD, op: "55" }
+      - { dst: E, src: IYH, pfx: FD, op: "5C" }
+      - { dst: E, src: IYL, pfx: FD, op: "5D" }
+      - { dst: IYH, src: B, pfx: FD, op: "60" }
+      - { dst: IYH, src: C, pfx: FD, op: "61" }
+      - { dst: IYH, src: D, pfx: FD, op: "62" }
+      - { dst: IYH, src: E, pfx: FD, op: "63" }
+      - { dst: IYH, src: IYH, pfx: FD, op: "64" }
+      - { dst: IYH, src: IYL, pfx: FD, op: "65" }
+      - { dst: IYH, src: A, pfx: FD, op: "67" }
+      - { dst: IYL, src: B, pfx: FD, op: "68" }
+      - { dst: IYL, src: C, pfx: FD, op: "69" }
+      - { dst: IYL, src: D, pfx: FD, op: "6A" }
+      - { dst: IYL, src: E, pfx: FD, op: "6B" }
+      - { dst: IYL, src: IYH, pfx: FD, op: "6C" }
+      - { dst: IYL, src: IYL, pfx: FD, op: "6D" }
+      - { dst: IYL, src: A, pfx: FD, op: "6F" }
+      - { dst: A, src: IYH, pfx: FD, op: "7C" }
+      - { dst: A, src: IYL, pfx: FD, op: "7D" }
+  # ALU A,IXH/IXL/IYH/IYL: ADD/ADC/SUB/SBC/AND/XOR/OR/CP; 8T/2M; full ALU flags.
+  - id: Z80-OPC-ALU-IDXHALF-001
+    syntax: "{pre}{reg}"
+    bytes: ["{pfx}", "{op}"]
+    t: 8
+    m: 2
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-INDEX-HALF-ALU-001]
+    rows:
+      - { pre: "ADD A,", reg: IXH, pfx: DD, op: "84" }
+      - { pre: "ADD A,", reg: IXL, pfx: DD, op: "85" }
+      - { pre: "ADC A,", reg: IXH, pfx: DD, op: "8C" }
+      - { pre: "ADC A,", reg: IXL, pfx: DD, op: "8D" }
+      - { pre: "SUB ", reg: IXH, pfx: DD, op: "94" }
+      - { pre: "SUB ", reg: IXL, pfx: DD, op: "95" }
+      - { pre: "SBC A,", reg: IXH, pfx: DD, op: "9C" }
+      - { pre: "SBC A,", reg: IXL, pfx: DD, op: "9D" }
+      - { pre: "AND ", reg: IXH, pfx: DD, op: "A4" }
+      - { pre: "AND ", reg: IXL, pfx: DD, op: "A5" }
+      - { pre: "XOR ", reg: IXH, pfx: DD, op: "AC" }
+      - { pre: "XOR ", reg: IXL, pfx: DD, op: "AD" }
+      - { pre: "OR ", reg: IXH, pfx: DD, op: "B4" }
+      - { pre: "OR ", reg: IXL, pfx: DD, op: "B5" }
+      - { pre: "CP ", reg: IXH, pfx: DD, op: "BC" }
+      - { pre: "CP ", reg: IXL, pfx: DD, op: "BD" }
+      - { pre: "ADD A,", reg: IYH, pfx: FD, op: "84" }
+      - { pre: "ADD A,", reg: IYL, pfx: FD, op: "85" }
+      - { pre: "ADC A,", reg: IYH, pfx: FD, op: "8C" }
+      - { pre: "ADC A,", reg: IYL, pfx: FD, op: "8D" }
+      - { pre: "SUB ", reg: IYH, pfx: FD, op: "94" }
+      - { pre: "SUB ", reg: IYL, pfx: FD, op: "95" }
+      - { pre: "SBC A,", reg: IYH, pfx: FD, op: "9C" }
+      - { pre: "SBC A,", reg: IYL, pfx: FD, op: "9D" }
+      - { pre: "AND ", reg: IYH, pfx: FD, op: "A4" }
+      - { pre: "AND ", reg: IYL, pfx: FD, op: "A5" }
+      - { pre: "XOR ", reg: IYH, pfx: FD, op: "AC" }
+      - { pre: "XOR ", reg: IYL, pfx: FD, op: "AD" }
+      - { pre: "OR ", reg: IYH, pfx: FD, op: "B4" }
+      - { pre: "OR ", reg: IYL, pfx: FD, op: "B5" }
+      - { pre: "CP ", reg: IYH, pfx: FD, op: "BC" }
+      - { pre: "CP ", reg: IYL, pfx: FD, op: "BD" }
+  # --- DDCB/FDCB double-prefixed bit/rotate group (Phase B5, ADR-0025) --------
+  # IX+d (DDCB) / IY+d (FDCB) rotate/shift, BIT, RES/SET. Bytes + canonical syntax
+  # verbatim from the ratified Phase-A1 generator (FUSE-seeded). The 4-byte encoding
+  # is prefix, CB, displacement (`d` slot, Z80-OPC-SLOT-TOKENS-001), then the opcode
+  # byte. The opcode's low 3 bits (z) select a register copy target B,C,D,E,H,L,-,A
+  # for z=0..7; z=6 is the canonical (HL)-equivalent form acting only on (IX+d).
+  # The 7 z!=6 forms ALSO store the result into register r -> undocumented result-copy
+  # syntax `RLC (IX+d),B` / `SET 0,(IX+d),B` per the ratified bijection decision (D1);
+  # they round-trip. BIT ignores z, so only its canonical z=6 form is a row (the other
+  # 7 per bit are decode-only aliases, documented in z80-opcodes.md, not duplicate rows).
+  # Timing z80-spec UM0080, every T-state cross-checked against the FUSE ddcb/fdcb
+  # end-state (256 each, zero disagreements): rotate/shift + result-copy = 23T/6M;
+  # BIT b,(IX+d) = 20T/5M; RES/SET + result-copy = 23T/6M. Flags: rotate/shift affect
+  # all 8 (the result-copy variant stores to r AND (IX+d) with identical flags); BIT
+  # affects S Z 5 H 3 PV N (C unchanged; undoc 5/3 from the WZ address high byte, the
+  # same CPU-owned source as CB BIT); RES/SET affect no flags.
+  - id: Z80-OPC-DDCB-ROT-001
+    syntax: "{mn} (IX+d){suf}"
+    bytes: ["DD", "CB", "d", "{op}"]
+    t: 23
+    m: 6
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-DDCB-ROT-001]
+    rows:
+      - { mn: RLC, suf: ",B", op: "00" }
+      - { mn: RLC, suf: ",C", op: "01" }
+      - { mn: RLC, suf: ",D", op: "02" }
+      - { mn: RLC, suf: ",E", op: "03" }
+      - { mn: RLC, suf: ",H", op: "04" }
+      - { mn: RLC, suf: ",L", op: "05" }
+      - { mn: RLC, suf: "", op: "06" }
+      - { mn: RLC, suf: ",A", op: "07" }
+      - { mn: RRC, suf: ",B", op: "08" }
+      - { mn: RRC, suf: ",C", op: "09" }
+      - { mn: RRC, suf: ",D", op: "0A" }
+      - { mn: RRC, suf: ",E", op: "0B" }
+      - { mn: RRC, suf: ",H", op: "0C" }
+      - { mn: RRC, suf: ",L", op: "0D" }
+      - { mn: RRC, suf: "", op: "0E" }
+      - { mn: RRC, suf: ",A", op: "0F" }
+      - { mn: RL, suf: ",B", op: "10" }
+      - { mn: RL, suf: ",C", op: "11" }
+      - { mn: RL, suf: ",D", op: "12" }
+      - { mn: RL, suf: ",E", op: "13" }
+      - { mn: RL, suf: ",H", op: "14" }
+      - { mn: RL, suf: ",L", op: "15" }
+      - { mn: RL, suf: "", op: "16" }
+      - { mn: RL, suf: ",A", op: "17" }
+      - { mn: RR, suf: ",B", op: "18" }
+      - { mn: RR, suf: ",C", op: "19" }
+      - { mn: RR, suf: ",D", op: "1A" }
+      - { mn: RR, suf: ",E", op: "1B" }
+      - { mn: RR, suf: ",H", op: "1C" }
+      - { mn: RR, suf: ",L", op: "1D" }
+      - { mn: RR, suf: "", op: "1E" }
+      - { mn: RR, suf: ",A", op: "1F" }
+      - { mn: SLA, suf: ",B", op: "20" }
+      - { mn: SLA, suf: ",C", op: "21" }
+      - { mn: SLA, suf: ",D", op: "22" }
+      - { mn: SLA, suf: ",E", op: "23" }
+      - { mn: SLA, suf: ",H", op: "24" }
+      - { mn: SLA, suf: ",L", op: "25" }
+      - { mn: SLA, suf: "", op: "26" }
+      - { mn: SLA, suf: ",A", op: "27" }
+      - { mn: SRA, suf: ",B", op: "28" }
+      - { mn: SRA, suf: ",C", op: "29" }
+      - { mn: SRA, suf: ",D", op: "2A" }
+      - { mn: SRA, suf: ",E", op: "2B" }
+      - { mn: SRA, suf: ",H", op: "2C" }
+      - { mn: SRA, suf: ",L", op: "2D" }
+      - { mn: SRA, suf: "", op: "2E" }
+      - { mn: SRA, suf: ",A", op: "2F" }
+      - { mn: SLL, suf: ",B", op: "30" }
+      - { mn: SLL, suf: ",C", op: "31" }
+      - { mn: SLL, suf: ",D", op: "32" }
+      - { mn: SLL, suf: ",E", op: "33" }
+      - { mn: SLL, suf: ",H", op: "34" }
+      - { mn: SLL, suf: ",L", op: "35" }
+      - { mn: SLL, suf: "", op: "36" }
+      - { mn: SLL, suf: ",A", op: "37" }
+      - { mn: SRL, suf: ",B", op: "38" }
+      - { mn: SRL, suf: ",C", op: "39" }
+      - { mn: SRL, suf: ",D", op: "3A" }
+      - { mn: SRL, suf: ",E", op: "3B" }
+      - { mn: SRL, suf: ",H", op: "3C" }
+      - { mn: SRL, suf: ",L", op: "3D" }
+      - { mn: SRL, suf: "", op: "3E" }
+      - { mn: SRL, suf: ",A", op: "3F" }
+  - id: Z80-OPC-DDCB-BIT-001
+    syntax: "BIT {b},(IX+d)"
+    bytes: ["DD", "CB", "d", "{op}"]
+    t: 20
+    m: 5
+    flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }
+    conformance: [ASM-EMIT-DDCB-BIT-001]
+    rows:
+      - { b: 0, op: "46" }
+      - { b: 1, op: "4E" }
+      - { b: 2, op: "56" }
+      - { b: 3, op: "5E" }
+      - { b: 4, op: "66" }
+      - { b: 5, op: "6E" }
+      - { b: 6, op: "76" }
+      - { b: 7, op: "7E" }
+  - id: Z80-OPC-DDCB-RES-SET-001
+    syntax: "{mn} {b},(IX+d){suf}"
+    bytes: ["DD", "CB", "d", "{op}"]
+    t: 23
+    m: 6
+    conformance: [ASM-EMIT-DDCB-RES-SET-001]
+    rows:
+      - { mn: RES, b: 0, suf: ",B", op: "80" }
+      - { mn: RES, b: 0, suf: ",C", op: "81" }
+      - { mn: RES, b: 0, suf: ",D", op: "82" }
+      - { mn: RES, b: 0, suf: ",E", op: "83" }
+      - { mn: RES, b: 0, suf: ",H", op: "84" }
+      - { mn: RES, b: 0, suf: ",L", op: "85" }
+      - { mn: RES, b: 0, suf: "", op: "86" }
+      - { mn: RES, b: 0, suf: ",A", op: "87" }
+      - { mn: RES, b: 1, suf: ",B", op: "88" }
+      - { mn: RES, b: 1, suf: ",C", op: "89" }
+      - { mn: RES, b: 1, suf: ",D", op: "8A" }
+      - { mn: RES, b: 1, suf: ",E", op: "8B" }
+      - { mn: RES, b: 1, suf: ",H", op: "8C" }
+      - { mn: RES, b: 1, suf: ",L", op: "8D" }
+      - { mn: RES, b: 1, suf: "", op: "8E" }
+      - { mn: RES, b: 1, suf: ",A", op: "8F" }
+      - { mn: RES, b: 2, suf: ",B", op: "90" }
+      - { mn: RES, b: 2, suf: ",C", op: "91" }
+      - { mn: RES, b: 2, suf: ",D", op: "92" }
+      - { mn: RES, b: 2, suf: ",E", op: "93" }
+      - { mn: RES, b: 2, suf: ",H", op: "94" }
+      - { mn: RES, b: 2, suf: ",L", op: "95" }
+      - { mn: RES, b: 2, suf: "", op: "96" }
+      - { mn: RES, b: 2, suf: ",A", op: "97" }
+      - { mn: RES, b: 3, suf: ",B", op: "98" }
+      - { mn: RES, b: 3, suf: ",C", op: "99" }
+      - { mn: RES, b: 3, suf: ",D", op: "9A" }
+      - { mn: RES, b: 3, suf: ",E", op: "9B" }
+      - { mn: RES, b: 3, suf: ",H", op: "9C" }
+      - { mn: RES, b: 3, suf: ",L", op: "9D" }
+      - { mn: RES, b: 3, suf: "", op: "9E" }
+      - { mn: RES, b: 3, suf: ",A", op: "9F" }
+      - { mn: RES, b: 4, suf: ",B", op: "A0" }
+      - { mn: RES, b: 4, suf: ",C", op: "A1" }
+      - { mn: RES, b: 4, suf: ",D", op: "A2" }
+      - { mn: RES, b: 4, suf: ",E", op: "A3" }
+      - { mn: RES, b: 4, suf: ",H", op: "A4" }
+      - { mn: RES, b: 4, suf: ",L", op: "A5" }
+      - { mn: RES, b: 4, suf: "", op: "A6" }
+      - { mn: RES, b: 4, suf: ",A", op: "A7" }
+      - { mn: RES, b: 5, suf: ",B", op: "A8" }
+      - { mn: RES, b: 5, suf: ",C", op: "A9" }
+      - { mn: RES, b: 5, suf: ",D", op: "AA" }
+      - { mn: RES, b: 5, suf: ",E", op: "AB" }
+      - { mn: RES, b: 5, suf: ",H", op: "AC" }
+      - { mn: RES, b: 5, suf: ",L", op: "AD" }
+      - { mn: RES, b: 5, suf: "", op: "AE" }
+      - { mn: RES, b: 5, suf: ",A", op: "AF" }
+      - { mn: RES, b: 6, suf: ",B", op: "B0" }
+      - { mn: RES, b: 6, suf: ",C", op: "B1" }
+      - { mn: RES, b: 6, suf: ",D", op: "B2" }
+      - { mn: RES, b: 6, suf: ",E", op: "B3" }
+      - { mn: RES, b: 6, suf: ",H", op: "B4" }
+      - { mn: RES, b: 6, suf: ",L", op: "B5" }
+      - { mn: RES, b: 6, suf: "", op: "B6" }
+      - { mn: RES, b: 6, suf: ",A", op: "B7" }
+      - { mn: RES, b: 7, suf: ",B", op: "B8" }
+      - { mn: RES, b: 7, suf: ",C", op: "B9" }
+      - { mn: RES, b: 7, suf: ",D", op: "BA" }
+      - { mn: RES, b: 7, suf: ",E", op: "BB" }
+      - { mn: RES, b: 7, suf: ",H", op: "BC" }
+      - { mn: RES, b: 7, suf: ",L", op: "BD" }
+      - { mn: RES, b: 7, suf: "", op: "BE" }
+      - { mn: RES, b: 7, suf: ",A", op: "BF" }
+      - { mn: SET, b: 0, suf: ",B", op: "C0" }
+      - { mn: SET, b: 0, suf: ",C", op: "C1" }
+      - { mn: SET, b: 0, suf: ",D", op: "C2" }
+      - { mn: SET, b: 0, suf: ",E", op: "C3" }
+      - { mn: SET, b: 0, suf: ",H", op: "C4" }
+      - { mn: SET, b: 0, suf: ",L", op: "C5" }
+      - { mn: SET, b: 0, suf: "", op: "C6" }
+      - { mn: SET, b: 0, suf: ",A", op: "C7" }
+      - { mn: SET, b: 1, suf: ",B", op: "C8" }
+      - { mn: SET, b: 1, suf: ",C", op: "C9" }
+      - { mn: SET, b: 1, suf: ",D", op: "CA" }
+      - { mn: SET, b: 1, suf: ",E", op: "CB" }
+      - { mn: SET, b: 1, suf: ",H", op: "CC" }
+      - { mn: SET, b: 1, suf: ",L", op: "CD" }
+      - { mn: SET, b: 1, suf: "", op: "CE" }
+      - { mn: SET, b: 1, suf: ",A", op: "CF" }
+      - { mn: SET, b: 2, suf: ",B", op: "D0" }
+      - { mn: SET, b: 2, suf: ",C", op: "D1" }
+      - { mn: SET, b: 2, suf: ",D", op: "D2" }
+      - { mn: SET, b: 2, suf: ",E", op: "D3" }
+      - { mn: SET, b: 2, suf: ",H", op: "D4" }
+      - { mn: SET, b: 2, suf: ",L", op: "D5" }
+      - { mn: SET, b: 2, suf: "", op: "D6" }
+      - { mn: SET, b: 2, suf: ",A", op: "D7" }
+      - { mn: SET, b: 3, suf: ",B", op: "D8" }
+      - { mn: SET, b: 3, suf: ",C", op: "D9" }
+      - { mn: SET, b: 3, suf: ",D", op: "DA" }
+      - { mn: SET, b: 3, suf: ",E", op: "DB" }
+      - { mn: SET, b: 3, suf: ",H", op: "DC" }
+      - { mn: SET, b: 3, suf: ",L", op: "DD" }
+      - { mn: SET, b: 3, suf: "", op: "DE" }
+      - { mn: SET, b: 3, suf: ",A", op: "DF" }
+      - { mn: SET, b: 4, suf: ",B", op: "E0" }
+      - { mn: SET, b: 4, suf: ",C", op: "E1" }
+      - { mn: SET, b: 4, suf: ",D", op: "E2" }
+      - { mn: SET, b: 4, suf: ",E", op: "E3" }
+      - { mn: SET, b: 4, suf: ",H", op: "E4" }
+      - { mn: SET, b: 4, suf: ",L", op: "E5" }
+      - { mn: SET, b: 4, suf: "", op: "E6" }
+      - { mn: SET, b: 4, suf: ",A", op: "E7" }
+      - { mn: SET, b: 5, suf: ",B", op: "E8" }
+      - { mn: SET, b: 5, suf: ",C", op: "E9" }
+      - { mn: SET, b: 5, suf: ",D", op: "EA" }
+      - { mn: SET, b: 5, suf: ",E", op: "EB" }
+      - { mn: SET, b: 5, suf: ",H", op: "EC" }
+      - { mn: SET, b: 5, suf: ",L", op: "ED" }
+      - { mn: SET, b: 5, suf: "", op: "EE" }
+      - { mn: SET, b: 5, suf: ",A", op: "EF" }
+      - { mn: SET, b: 6, suf: ",B", op: "F0" }
+      - { mn: SET, b: 6, suf: ",C", op: "F1" }
+      - { mn: SET, b: 6, suf: ",D", op: "F2" }
+      - { mn: SET, b: 6, suf: ",E", op: "F3" }
+      - { mn: SET, b: 6, suf: ",H", op: "F4" }
+      - { mn: SET, b: 6, suf: ",L", op: "F5" }
+      - { mn: SET, b: 6, suf: "", op: "F6" }
+      - { mn: SET, b: 6, suf: ",A", op: "F7" }
+      - { mn: SET, b: 7, suf: ",B", op: "F8" }
+      - { mn: SET, b: 7, suf: ",C", op: "F9" }
+      - { mn: SET, b: 7, suf: ",D", op: "FA" }
+      - { mn: SET, b: 7, suf: ",E", op: "FB" }
+      - { mn: SET, b: 7, suf: ",H", op: "FC" }
+      - { mn: SET, b: 7, suf: ",L", op: "FD" }
+      - { mn: SET, b: 7, suf: "", op: "FE" }
+      - { mn: SET, b: 7, suf: ",A", op: "FF" }
+  - id: Z80-OPC-FDCB-ROT-001
+    syntax: "{mn} (IY+d){suf}"
+    bytes: ["FD", "CB", "d", "{op}"]
+    t: 23
+    m: 6
+    flags: { affected: [S, Z, "5", H, "3", PV, N, C], unchanged: [] }
+    conformance: [ASM-EMIT-FDCB-ROT-001]
+    rows:
+      - { mn: RLC, suf: ",B", op: "00" }
+      - { mn: RLC, suf: ",C", op: "01" }
+      - { mn: RLC, suf: ",D", op: "02" }
+      - { mn: RLC, suf: ",E", op: "03" }
+      - { mn: RLC, suf: ",H", op: "04" }
+      - { mn: RLC, suf: ",L", op: "05" }
+      - { mn: RLC, suf: "", op: "06" }
+      - { mn: RLC, suf: ",A", op: "07" }
+      - { mn: RRC, suf: ",B", op: "08" }
+      - { mn: RRC, suf: ",C", op: "09" }
+      - { mn: RRC, suf: ",D", op: "0A" }
+      - { mn: RRC, suf: ",E", op: "0B" }
+      - { mn: RRC, suf: ",H", op: "0C" }
+      - { mn: RRC, suf: ",L", op: "0D" }
+      - { mn: RRC, suf: "", op: "0E" }
+      - { mn: RRC, suf: ",A", op: "0F" }
+      - { mn: RL, suf: ",B", op: "10" }
+      - { mn: RL, suf: ",C", op: "11" }
+      - { mn: RL, suf: ",D", op: "12" }
+      - { mn: RL, suf: ",E", op: "13" }
+      - { mn: RL, suf: ",H", op: "14" }
+      - { mn: RL, suf: ",L", op: "15" }
+      - { mn: RL, suf: "", op: "16" }
+      - { mn: RL, suf: ",A", op: "17" }
+      - { mn: RR, suf: ",B", op: "18" }
+      - { mn: RR, suf: ",C", op: "19" }
+      - { mn: RR, suf: ",D", op: "1A" }
+      - { mn: RR, suf: ",E", op: "1B" }
+      - { mn: RR, suf: ",H", op: "1C" }
+      - { mn: RR, suf: ",L", op: "1D" }
+      - { mn: RR, suf: "", op: "1E" }
+      - { mn: RR, suf: ",A", op: "1F" }
+      - { mn: SLA, suf: ",B", op: "20" }
+      - { mn: SLA, suf: ",C", op: "21" }
+      - { mn: SLA, suf: ",D", op: "22" }
+      - { mn: SLA, suf: ",E", op: "23" }
+      - { mn: SLA, suf: ",H", op: "24" }
+      - { mn: SLA, suf: ",L", op: "25" }
+      - { mn: SLA, suf: "", op: "26" }
+      - { mn: SLA, suf: ",A", op: "27" }
+      - { mn: SRA, suf: ",B", op: "28" }
+      - { mn: SRA, suf: ",C", op: "29" }
+      - { mn: SRA, suf: ",D", op: "2A" }
+      - { mn: SRA, suf: ",E", op: "2B" }
+      - { mn: SRA, suf: ",H", op: "2C" }
+      - { mn: SRA, suf: ",L", op: "2D" }
+      - { mn: SRA, suf: "", op: "2E" }
+      - { mn: SRA, suf: ",A", op: "2F" }
+      - { mn: SLL, suf: ",B", op: "30" }
+      - { mn: SLL, suf: ",C", op: "31" }
+      - { mn: SLL, suf: ",D", op: "32" }
+      - { mn: SLL, suf: ",E", op: "33" }
+      - { mn: SLL, suf: ",H", op: "34" }
+      - { mn: SLL, suf: ",L", op: "35" }
+      - { mn: SLL, suf: "", op: "36" }
+      - { mn: SLL, suf: ",A", op: "37" }
+      - { mn: SRL, suf: ",B", op: "38" }
+      - { mn: SRL, suf: ",C", op: "39" }
+      - { mn: SRL, suf: ",D", op: "3A" }
+      - { mn: SRL, suf: ",E", op: "3B" }
+      - { mn: SRL, suf: ",H", op: "3C" }
+      - { mn: SRL, suf: ",L", op: "3D" }
+      - { mn: SRL, suf: "", op: "3E" }
+      - { mn: SRL, suf: ",A", op: "3F" }
+  - id: Z80-OPC-FDCB-BIT-001
+    syntax: "BIT {b},(IY+d)"
+    bytes: ["FD", "CB", "d", "{op}"]
+    t: 20
+    m: 5
+    flags: { affected: [S, Z, "5", H, "3", PV, N], unchanged: [C] }
+    conformance: [ASM-EMIT-FDCB-BIT-001]
+    rows:
+      - { b: 0, op: "46" }
+      - { b: 1, op: "4E" }
+      - { b: 2, op: "56" }
+      - { b: 3, op: "5E" }
+      - { b: 4, op: "66" }
+      - { b: 5, op: "6E" }
+      - { b: 6, op: "76" }
+      - { b: 7, op: "7E" }
+  - id: Z80-OPC-FDCB-RES-SET-001
+    syntax: "{mn} {b},(IY+d){suf}"
+    bytes: ["FD", "CB", "d", "{op}"]
+    t: 23
+    m: 6
+    conformance: [ASM-EMIT-FDCB-RES-SET-001]
+    rows:
+      - { mn: RES, b: 0, suf: ",B", op: "80" }
+      - { mn: RES, b: 0, suf: ",C", op: "81" }
+      - { mn: RES, b: 0, suf: ",D", op: "82" }
+      - { mn: RES, b: 0, suf: ",E", op: "83" }
+      - { mn: RES, b: 0, suf: ",H", op: "84" }
+      - { mn: RES, b: 0, suf: ",L", op: "85" }
+      - { mn: RES, b: 0, suf: "", op: "86" }
+      - { mn: RES, b: 0, suf: ",A", op: "87" }
+      - { mn: RES, b: 1, suf: ",B", op: "88" }
+      - { mn: RES, b: 1, suf: ",C", op: "89" }
+      - { mn: RES, b: 1, suf: ",D", op: "8A" }
+      - { mn: RES, b: 1, suf: ",E", op: "8B" }
+      - { mn: RES, b: 1, suf: ",H", op: "8C" }
+      - { mn: RES, b: 1, suf: ",L", op: "8D" }
+      - { mn: RES, b: 1, suf: "", op: "8E" }
+      - { mn: RES, b: 1, suf: ",A", op: "8F" }
+      - { mn: RES, b: 2, suf: ",B", op: "90" }
+      - { mn: RES, b: 2, suf: ",C", op: "91" }
+      - { mn: RES, b: 2, suf: ",D", op: "92" }
+      - { mn: RES, b: 2, suf: ",E", op: "93" }
+      - { mn: RES, b: 2, suf: ",H", op: "94" }
+      - { mn: RES, b: 2, suf: ",L", op: "95" }
+      - { mn: RES, b: 2, suf: "", op: "96" }
+      - { mn: RES, b: 2, suf: ",A", op: "97" }
+      - { mn: RES, b: 3, suf: ",B", op: "98" }
+      - { mn: RES, b: 3, suf: ",C", op: "99" }
+      - { mn: RES, b: 3, suf: ",D", op: "9A" }
+      - { mn: RES, b: 3, suf: ",E", op: "9B" }
+      - { mn: RES, b: 3, suf: ",H", op: "9C" }
+      - { mn: RES, b: 3, suf: ",L", op: "9D" }
+      - { mn: RES, b: 3, suf: "", op: "9E" }
+      - { mn: RES, b: 3, suf: ",A", op: "9F" }
+      - { mn: RES, b: 4, suf: ",B", op: "A0" }
+      - { mn: RES, b: 4, suf: ",C", op: "A1" }
+      - { mn: RES, b: 4, suf: ",D", op: "A2" }
+      - { mn: RES, b: 4, suf: ",E", op: "A3" }
+      - { mn: RES, b: 4, suf: ",H", op: "A4" }
+      - { mn: RES, b: 4, suf: ",L", op: "A5" }
+      - { mn: RES, b: 4, suf: "", op: "A6" }
+      - { mn: RES, b: 4, suf: ",A", op: "A7" }
+      - { mn: RES, b: 5, suf: ",B", op: "A8" }
+      - { mn: RES, b: 5, suf: ",C", op: "A9" }
+      - { mn: RES, b: 5, suf: ",D", op: "AA" }
+      - { mn: RES, b: 5, suf: ",E", op: "AB" }
+      - { mn: RES, b: 5, suf: ",H", op: "AC" }
+      - { mn: RES, b: 5, suf: ",L", op: "AD" }
+      - { mn: RES, b: 5, suf: "", op: "AE" }
+      - { mn: RES, b: 5, suf: ",A", op: "AF" }
+      - { mn: RES, b: 6, suf: ",B", op: "B0" }
+      - { mn: RES, b: 6, suf: ",C", op: "B1" }
+      - { mn: RES, b: 6, suf: ",D", op: "B2" }
+      - { mn: RES, b: 6, suf: ",E", op: "B3" }
+      - { mn: RES, b: 6, suf: ",H", op: "B4" }
+      - { mn: RES, b: 6, suf: ",L", op: "B5" }
+      - { mn: RES, b: 6, suf: "", op: "B6" }
+      - { mn: RES, b: 6, suf: ",A", op: "B7" }
+      - { mn: RES, b: 7, suf: ",B", op: "B8" }
+      - { mn: RES, b: 7, suf: ",C", op: "B9" }
+      - { mn: RES, b: 7, suf: ",D", op: "BA" }
+      - { mn: RES, b: 7, suf: ",E", op: "BB" }
+      - { mn: RES, b: 7, suf: ",H", op: "BC" }
+      - { mn: RES, b: 7, suf: ",L", op: "BD" }
+      - { mn: RES, b: 7, suf: "", op: "BE" }
+      - { mn: RES, b: 7, suf: ",A", op: "BF" }
+      - { mn: SET, b: 0, suf: ",B", op: "C0" }
+      - { mn: SET, b: 0, suf: ",C", op: "C1" }
+      - { mn: SET, b: 0, suf: ",D", op: "C2" }
+      - { mn: SET, b: 0, suf: ",E", op: "C3" }
+      - { mn: SET, b: 0, suf: ",H", op: "C4" }
+      - { mn: SET, b: 0, suf: ",L", op: "C5" }
+      - { mn: SET, b: 0, suf: "", op: "C6" }
+      - { mn: SET, b: 0, suf: ",A", op: "C7" }
+      - { mn: SET, b: 1, suf: ",B", op: "C8" }
+      - { mn: SET, b: 1, suf: ",C", op: "C9" }
+      - { mn: SET, b: 1, suf: ",D", op: "CA" }
+      - { mn: SET, b: 1, suf: ",E", op: "CB" }
+      - { mn: SET, b: 1, suf: ",H", op: "CC" }
+      - { mn: SET, b: 1, suf: ",L", op: "CD" }
+      - { mn: SET, b: 1, suf: "", op: "CE" }
+      - { mn: SET, b: 1, suf: ",A", op: "CF" }
+      - { mn: SET, b: 2, suf: ",B", op: "D0" }
+      - { mn: SET, b: 2, suf: ",C", op: "D1" }
+      - { mn: SET, b: 2, suf: ",D", op: "D2" }
+      - { mn: SET, b: 2, suf: ",E", op: "D3" }
+      - { mn: SET, b: 2, suf: ",H", op: "D4" }
+      - { mn: SET, b: 2, suf: ",L", op: "D5" }
+      - { mn: SET, b: 2, suf: "", op: "D6" }
+      - { mn: SET, b: 2, suf: ",A", op: "D7" }
+      - { mn: SET, b: 3, suf: ",B", op: "D8" }
+      - { mn: SET, b: 3, suf: ",C", op: "D9" }
+      - { mn: SET, b: 3, suf: ",D", op: "DA" }
+      - { mn: SET, b: 3, suf: ",E", op: "DB" }
+      - { mn: SET, b: 3, suf: ",H", op: "DC" }
+      - { mn: SET, b: 3, suf: ",L", op: "DD" }
+      - { mn: SET, b: 3, suf: "", op: "DE" }
+      - { mn: SET, b: 3, suf: ",A", op: "DF" }
+      - { mn: SET, b: 4, suf: ",B", op: "E0" }
+      - { mn: SET, b: 4, suf: ",C", op: "E1" }
+      - { mn: SET, b: 4, suf: ",D", op: "E2" }
+      - { mn: SET, b: 4, suf: ",E", op: "E3" }
+      - { mn: SET, b: 4, suf: ",H", op: "E4" }
+      - { mn: SET, b: 4, suf: ",L", op: "E5" }
+      - { mn: SET, b: 4, suf: "", op: "E6" }
+      - { mn: SET, b: 4, suf: ",A", op: "E7" }
+      - { mn: SET, b: 5, suf: ",B", op: "E8" }
+      - { mn: SET, b: 5, suf: ",C", op: "E9" }
+      - { mn: SET, b: 5, suf: ",D", op: "EA" }
+      - { mn: SET, b: 5, suf: ",E", op: "EB" }
+      - { mn: SET, b: 5, suf: ",H", op: "EC" }
+      - { mn: SET, b: 5, suf: ",L", op: "ED" }
+      - { mn: SET, b: 5, suf: "", op: "EE" }
+      - { mn: SET, b: 5, suf: ",A", op: "EF" }
+      - { mn: SET, b: 6, suf: ",B", op: "F0" }
+      - { mn: SET, b: 6, suf: ",C", op: "F1" }
+      - { mn: SET, b: 6, suf: ",D", op: "F2" }
+      - { mn: SET, b: 6, suf: ",E", op: "F3" }
+      - { mn: SET, b: 6, suf: ",H", op: "F4" }
+      - { mn: SET, b: 6, suf: ",L", op: "F5" }
+      - { mn: SET, b: 6, suf: "", op: "F6" }
+      - { mn: SET, b: 6, suf: ",A", op: "F7" }
+      - { mn: SET, b: 7, suf: ",B", op: "F8" }
+      - { mn: SET, b: 7, suf: ",C", op: "F9" }
+      - { mn: SET, b: 7, suf: ",D", op: "FA" }
+      - { mn: SET, b: 7, suf: ",E", op: "FB" }
+      - { mn: SET, b: 7, suf: ",H", op: "FC" }
+      - { mn: SET, b: 7, suf: ",L", op: "FD" }
+      - { mn: SET, b: 7, suf: "", op: "FE" }
+      - { mn: SET, b: 7, suf: ",A", op: "FF" }

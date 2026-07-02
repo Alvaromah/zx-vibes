@@ -1,0 +1,47 @@
+{
+  "id": "ASM-EMIT-LD-HL-MEM-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-hl-memory-family",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld (hl), 0x2a",
+          "    ld b, (hl)",
+          "    ld c, (hl)",
+          "    ld d, (hl)",
+          "    ld e, (hl)",
+          "    ld h, (hl)",
+          "    ld l, (hl)",
+          "    ld a, (hl)",
+          "    ld (hl), b",
+          "    ld (hl), c",
+          "    ld (hl), d",
+          "    ld (hl), e",
+          "    ld (hl), h",
+          "    ld (hl), l",
+          "    ld (hl), a",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-hl-memory.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-hl-memory-family",
+        "ok": true,
+        "bytesHex": "362A464E565E666E7E70717273747577"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

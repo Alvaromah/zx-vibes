@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ZX Spectrum — Medium demo</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; background: #14141a; color: #d7d7de;
+         font: 15px/1.5 system-ui, sans-serif; display: grid; place-items: start center; }
+  main { width: 100%; max-width: 720px; padding: 28px 18px 60px; box-sizing: border-box; text-align: center; }
+  h1 { font-size: 19px; font-weight: 600; margin: 0 0 4px; }
+  .sub { margin: 0 0 16px; color: #9a9aa6; }
+  /* 320x240 buffer shown at 2x so every ZX pixel is a uniform 2x2 block. */
+  canvas { width: 640px; max-width: 100%; height: auto; aspect-ratio: 4 / 3;
+           image-rendering: pixelated; background: #000; border-radius: 6px;
+           box-shadow: 0 8px 40px #0008; margin: 0 auto 14px; display: block; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 0 0 20px; }
+  button { font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+           border: 1px solid #333340; background: #22222c; color: #e6e6ee; transition: border-color .15s, background .15s; }
+  button:hover:not(:disabled) { border-color: #7db3ff; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: #2b4a6f; border-color: #3a6ea5; }
+
+  /* On-screen keyboard */
+  .kb { display: inline-grid; gap: 6px; padding: 12px; background: #1a1a22; border: 1px solid #2c2c38;
+        border-radius: 12px; user-select: none; touch-action: none; margin: 0 auto 8px; max-width: 100%; }
+  .kb-row { display: flex; gap: 6px; justify-content: center; }
+  .key { position: relative; min-width: 24px; height: 46px; flex: 1 1 0; border-radius: 7px;
+         background: #2a2a34; border: 1px solid #3a3a46; color: #e6e6ee; cursor: pointer;
+         display: flex; flex-direction: column; align-items: center; justify-content: center;
+         padding: 3px 2px; line-height: 1; transition: background .06s, border-color .06s; }
+  .key:hover { border-color: #55556a; }
+  .key.wide { flex: 1.7 1 0; }
+  .key.mod { background: #34343f; }
+  .key.lit { background: #7db3ff; color: #10131a; border-color: #a9ccff; }
+  .key .main { font-size: 15px; font-weight: 600; }
+  .key .kw { font-size: 8px; color: #6bd08a; letter-spacing: .2px; }
+  .key.lit .kw { color: #17361f; }
+  .key .sym { font-size: 8px; color: #e88; }
+  .key.lit .sym { color: #3a1414; }
+  .key .lbl { font-size: 10px; font-weight: 600; letter-spacing: .3px; }
+  .hint { color: #75757f; font-size: 12px; margin: 4px 0 22px; }
+
+  /* Program loader */
+  .loader { text-align: left; background: #1a1a22; border: 1px solid #2c2c38; border-radius: 12px; padding: 16px; }
+  .loader h2 { font-size: 15px; margin: 0 0 8px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .presets button { font-size: 12px; padding: 5px 10px; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 108px; resize: vertical; background: #0d0d12;
+             color: #cfe0ff; border: 1px solid #2c2c38; border-radius: 8px; padding: 10px;
+             font: 13px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .loader-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+  .loader .note { color: #75757f; font-size: 12px; margin: 8px 0 0; }
+  code { background: #262630; border-radius: 4px; padding: 1px 6px; }
+  a { color: #7db3ff; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ZX Spectrum 48K — Medium</h1>
+  <p class="sub">The real BASIC ROM, plus an on-screen keyboard, a one-click program loader, and pause / reset.</p>
+
+  <canvas id="screen" width="320" height="240"></canvas>
+
+  <div class="controls">
+    <button id="pause">⏸ Pause</button>
+    <button id="reset">⟳ Reset</button>
+    <button id="sound">🔊 Sound: on</button>
+  </div>
+
+  <div id="kb" class="kb" aria-label="ZX Spectrum keyboard"></div>
+  <p class="hint">Click keys (or use your real keyboard). <b>Caps</b> and <b>Sym</b> are sticky — tap one, then a key, for the red/green legends.</p>
+
+  <div class="loader">
+    <h2>Load a program</h2>
+    <div class="presets" id="presets"></div>
+    <textarea id="src" spellcheck="false"></textarea>
+    <div class="loader-actions">
+      <button id="typeRun" class="primary">▶ Type &amp; Run</button>
+      <button id="typeIn">⌨ Type it in</button>
+      <button id="stopType" disabled>■ Stop</button>
+    </div>
+    <p class="note">It types the listing on the real keyboard for you (watch the keys light up). Keywords, <code>FOR…TO</code>,
+      strings and punctuation are handled; functions and graphics aren’t — type those yourself. <a href="index.html">← all demos</a></p>
+  </div>
+
+  <script src="zxspectrum.js"></script>
+  <script>
+    const zx = ZXSpectrum.create();
+    zx.attach(document.getElementById('screen'));
+    zx.start();
+    let running = true, soundOn = true;
+
+    // ---- on-screen keyboard --------------------------------------------------
+    // key = canonical matrix name; kw = green BASIC keyword; sym = red symbol-shift legend.
+    const ROWS = [
+      [['1',null,'!'],['2',null,'@'],['3',null,'#'],['4',null,'$'],['5',null,'%'],
+       ['6',null,'&'],['7',null,"'"],['8',null,'('],['9',null,')'],['0',null,'_']],
+      [['Q','PLOT','<='],['W','DRAW','<>'],['E','REM','>='],['R','RUN','<'],['T','RAND','>'],
+       ['Y','RETURN','AND'],['U','IF','OR'],['I','INPUT','AT'],['O','POKE',';'],['P','PRINT','"']],
+      [['A','NEW','STOP'],['S','SAVE','NOT'],['D','DIM','STEP'],['F','FOR','TO'],['G','GOTO','THEN'],
+       ['H','GOSUB','↑'],['J','LOAD','-'],['K','LIST','+'],['L','LET','='],['ENTER',null,null,'Enter','wide']],
+      [['CAPS',null,null,'Caps','mod wide'],['Z','COPY',':'],['X','CLEAR','£'],['C','CONT','?'],['V','CLS','/'],
+       ['B','BORDER','*'],['N','NEXT',','],['M','PAUSE','.'],['SYM',null,null,'Sym','mod wide'],['SPACE',null,null,'Space','wide']],
+    ];
+    const kbEl = document.getElementById('kb');
+    const keyEls = new Map();               // canonical -> element
+    const sticky = new Set();               // CAPS / SYM currently held (sticky)
+    const momentary = new Set();            // key held by pointer right now
+    let autoTyping = false;
+
+    for (const row of ROWS) {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'kb-row';
+      for (const [key, kw, sym, lbl, cls] of row) {
+        const el = document.createElement('button');
+        el.className = 'key' + (cls ? ' ' + cls : '');
+        el.dataset.key = key;
+        if (lbl) {
+          el.innerHTML = `<span class="lbl">${lbl}</span>`;
+        } else {
+          el.innerHTML =
+            (kw ? `<span class="kw">${kw}</span>` : '') +
+            `<span class="main">${key}</span>` +
+            (sym ? `<span class="sym">${sym}</span>` : '');
+        }
+        const isMod = key === 'CAPS' || key === 'SYM';
+        el.addEventListener('pointerdown', (e) => { e.preventDefault(); kickAudio(); onDown(key, isMod, el); });
+        el.addEventListener('pointerup', (e) => { e.preventDefault(); onUp(key, isMod); });
+        el.addEventListener('pointerleave', () => { if (momentary.has(key)) onUp(key, isMod); });
+        el.addEventListener('pointercancel', () => onUp(key, isMod));
+        keyEls.set(key, el);
+        rowEl.appendChild(el);
+      }
+      kbEl.appendChild(rowEl);
+    }
+
+    // Push the current logical key set into the machine and repaint highlights.
+    function applyPressed(iterable) {
+      zx.pressed.clear();
+      for (const k of iterable) zx.pressed.add(k);
+      for (const [k, el] of keyEls) el.classList.toggle('lit', zx.pressed.has(k));
+    }
+    function refresh() { applyPressed([...sticky, ...momentary]); }
+
+    function onDown(key, isMod, el) {
+      if (autoTyping) return;
+      if (isMod) { sticky.has(key) ? sticky.delete(key) : sticky.add(key); refresh(); return; }
+      momentary.add(key); refresh();
+    }
+    function onUp(key, isMod) {
+      if (autoTyping || isMod) return;
+      momentary.delete(key);
+      sticky.clear();               // one-shot: Caps/Sym release after the keyed press
+      refresh();
+    }
+
+    // ---- controls ------------------------------------------------------------
+    const pauseBtn = document.getElementById('pause');
+    const resetBtn = document.getElementById('reset');
+    const soundBtn = document.getElementById('sound');
+    pauseBtn.onclick = () => {
+      running = !running;
+      if (running) zx.start(); else zx.stop();
+      pauseBtn.textContent = running ? '⏸ Pause' : '▶ Resume';
+    };
+    resetBtn.onclick = () => {
+      abortTyping();
+      zx.reset(); zx.start();
+      running = true; pauseBtn.textContent = '⏸ Pause';
+      sticky.clear(); momentary.clear(); refresh();
+    };
+    soundBtn.onclick = () => {
+      soundOn = !soundOn;
+      zx.setSound(soundOn);
+      soundBtn.textContent = soundOn ? '🔊 Sound: on' : '🔇 Sound: off';
+    };
+    // Web Audio needs a user gesture; pointer taps count, keydown is handled by the bundle.
+    let audioKicked = false;
+    function kickAudio() { if (!audioKicked && soundOn) { audioKicked = true; zx.setSound(true); } }
+
+    // ---- program loader ------------------------------------------------------
+    const PRESETS = {
+      'Hello': '10 PRINT "zx vibes"\n20 GO TO 10',
+      'Squares': '10 FOR n=1 TO 10\n20 PRINT n, n*n\n30 NEXT n',
+      'Colour bars': '10 FOR c=0 TO 7\n20 BORDER c\n30 PAUSE 10\n40 NEXT c\n50 GO TO 10',
+      'Countdown': '10 FOR n=9 TO 1 STEP -1\n20 PRINT n\n30 PAUSE 25\n40 NEXT n\n50 PRINT "lift off"',
+    };
+    const srcEl = document.getElementById('src');
+    srcEl.value = PRESETS.Hello;
+    const presetsEl = document.getElementById('presets');
+    for (const name of Object.keys(PRESETS)) {
+      const b = document.createElement('button');
+      b.textContent = name;
+      b.onclick = () => { srcEl.value = PRESETS[name]; };
+      presetsEl.appendChild(b);
+    }
+
+    // BASIC text -> flat array of canonical key steps. (Verified headlessly against
+    // the real ROM; see tooling. Ported verbatim.)
+    const STMT_KEYWORDS = {
+      PLOT: 'Q', DRAW: 'W', REM: 'E', RUN: 'R', RANDOMIZE: 'T', RAND: 'T', RETURN: 'Y',
+      IF: 'U', INPUT: 'I', POKE: 'O', PRINT: 'P', NEW: 'A', SAVE: 'S', DIM: 'D', FOR: 'F',
+      GOTO: 'G', GOSUB: 'H', LOAD: 'J', LIST: 'K', LET: 'L', COPY: 'Z', CLEAR: 'X',
+      CONT: 'C', CLS: 'V', BORDER: 'B', NEXT: 'N', PAUSE: 'M',
+    };
+    const SYM_WORDS = { TO: 'F', THEN: 'G', STEP: 'D', AND: 'Y', OR: 'U', AT: 'I', NOT: 'S', STOP: 'A' };
+    const SYMBOL_CHARS = {
+      '!': ['SYM', '1'], '@': ['SYM', '2'], '#': ['SYM', '3'], $: ['SYM', '4'], '%': ['SYM', '5'],
+      '&': ['SYM', '6'], "'": ['SYM', '7'], '(': ['SYM', '8'], ')': ['SYM', '9'], _: ['SYM', '0'],
+      '"': ['SYM', 'P'], ';': ['SYM', 'O'], ':': ['SYM', 'Z'], ',': ['SYM', 'N'], '.': ['SYM', 'M'],
+      '=': ['SYM', 'L'], '+': ['SYM', 'K'], '-': ['SYM', 'J'], '*': ['SYM', 'B'], '/': ['SYM', 'V'],
+      '?': ['SYM', 'C'], '<': ['SYM', 'R'], '>': ['SYM', 'T'], '^': ['SYM', 'H'],
+    };
+    function keysForChar(ch) {
+      if (ch >= 'a' && ch <= 'z') return [ch.toUpperCase()];
+      if (ch >= 'A' && ch <= 'Z') return ['CAPS', ch];
+      if (ch >= '0' && ch <= '9') return [ch];
+      if (ch === ' ') return ['SPACE'];
+      if (SYMBOL_CHARS[ch]) return SYMBOL_CHARS[ch];
+      return null;
+    }
+    function programToSteps(text) {
+      const steps = [];
+      const push = (keys) => steps.push(keys);
+      for (const rawLine of text.split('\n')) {
+        const line = rawLine.replace(/\s+$/, '');
+        if (!line.trim()) continue;
+        let i = 0, atStmt = true;
+        const m = /^(\s*)(\d+)(\s*)/.exec(line);
+        if (m) { for (const d of m[2]) push([d]); i = m[0].length; }
+        while (i < line.length) {
+          const ch = line[i];
+          const wm = /^[A-Za-z]+/.exec(line.slice(i));
+          if (wm) {
+            const word = wm[0], upper = word.toUpperCase(), rest = line.slice(i + word.length);
+            if (upper === 'GO' && /^\s+TO\b/i.test(rest)) {
+              push(['G']); i += word.length + rest.match(/^\s+TO/i)[0].length;
+              if (line[i] === ' ') i += 1; atStmt = false; continue;
+            }
+            if (upper === 'GO' && /^\s+SUB\b/i.test(rest)) {
+              push(['H']); i += word.length + rest.match(/^\s+SUB/i)[0].length;
+              if (line[i] === ' ') i += 1; atStmt = false; continue;
+            }
+            if (atStmt && STMT_KEYWORDS[upper]) {
+              push([STMT_KEYWORDS[upper]]); atStmt = false; i += word.length;
+              if (line[i] === ' ') i += 1; continue;
+            }
+            if (SYM_WORDS[upper]) {
+              push(['SYM', SYM_WORDS[upper]]); atStmt = (upper === 'THEN');
+              i += word.length; if (line[i] === ' ') i += 1; continue;
+            }
+            for (const c of word) { const k = keysForChar(c); if (k) push(k); }
+            i += word.length; atStmt = false; continue;
+          }
+          const nm = /^\d+/.exec(line.slice(i));
+          if (nm) { for (const d of nm[0]) push([d]); i += nm[0].length; atStmt = false; continue; }
+          if (ch === ':') { push(['SYM', 'Z']); atStmt = true; i += 1; continue; }
+          const k = keysForChar(ch); if (k) push(k);
+          i += 1;
+        }
+        push(['ENTER']);
+      }
+      return steps;
+    }
+
+    // Auto-typer: press each step, wait, release, wait — real time, so the 50 Hz
+    // emulation loop advances and the ROM debounces each key exactly as verified.
+    const typeInBtn = document.getElementById('typeIn');
+    const typeRunBtn = document.getElementById('typeRun');
+    const stopBtn = document.getElementById('stopType');
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    function abortTyping() { autoTyping = false; }
+    function setTypingUI(on) {
+      autoTyping = on;
+      typeInBtn.disabled = on; typeRunBtn.disabled = on;
+      pauseBtn.disabled = on; resetBtn.disabled = on;
+      stopBtn.disabled = !on;
+    }
+    async function typeProgram(withRun) {
+      if (autoTyping) return;
+      if (!running) { zx.start(); running = true; pauseBtn.textContent = '⏸ Pause'; }
+      kickAudio();
+      // Lead with a harmless CAPS SHIFT tap: the ROM's key debounce can swallow the very
+      // first keystroke, and losing it would corrupt the first line (a dropped line number
+      // or keyword). CAPS types nothing, so it just absorbs that.
+      const steps = [['CAPS'], ...programToSteps(srcEl.value)];
+      if (withRun) steps.push(['R'], ['ENTER']);
+      setTypingUI(true);
+      for (const keys of steps) {
+        if (!autoTyping) break;
+        applyPressed(keys);
+        await sleep(90);
+        applyPressed([]);
+        await sleep(150);
+      }
+      applyPressed([]);
+      sticky.clear(); momentary.clear();
+      setTypingUI(false);
+    }
+    typeInBtn.onclick = () => typeProgram(false);
+    typeRunBtn.onclick = () => typeProgram(true);
+    stopBtn.onclick = () => abortTyping();
+
+    // Mirror physical keypresses on the on-screen keys (cosmetic highlight only;
+    // the bundle already drives the matrix from real key events).
+    const CODE_HINT = { Enter: 'ENTER', Space: 'SPACE', ShiftLeft: 'CAPS', ShiftRight: 'CAPS',
+                        ControlLeft: 'SYM', ControlRight: 'SYM' };
+    function codeToKey(code) {
+      if (CODE_HINT[code]) return CODE_HINT[code];
+      let mm = /^Key([A-Z])$/.exec(code); if (mm) return mm[1];
+      mm = /^(?:Digit|Numpad)([0-9])$/.exec(code); if (mm) return mm[1];
+      return null;
+    }
+    addEventListener('keydown', (e) => { if (autoTyping) return; const k = codeToKey(e.code); const el = k && keyEls.get(k); if (el) el.classList.add('lit'); });
+    addEventListener('keyup', (e) => { if (autoTyping) return; const k = codeToKey(e.code); const el = k && keyEls.get(k); if (el) el.classList.remove('lit'); });
+  </script>
+</main>
+</body>
+</html>

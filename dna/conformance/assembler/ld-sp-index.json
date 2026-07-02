@@ -1,0 +1,34 @@
+{
+  "id": "ASM-EMIT-LD-SP-IXIY-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-sp-index",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld sp, ix",
+          "    ld sp, iy",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-sp-index.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-sp-index",
+        "ok": true,
+        "bytesHex": "DDF9FDF9"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

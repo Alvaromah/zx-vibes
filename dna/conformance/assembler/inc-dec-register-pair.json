@@ -1,0 +1,40 @@
+{
+  "id": "ASM-EMIT-INC-DEC-SS-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "inc-dec-register-pair",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    inc bc",
+          "    inc de",
+          "    inc hl",
+          "    inc sp",
+          "    dec bc",
+          "    dec de",
+          "    dec hl",
+          "    dec sp",
+          ""
+        ],
+        "options": {
+          "entryPath": "inc-dec-register-pair.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "inc-dec-register-pair",
+        "ok": true,
+        "bytesHex": "031323330B1B2B3B"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

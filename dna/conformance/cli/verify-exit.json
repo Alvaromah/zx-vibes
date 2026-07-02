@@ -1,0 +1,31 @@
+[
+  {
+    "id": "CLI-EXIT-VERIFY-001",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "cli-exit",
+      "command": "zxs verify --json",
+      "note": "Contract: `zxs verify` exits 0 when the project passes and non-zero when any stage fails (dna/product/cli.md CLI-PROD-OUT-VERIFY-002; dna/product/toolkit-runtime.md RT-PROD-VERIFY-002). Executed by the cli fixture runner (authored in R-W4-05) against the REGENERATED @zx-vibes/toolkit, normalized via the cli-snapshot profile. Asserts the exit-code contract only — NOT byte-for-byte legacy output (ADR-0013, ADR-0015). Flips to covered when the regenerated toolkit passes it.",
+      "cases": [
+        {
+          "name": "pass",
+          "project": "a minimal project that assembles, runs without a hang, and has no failing tests",
+          "command": "zxs verify --json"
+        },
+        {
+          "name": "fail-build",
+          "project": "a project whose entry has an assembly error",
+          "command": "zxs verify --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "pass", "exitCode": 0, "json": { "ok": true, "stage": "verify" } },
+        { "name": "fail-build", "exitNonZero": true, "json": { "ok": false, "stage": "verify" } }
+      ]
+    },
+    "normalization": { "profile": "cli-snapshot" }
+  }
+]

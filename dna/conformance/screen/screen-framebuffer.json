@@ -1,0 +1,77 @@
+{
+  "id": "SCREEN-FRAMEBUFFER-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0022",
+  "input": {
+    "kind": "screen-framebuffer-query",
+    "note": "Gallery 256x192 framebuffer assembly (screen-render.md SCREEN-FRAMEBUFFER-001, decision:ADR-0022): the display-file address decode + bit extraction (7-(x&7), MSB leftmost) + the attribute decode + the palette, composed over a captured 6912-byte screen. The runner builds the screen from `writes` (offset 0 = 0x4000) and passes it to the model. Samples span the three thirds, an interleave-sensitive line (y=1, which a LINEAR decoder reads from the wrong byte), multiple attribute cells (black/white, red, green, flash-bright), both FLASH phases (frame 0 vs 16), and the byte's leftmost (bit 7) / rightmost (bit 0) pixels (which an LSB-first decoder mirrors). The self-test rejects linear addressing, LSB-first bit order, a single-attribute screen, and FLASH ignored.",
+    "screen": {
+      "fill": 0,
+      "writes": [
+        [0, 128],
+        [256, 128],
+        [2048, 128],
+        [4096, 128],
+        [6143, 1],
+        [6144, 56],
+        [6400, 2],
+        [6656, 199],
+        [6911, 4]
+      ]
+    },
+    "cases": [
+      { "name": "frame-width", "query": "frameWidth" },
+      { "name": "frame-height", "query": "frameHeight" },
+      { "name": "frame-size", "query": "frameSize" },
+      { "name": "screen-image-size", "query": "screenImageSize" },
+      { "name": "index-frame-length", "query": "frameIndexLength" },
+      { "name": "rgb-frame-length", "query": "frameRgbLength" },
+
+      { "name": "top-0-0-on", "query": "framePixelIndex", "args": [0, 0, 0] },
+      { "name": "top-1-0-off", "query": "framePixelIndex", "args": [1, 0, 0] },
+      { "name": "top-7-0-off", "query": "framePixelIndex", "args": [7, 0, 0] },
+      { "name": "interleave-0-1-on", "query": "framePixelIndex", "args": [0, 1, 0] },
+      { "name": "mid-0-64-on", "query": "framePixelIndex", "args": [0, 64, 0] },
+      { "name": "bottom-0-128-on-phase0", "query": "framePixelIndex", "args": [0, 128, 0] },
+      { "name": "bottom-0-128-on-phase1", "query": "framePixelIndex", "args": [0, 128, 16] },
+      { "name": "corner-255-191-on", "query": "framePixelIndex", "args": [255, 191, 0] },
+      { "name": "corner-248-191-off", "query": "framePixelIndex", "args": [248, 191, 0] },
+
+      { "name": "rgb-0-0", "query": "framePixelRgb", "args": [0, 0, 0] },
+      { "name": "rgb-1-0", "query": "framePixelRgb", "args": [1, 0, 0] },
+      { "name": "rgb-0-64", "query": "framePixelRgb", "args": [0, 64, 0] },
+      { "name": "rgb-0-128-phase0", "query": "framePixelRgb", "args": [0, 128, 0] },
+      { "name": "rgb-0-128-phase1", "query": "framePixelRgb", "args": [0, 128, 16] },
+      { "name": "rgb-255-191", "query": "framePixelRgb", "args": [255, 191, 0] }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "frame-width", "value": 256 },
+      { "name": "frame-height", "value": 192 },
+      { "name": "frame-size", "value": 49152 },
+      { "name": "screen-image-size", "value": 6912 },
+      { "name": "index-frame-length", "value": 49152 },
+      { "name": "rgb-frame-length", "value": 147456 },
+
+      { "name": "top-0-0-on", "value": 0 },
+      { "name": "top-1-0-off", "value": 7 },
+      { "name": "top-7-0-off", "value": 7 },
+      { "name": "interleave-0-1-on", "value": 0 },
+      { "name": "mid-0-64-on", "value": 2 },
+      { "name": "bottom-0-128-on-phase0", "value": 15 },
+      { "name": "bottom-0-128-on-phase1", "value": 8 },
+      { "name": "corner-255-191-on", "value": 4 },
+      { "name": "corner-248-191-off", "value": 0 },
+
+      { "name": "rgb-0-0", "value": [0, 0, 0] },
+      { "name": "rgb-1-0", "value": [205, 205, 205] },
+      { "name": "rgb-0-64", "value": [205, 0, 0] },
+      { "name": "rgb-0-128-phase0", "value": [255, 255, 255] },
+      { "name": "rgb-0-128-phase1", "value": [0, 0, 0] },
+      { "name": "rgb-255-191", "value": [0, 205, 0] }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

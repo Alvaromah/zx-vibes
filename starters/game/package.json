@@ -1,0 +1,19 @@
+{
+  "name": "__NAME__",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "doctor": "zxs doctor",
+    "build": "zxs build",
+    "run": "zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png",
+    "screen": "zxs screen --text --png screen.png",
+    "test": "zxs test tests",
+    "verify": "zxs verify",
+    "preview": "zxs preview --watch",
+    "zxs": "zxs"
+  },
+  "devDependencies": {
+    "zx-vibes": "^0.2.1"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "name": "@zx-vibes/asm",
+  "version": "0.2.0",
+  "description": "zx-vibes Z80 assembler/disassembler for ZX Spectrum 48K workflows.",
+  "license": "MIT",
+  "author": "Alvaro Mateos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
+    "directory": "packages/asm"
+  },
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
+  "bugs": {
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "spectral-asm": "bin/zxasm.js",
+    "zxasm": "bin/zxasm.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "import": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup && node ../../scripts/ensure-shebang.js dist/cli.js",
+    "prepack": "pnpm run build",
+    "test": "tsup --silent && node ../../scripts/ensure-shebang.js --silent dist/cli.js && vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests bin",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "dependencies": {
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "prettier": "^3.5.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.8"
+  }
+}

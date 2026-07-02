@@ -1,0 +1,33 @@
+{
+  "id": "ASM-EMIT-IN-C-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "in-c-discard",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    in (c)",
+          ""
+        ],
+        "options": {
+          "entryPath": "in-c-discard.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "in-c-discard",
+        "ok": true,
+        "bytesHex": "ED70"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

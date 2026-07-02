@@ -1,0 +1,54 @@
+{
+  "id": "HOST-IO-EVENT-CHRONO-001",
+  "area": "emulator",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "host-io-chrono",
+    "cases": [
+      {
+        "name": "wrap-stays-chronological",
+        "frameStart": 69800,
+        "writes": [
+          { "clock": 69850, "value": "0x02" },
+          { "clock": 69880, "value": "0x12" },
+          { "clock": 69930, "value": "0x05" },
+          { "clock": 69970, "value": "0x15" }
+        ]
+      },
+      {
+        "name": "no-wrap-baseline",
+        "frameStart": 1000,
+        "writes": [
+          { "clock": 1100, "value": "0x04" },
+          { "clock": 1200, "value": "0x14" },
+          { "clock": 1300, "value": "0x01" }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "wrap-stays-chronological",
+        "events": [
+          { "tFrame": 50, "kind": "border", "value": 2 },
+          { "tFrame": 80, "kind": "beeper", "level": 1 },
+          { "tFrame": 130, "kind": "border", "value": 5 },
+          { "tFrame": 130, "kind": "beeper", "level": 0 },
+          { "tFrame": 170, "kind": "beeper", "level": 1 }
+        ]
+      },
+      {
+        "name": "no-wrap-baseline",
+        "events": [
+          { "tFrame": 100, "kind": "border", "value": 4 },
+          { "tFrame": 200, "kind": "beeper", "level": 1 },
+          { "tFrame": 300, "kind": "border", "value": 1 },
+          { "tFrame": 300, "kind": "beeper", "level": 0 }
+        ]
+      }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

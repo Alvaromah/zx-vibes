@@ -1,0 +1,1430 @@
+# Coverage ledger (machine-readable). See coverage.md for schema and gate.
+#
+# status:     covered | partial | uncovered | unknown
+# tier:       contract | fidelity | incidental
+# provenance: hardware | z80-spec | zexall | zexdoc | fuse | contract | manual
+#             | decision:<id> | UNKNOWN
+#
+# Gate (CI, R-W0-03): no contract/fidelity row may be uncovered/partial/unknown
+# at its slice cutover. The rows below are SEED examples (status: uncovered) that
+# show the intended shape; real rows are added as behaviors/fixtures are authored.
+
+behaviors:
+  # --- DNA conformance foundations (W0) ---
+  - id: CONF-RUNNER-001
+    area: cross
+    behavior: "an empty dna/conformance suite runs green during W0 bootstrap"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/self-test.mjs]
+    status: covered
+
+  - id: CONF-SCHEMA-001
+    area: cross
+    behavior: "fixture files missing id/tier/provenance/input/expected/normalization are rejected"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/self-test.mjs, conformance/schema/fixture.schema.json]
+    status: covered
+
+  - id: CONF-DETERMINISM-001
+    area: cross
+    behavior: "deterministic runs force stable TZ/locale/color/RNG/frame/T-state settings"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/normalization-self-test.mjs, conformance/profiles/deterministic-run.json]
+    status: covered
+
+  - id: CONF-NORMALIZE-001
+    area: cross
+    behavior: "CLI snapshots normalize version strings, absolute paths, timestamps, build hashes, ports, and temp dirs"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/normalization-self-test.mjs, conformance/normalization.mjs]
+    status: covered
+
+  - id: CONF-COVERAGE-001
+    area: cross
+    behavior: "coverage.yaml rows are schema-checked and covered rows must reference real fixtures"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/coverage-check.mjs, conformance/coverage-self-test.mjs]
+    status: covered
+
+  - id: CONF-COVERAGE-GATE-001
+    area: cross
+    behavior: "coverage cutover gate rejects uncovered, partial, unknown, or UNKNOWN-provenance contract/fidelity rows"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/coverage-check.mjs, conformance/coverage-self-test.mjs]
+    status: covered
+
+  - id: CONF-PROVENANCE-001
+    area: cross
+    behavior: "coverage rows, fixtures, and authored Markdown claims missing provenance fail CI"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/provenance-lint.mjs, conformance/provenance-self-test.mjs]
+    status: covered
+
+  - id: CONF-UNKNOWN-001
+    area: cross
+    behavior: "UNKNOWN provenance entries must be tracked per area in decisions.md"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/provenance-lint.mjs, conformance/provenance-self-test.mjs]
+    status: covered
+
+  - id: CONF-EXT-MANIFEST-001
+    area: cross
+    behavior: "external suite manifests pin repository URL, git commit, license, artifact byte size, SHA-256, and provenance"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/external-suites.mjs, conformance/external/zexdoc.manifest.json, conformance/external/zexall.manifest.json, conformance/external/fuse-z80-tests.manifest.json]
+    status: covered
+
+  - id: CONF-EXT-REPORT-001
+    area: cross
+    behavior: "external suite registry validation reports pass/fail and rejects missing provenance or mismatched vendored hashes"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/external-suites.mjs, conformance/external-suites-self-test.mjs]
+    status: covered
+
+  - id: CONF-EXT-CPU-ADAPTER-001
+    area: cross
+    behavior: "zexdoc/zexall runner invokes a CPU reference adapter and maps PASS, FAIL, NOT_RUN, and adapter errors to stable exit codes"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/external-adapter-protocol.mjs, conformance/cpu/run-zex.mjs, conformance/external-adapters-self-test.mjs]
+    status: covered
+
+  - id: CONF-EXT-TIMING-ADAPTER-001
+    area: cross
+    behavior: "FUSE Z80 timing runner invokes a timing reference adapter and maps PASS, FAIL, NOT_RUN, and adapter errors to stable exit codes"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/external-adapter-protocol.mjs, conformance/timing/run-fuse-z80.mjs, conformance/external-adapters-self-test.mjs]
+    status: covered
+
+  - id: CONF-EXT-PAYLOADS-001
+    area: cross
+    behavior: "external suite payloads resolve from pinned git commits into an untracked cache and are rejected on byte-size or SHA-256 mismatch"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/external-payloads.mjs, conformance/external-payloads-self-test.mjs]
+    status: covered
+
+  - id: CONF-EXT-PAYLOAD-ADAPTER-001
+    area: cross
+    behavior: "adapter runners can pass verified external suite payload paths to reference adapters without vendoring the payloads"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/external-adapter-protocol.mjs, conformance/external-payloads-self-test.mjs]
+    status: covered
+
+  - id: CONF-EXT-FUSE-REFERENCE-001
+    area: cross
+    behavior: "FUSE Z80 tests.in/tests.expected payloads execute through a reference adapter that reports PASS for aligned transcripts and FAIL for mismatches"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/timing/fuse-z80-reference-adapter.mjs, conformance/timing/fuse-z80-reference-self-test.mjs]
+    status: covered
+
+  - id: CONF-EXT-ZEX-CPM-001
+    area: cross
+    behavior: "zexdoc/zexall CP/M COM monitor loads verified COM payloads, handles BDOS console output, and classifies PASS, FAIL, and NOT_RUN transcripts"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/cpu/zex-cpm-adapter.mjs, conformance/cpu/zex-cpm-adapter-self-test.mjs]
+    status: covered
+
+  - id: CONF-ORACLE-CAPTURE-001
+    area: cross
+    behavior: "oracle capture harness rejects dirty or wrong-commit oracle worktrees and reproducibly captures normalized command snapshots plus binary hashes"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/oracle/oracle-capture.mjs, conformance/oracle/oracle-capture-self-test.mjs, conformance/oracle/capture-plan.json]
+    status: covered
+
+  - id: DIST-CI-GATE-001
+    area: cross
+    behavior: "distribution bootstrap keeps pnpm workspace scripts and CI/release validation wired to the DNA conformance gate before build/typecheck/lint/test"
+    tier: contract
+    provenance: decision:ADR-0001
+    fixtures: [conformance/distribution/distribution-bootstrap-check.mjs]
+    status: covered
+
+  # --- assembler (W2) ---
+  - id: ASM-EMIT-001
+    area: assembler
+    behavior: "LD A,n assembles to bytes 0x3E nn"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-a-immediate.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-R-N-001
+    area: assembler
+    behavior: "LD r,n for B,C,D,E,H,L,A assembles to base opcodes 00 r 110 followed by nn"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-r-immediate.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-R-R-001
+    area: assembler
+    behavior: "LD r,r' for every register-only pair in B,C,D,E,H,L,A assembles to base opcodes 01 destination source"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-register-register.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-DD-NN-001
+    area: assembler
+    behavior: "LD dd,nn for BC,DE,HL,SP assembles to base opcodes 00 dd 0001 followed by little-endian nn"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-dd-immediate.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-IXIY-NN-001
+    area: assembler
+    behavior: "LD IX,nn and LD IY,nn assemble to indexed-prefix register-pair immediate opcodes followed by little-endian nn"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-index-immediate.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-ACC-BCDE-IND-001
+    area: assembler
+    behavior: "LD A,(BC), LD A,(DE), LD (BC),A, and LD (DE),A assemble to the accumulator indirect opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-accumulator-indirect.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-ACC-NN-IND-001
+    area: assembler
+    behavior: "LD A,(nn) and LD (nn),A assemble to accumulator absolute-memory opcodes with little-endian addresses"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-accumulator-absolute.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-HL-NN-IND-001
+    area: assembler
+    behavior: "LD HL,(nn) and LD (nn),HL assemble to 16-bit HL absolute-memory opcodes with little-endian addresses"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-hl-absolute.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-IXIY-NN-IND-001
+    area: assembler
+    behavior: "LD IX/IY,(nn) and LD (nn),IX/IY assemble to indexed-prefix absolute word-transfer opcodes with little-endian addresses"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-index-absolute.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-DD-NN-IND-001
+    area: assembler
+    behavior: "LD dd,(nn) and LD (nn),dd for BC,DE,SP assemble to ED-prefixed absolute word-transfer opcodes with little-endian addresses"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-dd-absolute.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-SP-HL-001
+    area: assembler
+    behavior: "LD SP,HL assembles to the single-byte stack-pointer load opcode"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-sp-hl.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-SP-IXIY-001
+    area: assembler
+    behavior: "LD SP,IX and LD SP,IY assemble to indexed-prefix stack-pointer load opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-sp-index.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INC-DEC-SS-001
+    area: assembler
+    behavior: "INC ss and DEC ss for BC,DE,HL,SP assemble to the 16-bit register-pair update opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/inc-dec-register-pair.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INC-DEC-IXIY-001
+    area: assembler
+    behavior: "INC IX/IY and DEC IX/IY assemble to indexed-prefix 16-bit register-pair update opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/inc-dec-index-register-pair.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INC-R-001
+    area: assembler
+    behavior: "INC r for B,C,D,E,H,L,A assembles to the base 8-bit register increment opcodes 00 r 100"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/inc-r.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-PUSH-QQ-001
+    area: assembler
+    behavior: "PUSH qq for BC,DE,HL,AF assembles to the 16-bit register-pair stack push opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/push-register-pair.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-PUSH-IXIY-001
+    area: assembler
+    behavior: "PUSH IX and PUSH IY assemble to indexed-prefix stack push opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/push-index-register-pair.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-POP-QQ-001
+    area: assembler
+    behavior: "POP qq for BC,DE,HL,AF assembles to the 16-bit register-pair stack pop opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/pop-register-pair.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-POP-IXIY-001
+    area: assembler
+    behavior: "POP IX and POP IY assemble to indexed-prefix stack pop opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/pop-index-register-pair.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-HL-MEM-001
+    area: assembler
+    behavior: "LD (HL),n, LD r,(HL), and LD (HL),r assemble to the base HL-memory load/store opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-hl-memory.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-JP-NN-001
+    area: assembler
+    behavior: "unconditional JP nn assembles to opcode 0xC3 followed by little-endian absolute address"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/jp-absolute.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-JP-CC-NN-001
+    area: assembler
+    behavior: "conditional JP cc,nn assembles NZ/Z/NC/C/PO/PE/P/M opcodes followed by little-endian absolute address"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/jp-conditional-absolute.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-JP-HL-001
+    area: assembler
+    behavior: "indirect JP (HL) assembles to opcode 0xE9"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/jp-hl.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-JP-IXIY-001
+    area: assembler
+    behavior: "indirect JP (IX) and JP (IY) assemble to indexed-prefix jump opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/jp-index.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-EX-DE-HL-001
+    area: assembler
+    behavior: "EX DE,HL assembles to opcode 0xEB"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ex-de-hl.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-EX-AF-AF-PRIME-001
+    area: assembler
+    behavior: "EX AF,AF' assembles to opcode 0x08"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ex-af-af-prime.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-EXX-001
+    area: assembler
+    behavior: "EXX assembles to opcode 0xD9"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/exx.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-EX-SP-HL-IXIY-001
+    area: assembler
+    behavior: "EX (SP),HL, EX (SP),IX, and EX (SP),IY assemble to stack exchange opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ex-sp-register-pair.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-CALL-NN-001
+    area: assembler
+    behavior: "unconditional CALL nn assembles to opcode 0xCD followed by little-endian absolute address"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/call-absolute.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-CALL-CC-NN-001
+    area: assembler
+    behavior: "conditional CALL cc,nn assembles NZ/Z/NC/C/PO/PE/P/M opcodes followed by little-endian absolute address"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/call-conditional-absolute.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-RET-001
+    area: assembler
+    behavior: "unconditional RET assembles to opcode 0xC9"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ret.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-RET-CC-001
+    area: assembler
+    behavior: "conditional RET cc assembles NZ/Z/NC/C/PO/PE/P/M single-byte opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ret-conditional.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-RETN-RETI-001
+    area: assembler
+    behavior: "RETN and RETI assemble to ED-prefixed interrupt-return opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/retn-reti.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-RST-P-001
+    area: assembler
+    behavior: "RST p assembles restart vectors 00H/08H/10H/18H/20H/28H/30H/38H to single-byte opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/rst-vectors.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-NOP-001
+    area: assembler
+    behavior: "NOP assembles to opcode 0x00"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/nop.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-HALT-001
+    area: assembler
+    behavior: "HALT assembles to opcode 0x76"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/halt.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-DI-EI-001
+    area: assembler
+    behavior: "DI and EI assemble to opcodes 0xF3 and 0xFB"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/di-ei.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-IM-001
+    area: assembler
+    behavior: "IM 0, IM 1, and IM 2 assemble to ED-prefixed interrupt-mode opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/interrupt-mode.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-I-R-A-001
+    area: assembler
+    behavior: "LD I,A and LD R,A assemble to ED-prefixed special-register load opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-special-register-from-a.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-LD-A-I-R-001
+    area: assembler
+    behavior: "LD A,I and LD A,R assemble to ED-prefixed special-register read opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ld-a-from-special-register.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-IO-N-A-001
+    area: assembler
+    behavior: "OUT (n),A and IN A,(n) assemble to immediate-port accumulator I/O opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/io-immediate-accumulator.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-OUT-C-R-001
+    area: assembler
+    behavior: "OUT (C),r for B,C,D,E,H,L,A assembles to ED-prefixed register-port output opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/out-c-register.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-IN-R-C-001
+    area: assembler
+    behavior: "IN r,(C) for B,C,D,E,H,L,A assembles to ED-prefixed register-port input opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/in-c-register.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-IN-C-001
+    area: assembler
+    behavior: "IN (C) (the register-code-6 ED input that discards its result) assembles to ED 70"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/in-c-discard.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-OUT-C-0-001
+    area: assembler
+    behavior: "OUT (C),0 (the register-code-6 ED output; NMOS writes 0x00) assembles to ED 71"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/out-c-zero.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-ROUNDTRIP-001
+    area: assembler
+    behavior: "assemble<->disassemble bijection: encode then decode is byte-identity on every documented opcode form (table-seeded, strict), and decode->encode is mnemonic-stable over every opcode the CPU executes (FUSE-seeded; decode-only aliases collapse to canonical bytes, same mnemonic)"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/assembler/run-roundtrip.mjs, conformance/assembler/run-roundtrip-self-test.mjs]
+    status: covered
+
+  - id: OPCODE-DECODE-UNIQUE-001
+    area: assembler
+    behavior: "each decodable byte sequence maps to exactly one canonical opcode-table row (no two rows share a byte template; decode-only aliases are documented, not rows)"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/domain/z80-opcodes-check.mjs, conformance/domain/z80-opcodes-check-self-test.mjs]
+    status: covered
+
+  - id: ASM-EMIT-JR-E-001
+    area: assembler
+    behavior: "unconditional JR e assembles to opcode 0x18 followed by signed PC-relative displacement"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/jr-relative.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-JR-CC-E-001
+    area: assembler
+    behavior: "conditional JR cc,e assembles NZ/Z/NC/C opcodes with signed PC-relative displacement"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/jr-conditional-relative.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-DJNZ-E-001
+    area: assembler
+    behavior: "DJNZ e assembles to opcode 0x10 followed by signed PC-relative displacement"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/djnz-relative.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ALU-ADD-001
+    area: assembler
+    behavior: "ADD A,r/(HL)/n assembles to base ALU opcodes 10000 sss and immediate 0xC6"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/alu-add.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ALU-ADC-001
+    area: assembler
+    behavior: "ADC A,r/(HL)/n assembles to base ALU opcodes 10001 sss and immediate 0xCE"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/alu-adc.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ALU-SUB-001
+    area: assembler
+    behavior: "SUB r/(HL)/n assembles to base ALU opcodes 10010 sss and immediate 0xD6"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/alu-sub.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ALU-SBC-001
+    area: assembler
+    behavior: "SBC A,r/(HL)/n assembles to base ALU opcodes 10011 sss and immediate 0xDE"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/alu-sbc.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ALU-AND-001
+    area: assembler
+    behavior: "AND r/(HL)/n assembles to base ALU opcodes 10100 sss and immediate 0xE6"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/alu-and.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ALU-XOR-001
+    area: assembler
+    behavior: "XOR r/(HL)/n assembles to base ALU opcodes 10101 sss and immediate 0xEE"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/alu-xor.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ALU-OR-001
+    area: assembler
+    behavior: "OR r/(HL)/n assembles to base ALU opcodes 10110 sss and immediate 0xF6"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/alu-or.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ALU-CP-001
+    area: assembler
+    behavior: "CP r/(HL)/n assembles to base ALU opcodes 10111 sss and immediate 0xFE"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/alu-cp.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-DEC-R-001
+    area: assembler
+    behavior: "DEC r for B,C,D,E,H,L,A assembles to the base 8-bit register decrement opcodes 00 r 101"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/dec-r.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INC-DEC-HL-IND-001
+    area: assembler
+    behavior: "INC (HL) and DEC (HL) assemble to the base HL-memory increment/decrement opcodes 0x34 and 0x35"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/inc-dec-hl-indirect.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ROT-A-001
+    area: assembler
+    behavior: "RLCA, RRCA, RLA, and RRA assemble to the accumulator rotate opcodes 0x07/0x0F/0x17/0x1F"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/rotate-accumulator.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-DAA-CPL-SCF-CCF-001
+    area: assembler
+    behavior: "DAA, CPL, SCF, and CCF assemble to the accumulator/flag adjust opcodes 0x27/0x2F/0x37/0x3F"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/daa-cpl-scf-ccf.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ADD-HL-SS-001
+    area: assembler
+    behavior: "ADD HL,ss for BC,DE,HL,SP assembles to the 16-bit register-pair add opcodes 00 ss 1001"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/add-hl-register-pair.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-CB-ROT-001
+    area: assembler
+    behavior: "CB-prefixed rotates/shifts RLC/RRC/RL/RR/SLA/SRA/SLL/SRL over B,C,D,E,H,L,(HL),A assemble to CB 00-3F (incl. undocumented SLL)"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/cb-rotate-shift.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-CB-BIT-001
+    area: assembler
+    behavior: "BIT b,r for b=0..7 over B,C,D,E,H,L,(HL),A assembles to CB 40-7F (01 b r)"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/cb-bit.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-CB-RES-SET-001
+    area: assembler
+    behavior: "RES b,r and SET b,r for b=0..7 over B,C,D,E,H,L,(HL),A assemble to CB 80-BF (RES, 10 b r) and CB C0-FF (SET, 11 b r)"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/cb-res-set.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ED-ADC-SBC-HL-SS-001
+    area: assembler
+    behavior: "ADC HL,ss and SBC HL,ss for ss=BC,DE,HL,SP assemble to ED-prefixed 16-bit add/subtract-with-carry opcodes (ED 4A/5A/6A/7A, ED 42/52/62/72)"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ed-adc-sbc-hl.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ED-NEG-001
+    area: assembler
+    behavior: "NEG assembles to the canonical ED-prefixed two's-complement opcode ED 44"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ed-neg.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ED-RRD-RLD-001
+    area: assembler
+    behavior: "RRD and RLD assemble to the ED-prefixed BCD rotate-digit opcodes ED 67 and ED 6F"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ed-rrd-rld.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ED-BLOCK-TRANSFER-001
+    area: assembler
+    behavior: "LDI/LDD/LDIR/LDDR assemble to the ED-prefixed block-transfer opcodes ED A0/A8/B0/B8"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ed-block-transfer.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ED-BLOCK-COMPARE-001
+    area: assembler
+    behavior: "CPI/CPD/CPIR/CPDR assemble to the ED-prefixed block-compare opcodes ED A1/A9/B1/B9"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ed-block-compare.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-ED-BLOCK-IO-001
+    area: assembler
+    behavior: "INI/IND/OUTI/OUTD/INIR/INDR/OTIR/OTDR assemble to the ED-prefixed block-I/O opcodes ED A2/AA/A3/AB/B2/BA/B3/BB"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ed-block-io.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-ADD-001
+    area: assembler
+    behavior: "ADD IX,pp and ADD IY,pp assemble to the DD/FD-prefixed 16-bit add opcodes DD/FD 09/19/29/39"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-add-ix-iy-pp.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-LD-R-001
+    area: assembler
+    behavior: "LD r,(IX+d) and LD r,(IY+d) for r=B,C,D,E,H,L,A assemble to the DD/FD prefix, LD r,(HL) opcode, and displacement byte"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-ld-r-mem.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-LD-MEM-R-001
+    area: assembler
+    behavior: "LD (IX+d),r and LD (IY+d),r for r=B,C,D,E,H,L,A assemble to the DD/FD prefix, LD (HL),r opcode, and displacement byte"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-ld-mem-r.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-LD-MEM-N-001
+    area: assembler
+    behavior: "LD (IX+d),n and LD (IY+d),n assemble to DD/FD 36 with the displacement byte before the immediate byte"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-ld-mem-n.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-ALU-001
+    area: assembler
+    behavior: "ADD/ADC/SUB/SBC/AND/XOR/OR/CP A,(IX+d) and A,(IY+d) assemble to the DD/FD prefix, ALU A,(HL) opcode, and displacement byte"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-alu-mem.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-INC-DEC-001
+    area: assembler
+    behavior: "INC/DEC (IX+d) and (IY+d) assemble to DD/FD 34/35 and the displacement byte"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-inc-dec-mem.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-HALF-LD-N-001
+    area: assembler
+    behavior: "LD IXH/IXL/IYH/IYL,n assemble to the DD/FD-prefixed 26/2E immediate-load opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-half-ld-n.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-HALF-INC-DEC-001
+    area: assembler
+    behavior: "INC/DEC IXH/IXL/IYH/IYL assemble to the DD/FD-prefixed 24/25/2C/2D opcodes"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-half-inc-dec.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-HALF-LD-R-001
+    area: assembler
+    behavior: "LD between an 8-bit register and IXH/IXL/IYH/IYL assembles to the DD/FD-prefixed LD r,r' opcodes with codes 100/101 as the index halves"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-half-ld-r.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-INDEX-HALF-ALU-001
+    area: assembler
+    behavior: "ADD/ADC/SUB/SBC/AND/XOR/OR/CP A,IXH/IXL/IYH/IYL assemble to the DD/FD-prefixed ALU A,r opcodes with codes 100/101 as the index halves"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/index-half-alu.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-DDCB-ROT-001
+    area: assembler
+    behavior: "RLC/RRC/RL/RR/SLA/SRA/SLL/SRL (IX+d) and the undocumented result-copy forms `op (IX+d),r` assemble to the 4-byte DD CB d <opcode> encoding"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ddcb-rotate-shift.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-DDCB-BIT-001
+    area: assembler
+    behavior: "BIT b,(IX+d) for b=0..7 assembles to the canonical z=6 form DD CB d 46/4E/56/5E/66/6E/76/7E"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ddcb-bit.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-DDCB-RES-SET-001
+    area: assembler
+    behavior: "RES/SET b,(IX+d) and the undocumented result-copy forms `RES/SET b,(IX+d),r` assemble to the 4-byte DD CB d <opcode> encoding"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/ddcb-res-set.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-FDCB-ROT-001
+    area: assembler
+    behavior: "RLC/RRC/RL/RR/SLA/SRA/SLL/SRL (IY+d) and the undocumented result-copy forms `op (IY+d),r` assemble to the 4-byte FD CB d <opcode> encoding"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/fdcb-rotate-shift.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-FDCB-BIT-001
+    area: assembler
+    behavior: "BIT b,(IY+d) for b=0..7 assembles to the canonical z=6 form FD CB d 46/4E/56/5E/66/6E/76/7E"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/fdcb-bit.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-EMIT-FDCB-RES-SET-001
+    area: assembler
+    behavior: "RES/SET b,(IY+d) and the undocumented result-copy forms `RES/SET b,(IY+d),r` assemble to the 4-byte FD CB d <opcode> encoding"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/assembler/fdcb-res-set.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs, conformance/domain/z80-opcodes-check.mjs]
+    status: covered
+
+  - id: ASM-DIAG-001
+    area: assembler
+    behavior: "undefined label emits a diagnostic with a stable code/message"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/assembler/diag-undefined-label.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs]
+    status: covered
+
+  - id: ASM-CLI-001
+    area: assembler
+    behavior: "zxasm exposes assemble/disasm/doctor/help/version, stable command options, doctor JSON, and disasm validation exits"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/assembler/cli-surface.json, conformance/assembler/run-assembler-cli-fixtures.mjs, conformance/assembler/run-assembler-cli-fixtures-self-test.mjs]
+    status: covered
+
+  - id: ASM-SYNTAX-001
+    area: assembler
+    behavior: "assembler source syntax covers labels, expressions, includes, defines, conditionals, macros, modules, repetition, data directives, binary inputs, END, and unsupported syntax diagnostics"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/assembler/syntax-surface.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs]
+    status: covered
+
+  - id: ASM-ARTIFACT-001
+    area: assembler
+    behavior: "successful assembly returns raw bytes, SLD-compatible symbol/source-line data, and confined SAVEBIN artifacts"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/assembler/artifacts-savebin.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs]
+    status: covered
+
+  - id: ASM-SANDBOX-001
+    area: assembler
+    behavior: "sandbox mode rejects INCLUDE/INCBIN/INSERT/BINARY reads outside the project and include roots while default mode remains backward compatible"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/assembler/sandbox.json, conformance/assembler/run-assembler-api-fixtures.mjs, conformance/assembler/run-assembler-api-fixtures-self-test.mjs]
+    status: covered
+
+  - id: ASM-CORPUS-001
+    area: assembler
+    behavior: "current starters, toolkit templates, examples, and recipes assemble with the embedded assembler"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/assembler/corpus.json, conformance/assembler/run-assembler-corpus-fixtures.mjs, conformance/assembler/run-assembler-corpus-fixtures-self-test.mjs]
+    status: covered
+
+  # --- emulator: CPU fidelity (W3) ---
+  - id: CPU-ZEXDOC-001
+    area: emulator
+    behavior: "documented-flag opcode behavior matches zexdoc"
+    tier: fidelity
+    provenance: zexdoc
+    fixtures: [conformance/external/zexdoc.manifest.json, conformance/cpu/zex-cpm-cpu-adapter.mjs, conformance/cpu/zex-cpm-cpu-adapter-self-test.mjs, conformance/cpu/run-zex.mjs]
+    status: covered
+    notes: "OFFLINE ACCEPTANCE ROW, NOT the CI emulator gate. ADR-0006 acceptance bar met: the pinned zexdoc payload runs to completion through the independent @zx-vibes/cpu reference (zex-cpm-cpu-adapter.mjs) and reports all 67 groups OK, 0 ERROR, 'Tests complete' (5,764,169,474 instructions, offline run 2026-06-28). The multi-billion-instruction run is too slow for CI (JS perf): conformance:check / conformance:check:emulator (emulator 28/28) carry only the fast adapter self-test (zex-cpm-cpu-adapter-self-test.mjs), and the CI fidelity net for CPU execution is the FUSE per-opcode suite (CPU-FUSE-* via run-fuse-suite). This row flips covered only on a recorded complete offline pass. See ADR-0006 (R-HYG-2)."
+
+  - id: CPU-ZEXALL-001
+    area: emulator
+    behavior: "documented and undocumented opcode behavior matches zexall"
+    tier: fidelity
+    provenance: zexall
+    fixtures: [conformance/external/zexall.manifest.json, conformance/cpu/zex-cpm-cpu-adapter.mjs, conformance/cpu/zex-cpm-cpu-adapter-self-test.mjs, conformance/cpu/run-zex.mjs]
+    status: covered
+    notes: "OFFLINE ACCEPTANCE ROW, NOT the CI emulator gate. ADR-0006 acceptance bar met: the pinned zexall payload runs to completion through the independent @zx-vibes/cpu reference (zex-cpm-cpu-adapter.mjs) and reports all 67 groups OK, 0 ERROR, 'Tests complete' (5,764,169,474 instructions, offline run 2026-06-28) — validating the undocumented 5/3 flags too. The multi-billion-instruction run is too slow for CI (JS perf): conformance:check / conformance:check:emulator (emulator 28/28) carry only the fast adapter self-test (zex-cpm-cpu-adapter-self-test.mjs), and the CI fidelity net for CPU execution is the FUSE per-opcode suite (CPU-FUSE-* via run-fuse-suite). This row flips covered only on a recorded complete offline pass. See ADR-0006 (R-HYG-2)."
+
+  - id: CPU-EXEC-INC-R-001
+    area: emulator
+    behavior: "executing INC r for B,C,D,E,H,L,A updates the register and computes S Z 5 H 3 P/V N flags (C preserved) in 4 T-states"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/cpu/inc-r.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-cpu-exec-fixtures-self-test.mjs]
+    status: covered
+    notes: "EMULATOR PIVOT first slice. Domain rule in dna/domain/z80-cpu-execution.md; expected values witnessed per opcode by the FUSE z80 tests (04/0C/14/1C/24/2C/3C) and validated against an independent reference INC r step in the runner self-test. Flips to covered when the regenerated CPU step passes run-cpu-exec-fixtures.mjs."
+
+  # --- emulator: CPU execution, full ISA from the FUSE oracle (generated by build-fuse-fixtures.mjs) ---
+  # 1333 single-step + 23 run-to-budget per-opcode cases transcribed verbatim from the pinned
+  # FUSE z80 suite (input->output registers + T-states + memory deltas + port I/O; MEMPTR (WZ)
+  # asserted on output — ADR-0009 G-2 lifted / ADR-0020). Single-step rows below cover one step()
+  # per case; the BUDGET rows cover the multi-instruction cases (DJNZ/block-op loops, prefix NONI
+  # timing) via the run-to-budget driver. @zx-vibes/cpu passes them all through run-fuse-suite.mjs.
+  - id: CPU-FUSE-BASE-001
+    area: emulator
+    behavior: "base (unprefixed) opcode execution matches the FUSE z80 per-opcode oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse/base.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "293 cases (incl. OUT (n),A / IN A,(n) / HALT). @zx-vibes/cpu via run-fuse-suite. DAA authored, ADR-0009; MEMPTR/WZ asserted, ADR-0020"
+
+  - id: CPU-FUSE-CB-001
+    area: emulator
+    behavior: "CB-prefixed rotate/shift/bit opcode execution matches the FUSE z80 oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse/cb.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "269 cases. @zx-vibes/cpu via run-fuse-suite. BIT n,(HL) 5/3-from-WZ authored, ADR-0009"
+
+  - id: CPU-FUSE-ED-001
+    area: emulator
+    behavior: "ED-prefixed opcode execution (excluding I/O and block I/O) matches the FUSE z80 oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse/ed.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "89 cases (incl. IN r,(C) / OUT (C),r / INI/OUTI/IND/OUTD, CPI/CPD, RETI/RETN). @zx-vibes/cpu via run-fuse-suite; MEMPTR/WZ asserted, ADR-0020"
+
+  - id: CPU-FUSE-DD-001
+    area: emulator
+    behavior: "DD-prefixed (IX) opcode execution matches the FUSE z80 oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse/dd.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "85 cases. @zx-vibes/cpu via run-fuse-suite"
+
+  - id: CPU-FUSE-FD-001
+    area: emulator
+    behavior: "FD-prefixed (IY) opcode execution matches the FUSE z80 oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse/fd.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "85 cases. @zx-vibes/cpu via run-fuse-suite"
+
+  - id: CPU-FUSE-DDCB-001
+    area: emulator
+    behavior: "DDCB-prefixed (IX+d) bit/rotate opcode execution matches the FUSE z80 oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse/ddcb.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "256 cases. @zx-vibes/cpu via run-fuse-suite"
+
+  - id: CPU-FUSE-FDCB-001
+    area: emulator
+    behavior: "FDCB-prefixed (IY+d) bit/rotate opcode execution matches the FUSE z80 oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse/fdcb.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "256 cases. @zx-vibes/cpu via run-fuse-suite"
+
+  - id: CPU-FUSE-BUDGET-BASE-001
+    area: emulator
+    behavior: "multi-instruction base run-to-budget (DJNZ loop) matches the FUSE z80 oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse-budget/base.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "1 case (DJNZ self-loop, budget 132->135t). Run-to-budget driver loops step(). ADR-0009"
+
+  - id: CPU-FUSE-BUDGET-DD-001
+    area: emulator
+    behavior: "DD/FD prefix NONI run-to-budget timing matches the FUSE z80 oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse-budget/dd.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "2 cases (dd00, ddfd00): redundant DD/FD prefix = +4 T NONI. ADR-0009"
+
+  - id: CPU-FUSE-BUDGET-ED-001
+    area: emulator
+    behavior: "repeating block ops (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR) match the FUSE z80 oracle"
+    tier: fidelity
+    provenance: fuse
+    fixtures: [conformance/cpu/fuse-budget/ed.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "20 cases. step() runs one iteration + rewinds PC; run-to-budget driver reproduces the repeat. Repeat flags = per-iteration flags (this FUSE suite predates the PC-derived 5/3 correction). ADR-0009"
+
+  - id: CPU-PREFIX-DDED-001
+    area: emulator
+    behavior: "DD/FD + ED prefix NONI: a DD or FD prefix immediately before an ED opcode is an ignored 4 T NONI; the ED instruction then executes as if unprefixed"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/cpu/prefix/ddfd-ed.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "4 cases (DD/FD ED 44 = NEG; DD/FD ED 57 = LD A,I), run-to-budget. Closes a FUSE net hole (no DDED/FDED upstream) that let a consumer regeneration decode the ED byte as a base PUSH-like op. Expected = documented NONI decode (z80-spec) + the FUSE 4 T NONI timing (as ddfd00), corroborated by the zex-validated @zx-vibes/cpu via run-fuse-suite. Consumer feedback 2026-06-28; resolves UNKNOWN:emulator:CPU-PREFIX-DDED-001."
+
+  - id: CPU-RETI-IFF-001
+    area: emulator
+    behavior: "RETI (ED 4D) restores the maskable-interrupt flip-flop IFF1 from IFF2, exactly like RETN"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/cpu/reti-iff.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "2 cases (ED4D entered with IFF1 != IFF2 in both directions). Restoring IFF1=IFF2 on RETI is verified Z80 silicon behavior (FUSE/zexall, 'The Undocumented Z80 Documented' SS5.4); the official Zilog manual documents it only for RETN. Closes a FUSE net hole: the pinned FUSE ED4D case enters IFF2=0 and cannot distinguish a RETI that restores IFF1 from one that does not. Run against @zx-vibes/cpu via run-fuse-suite. Backs dna/domain/z80-opcodes.md Z80-OPC-RETN-RETI-001."
+
+  - id: CPU-FLAG-DAA-001
+    area: emulator
+    behavior: "DAA flag computation (S Z H P/V C, plus undocumented 3/5)"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/cpu/daa-flags.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs]
+    status: covered
+    notes: "18 DAA (0x27) cases over N=0/1 x H/C with the +06/+60/+66 corrections and undocumented 5/3 bits. Expected A/F from the documented DAA algorithm (z80-cpu-execution.md [Z80-EXEC-DAA-001]/[Z80-EXEC-DAA-FLAGS-001]); an independent reference agrees with @zx-vibes/cpu over all 256xN/H/C inputs, and zexall corroborates end-to-end. Resolves UNKNOWN:emulator:CPU-FLAG-DAA-001 (ADR-0009 G-3)."
+
+  # --- emulator: timing fidelity (W3) ---
+  - id: TIM-FRAME-001
+    area: emulator
+    behavior: "48K frame is 69888 T-states; INT held low for 32 T-states"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/timing/frame-length.json, conformance/timing/run-timing-fixtures.mjs, conformance/timing/run-timing-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/ula timing model via run-timing-fixtures; DNA in dna/domain/ula-timing.md (ULA-TIME-FRAME-001/-INT-001). ADR-0010"
+
+  - id: TIM-CONTENTION-001
+    area: emulator
+    behavior: "memory contention follows 6,5,4,3,2,1,0,0 over 0x4000-0x7FFF"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/timing/contention.json, conformance/timing/run-timing-fixtures.mjs, conformance/timing/run-timing-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/ula timing model via run-timing-fixtures; DNA in dna/domain/ula-timing.md. Provenance hardware (no per-case FUSE payload exists; canonical early-timing pinned). Supersedes legacy display-latch patch. ADR-0010"
+
+  - id: BUS-FLOATING-001
+    area: emulator
+    behavior: "an IN from an odd, undriven port reads the floating bus: the ULA drives even ports (A0=0) so odd ports float (portFloats); outside the active display-fetch window (= the contended window of ULA-TIME-CONTENTION-WINDOW-001, anchor 14335) the idle bus floats high to 0xFF; inside the window the value is the ULA-fetched display/attribute byte whose exact T->byte phase mapping is the deferred A5 active-area timing (ADR-0021) and is reported unmodelled (modeled=false), never fabricated; a model that fabricates an in-window 0xFF, floats even ports, uses the legacy 14384 anchor, or drops the 128-T contended cutoff all fail"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/timing/floating-bus.json, conformance/timing/run-floating-bus-fixtures.mjs, conformance/timing/run-floating-bus-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/ula floating-bus model (packages/ula/src/floating-bus.mjs) via run-floating-bus-fixtures; DNA in dna/domain/ula-timing.md 'Floating bus' (ULA-FLOATBUS-PORT-001/-IDLE-001/-FETCH-001 hardware; -DEFER-001 decision:ADR-0026). SCOPED per ADR-0026: the port-decode + idle-0xFF facts are pinned hardware; the timing-exact in-window byte is DEFERRED with A5 (tracked deferral, not an UNKNOWN, not silent debt) — the fixture asserts the model reports it unmodelled rather than fabricating it. Window anchored to the DNA 14335, NOT the legacy 14384 (rejected, ADR-0002/0010/0011). Reverses the imprecise roadmap 'even-port' phrasing: odd ports float. W10.12, trivial-tier."
+
+  - id: JOY-KEMPSTON-001
+    area: emulator
+    behavior: "Kempston joystick read: active-high 000FUDLR byte (idle 0x00; R=0x01 L=0x02 D=0x04 U=0x08 F=0x10; top three bits always 0, so all-pressed = 0x1F not 0xFF; independent controls, Left+Right = 0x03 allowed) at the canonical port low byte 0x1F (high byte don't-care: 0x011F and 0xDF1F decode; 0x1E/0x1D/0x3F/0xFF do not); a model that reads active-low, swaps the direction bits, leaks the unused top bits, or decodes the wrong port all fail"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/peripherals/kempston.json, conformance/peripherals/run-kempston-fixtures.mjs, conformance/peripherals/run-kempston-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/ula Kempston model (packages/ula/src/kempston.mjs) via run-kempston-fixtures; DNA in dna/domain/peripherals.md 'Kempston joystick' (JOY-KEMPSTON-PORT-001 / -READ-001, hardware). Executes ADR-0021's ratified F1 scope ('port 0x1F active-high 000FUDLR') — no new ADR. Ships beside the floating-bus model: the Kempston is what carves 0x1F out of the floating odd-port set (ULA-FLOATBUS-PORT-001). Decode = low byte 0x1F (high byte don't-care); finer A5-only aliasing is interface-specific, out of scope. Self-test: independent reference + four broken models rejected + full 32-combo / 16-bit-port sweep. W10.13, trivial-tier."
+
+  # --- emulator: machine layer (W3) — joins @zx-vibes/cpu + @zx-vibes/ula ---
+  - id: MACHINE-INT-ACCEPT-001
+    area: emulator
+    behavior: "maskable interrupt acceptance: IFF1 gate, IFF/R/SP/PC effects, push return address, HALT exit, IM 0/1/2 dispatch"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/machine/interrupt-accept.json, conformance/machine/run-machine-fixtures.mjs, conformance/machine/run-machine-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/machine acceptInterrupt() via run-machine-fixtures; DNA in dna/domain/machine-execution.md (MACHINE-INT-ACCEPT-001/-IM-001/-DATABUS-001/-SAMPLE-001). 48K data bus 0xFF and IM 0 = RST 38h pinned by ADR-0011."
+
+  - id: MACHINE-CONTENTION-001
+    area: emulator
+    behavior: "per-access ULA memory contention threaded onto the executed instruction stream"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/machine/contention.json, conformance/machine/run-machine-fixtures.mjs, conformance/machine/run-machine-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/machine via run-machine-fixtures; threads @zx-vibes/ula contentionDelay (TIM-CONTENTION-001) onto each contended memory access through the CPU step() clock hook. Sampling model (instruction-start clock + accumulated contention) pinned by ADR-0011; M-cycle-exact refinement tracked, not assumed."
+
+  - id: MACHINE-CONTENTION-MCYCLE-001
+    area: emulator
+    behavior: "M-cycle-exact memory contention: internal no-MREQ cycles are charged and each access is sampled at its exact in-instruction T-offset"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/machine/contention-mcycle.json, conformance/machine/run-machine-fixtures.mjs, conformance/machine/run-machine-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/machine exactContention mode via run-machine-fixtures; DNA in dna/domain/machine-execution.md (MACHINE-CONTENTION-MCYCLE-001/-SCHEDULE-001/-MCYCLE-SCOPE-001). The CPU emits a bus-cycle schedule (clock.mcycle/internal/inexact) validated against the pinned FUSE per-instruction memory timeline by dna/conformance/cpu/validate-mcycle-schedule.mjs (1265 exact, 80 inexact-fallback, 0 silent). The 1366 FUSE/zex single-step cases (no clock) and the per-access model (MACHINE-CONTENTION-001) stay unchanged. ADR-0012."
+
+  - id: MACHINE-FRAME-001
+    area: emulator
+    behavior: "one frame of the machine loop accepts at most one interrupt at a boundary, honoring HALT and the post-EI delay"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/machine/frame-loop.json, conformance/machine/run-machine-fixtures.mjs, conformance/machine/run-machine-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/machine runFrame() via run-machine-fixtures; DNA in dna/domain/machine-execution.md (MACHINE-FRAME-LOOP-001/-INT-SAMPLE-001/-INT-EI-DELAY-001). HALT-sync 50Hz loop substrate. ADR-0011."
+
+  - id: MACHINE-NMI-ACCEPT-001
+    area: emulator
+    behavior: "non-maskable interrupt acceptance: NMI is edge-triggered and non-maskable (accepts regardless of IFF1), clears IFF1 while preserving IFF2, bumps R, leaves HALT with the post-HALT return address, pushes PC high-byte first, and vectors to 0x0066 in 11 T-states"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/machine/nmi-accept.json, conformance/machine/run-machine-fixtures.mjs, conformance/machine/run-machine-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/machine acceptNmi() via run-machine-fixtures (kind machine-nmi); DNA in dna/domain/machine-execution.md (MACHINE-NMI-SAMPLE-001/-ACCEPT-001/-RETN-001). NMI ignores IFF1 (non-maskable) and PRESERVES IFF2 so RETN restores IFF1 (unlike the maskable INT which clears both); 11 T = 5+3+3. ADR-0019 Option B (R-W9-01). The self-test rejects a model that masks on IFF1, clears IFF2, or fails to push PC + vector to 0x0066. RETN/RETI restore in the single-step contract (CPU-RETI-IFF-001, ADR-0018)."
+
+  - id: MACHINE-RESET-001
+    area: emulator
+    behavior: "power-on/reset establishes the documented state regardless of prior state: PC/I/R=0, IM 0, IFF1=IFF2=0 (Z80 RESET, z80-spec); SP/AF and the GP/alternate/index registers all-bits-set to 0xFFFF (decision:ADR-0021 power-on default, undefined by the spec); RAM all 0x00 (decision:ADR-0021, no oracle); clock 0; not halted"
+    tier: fidelity
+    provenance: decision:ADR-0021
+    fixtures: [conformance/machine/machine-reset.json, conformance/machine/run-machine-fixtures.mjs, conformance/machine/run-machine-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.5 (Track B, D3). dna/domain/machine-execution.md MACHINE-RESET-CONTROL-001 (z80-spec: PC/I/R=0, IM 0, IFF1=IFF2=0) + MACHINE-RESET-REGISTERS-001 (decision:ADR-0021: SP/AF + GP/alt/index = 0xFFFF, undefined by the Z80 RESET, all-bits-set power-on convention) + MACHINE-RESET-RAM-001 (decision:ADR-0021: RAM all-zero, no oracle for a pseudo-random power-up). Machine.reset() + RESET_REGISTERS in @zx-vibes/machine, driven via run-machine-fixtures.mjs (kind machine-reset; dirties a machine then asserts the reset state + RAM-all-zero + clock 0 + not halted). Trivial-tier slice (decisions.md Method calibration): one fixture + a self-test guard that a reset echoing the dirtied PC/SP fails; no double-blind-regen."
+
+  # --- emulator: formats (W3) ---
+  - id: FMT-Z80-V3-001
+    area: emulator
+    behavior: ".z80 v3 48K snapshot round-trip preserves RAM + registers"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/formats/z80-v3-roundtrip.json, conformance/formats/run-format-fixtures.mjs, conformance/formats/run-format-fixtures-self-test.mjs]
+    status: covered
+    notes: "@zx-vibes/machine writeZ80/readZ80 via run-format-fixtures; DNA in dna/domain/snapshot-z80.md. Writes v3, reads v1/v2/v3; three 48K pages (8/4/5) with ED ED RLE; round-trip preserves RAM + registers + border."
+
+  - id: FMT-Z80-V3-DECODE-001
+    area: emulator
+    behavior: "a pinned .z80 v3 48K snapshot decodes to the documented registers, border, version, and RAM"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/formats/z80-v3-roundtrip.json, conformance/formats/run-format-fixtures.mjs, conformance/formats/run-format-fixtures-self-test.mjs]
+    status: covered
+    notes: "Pins the on-disk format (header offsets FMT-Z80-HEADER-001, the PC=0 v2/3 marker + 54-byte v3 extra header FMT-Z80-VERSION-001, the page-block layout FMT-Z80-PAGES-001, the ED ED RLE FMT-Z80-RLE-001) to the documented spec independently of writeZ80()."
+
+  - id: FORMAT-SCR-001
+    area: emulator
+    behavior: "a .scr file is a raw headerless 6912-byte copy of memory 0x4000-0x5AFF (6144 display + 768 attribute), file offset o = address 0x4000 + o; load writes it into 0x4000.. touching no byte outside the region, save reads exactly that region in address order, and the format round-trips byte-for-byte; a header-offset loader, an attribute-dropping (6144-byte) save, a deinterleaving (scanline-reordered) copy, or an out-of-region write all fail"
+    tier: contract
+    provenance: hardware
+    fixtures: [conformance/formats/scr-format.json, conformance/formats/run-scr-fixtures.mjs, conformance/formats/run-scr-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.4 (Track A/G1, hardware). dna/domain/file-formats.md FMT-SCR-SIZE-001 / FMT-SCR-LAYOUT-001 / FMT-SCR-LOAD-001 / FMT-SCR-SAVE-001 / FMT-SCR-ROUNDTRIP-001. saveScr/loadScr + SCR_SIZE/SCR_BASE modeled in @zx-vibes/ula (packages/ula/src/scr-format.mjs, reusing the W10.1 region constants), driven via run-scr-fixtures.mjs (kind scr-format-query, builds memory + file then exercises save/load/round-trip). The self-test validates the fixture against an independent reference and rejects a header-offset loader, an attribute-dropping save, a deinterleaving copy, and an out-of-region load. The .scr is byte-identical to the SCREEN-FRAMEBUFFER-001 `screen` input (offset 0 = 0x4000), so the render of a loaded .scr is already pinned there — no new gallery row. Grounded by docs/reference/screen-layout.md + memory-map.md."
+
+  - id: FORMAT-TAP-001
+    area: emulator
+    behavior: "a .tap file is a flat concatenation of blocks with no header/footer/global length; each block is [len:2 little-endian][flag][data..][checksum], where len counts flag+data+checksum and checksum = XOR of the flag byte and every data byte; parseTap walks the file front-to-back validating each checksum (and rejecting a truncated/over-run block), serializeTap is its exact inverse (recomputes checksum + LE length, len = dataLength+2), and the two round-trip; a big-endian length, a length that omits the checksum, a checksum taken over the data only (dropping the flag), or a parser that skips checksum validation all fail"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/formats/tap-format.json, conformance/formats/run-tap-fixtures.mjs, conformance/formats/run-tap-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.6 (Track C/B1, fidelity-tier method). dna/domain/file-formats.md FMT-TAP-BLOCK-001 / FMT-TAP-LENGTH-001 / FMT-TAP-FLAG-001 / FMT-TAP-CHECKSUM-001 / FMT-TAP-ROUNDTRIP-001. tapChecksum/parseTap/serializeTap modeled in @zx-vibes/machine (packages/machine/src/tap-format.mjs, beside the .z80 codec — tape, like a snapshot, is a file the machine loads), driven via run-tap-fixtures.mjs (kind tap-format-query: a hand-authored on-disk `file` is the parse authority and `blocks` is the serialize input; serializeMatchesFile pins serialize against those bytes). Provenance contract: like .z80/.sna, .tap is an external community file-format convention (the 2-byte LE length prefix + block concatenation are the container), not a hardware mandate; the flag byte + XOR checksum inside a block mirror the 48K ROM tape block (SA-BYTES/LD-BYTES), authored separately at W10.9 (TAPE-EAR-PULSES-001). FIDELITY-TIER verification: two blind regenerations from the spec agreed byte-for-byte with the shipped model over ~53k differential checks (no DNA gap), and the self-test rejects a big-endian length, a length that omits the checksum, a checksum over data only, and a parser that skips checksum validation. Three malformed-rejection fixtures (bad checksum / truncated / over-run length) pin parseTap throwing."
+
+  - id: FORMAT-TZX-001
+    area: emulator
+    behavior: "a .tzx file is a 10-byte header (\"ZXTape!\" + 0x1A + major + minor, v1.20) followed by typed blocks each introduced by a 1-byte block ID; every multi-byte field is little-endian, the 0x10 data length is a 2-byte WORD while the 0x11/0x14 data lengths are 3-byte LE values; parseTzx validates the signature and walks the modeled blocks (0x10/0x11/0x12/0x13/0x14/0x20/0x21/0x22/0x30), rejecting a bad signature, a truncated block, or an unsupported ID; serializeTzx is its exact inverse and the two round-trip; a big-endian word reader, a model that reads the turbo/pure-data length as a WORD, a version-swap, or a parser that skips the signature check all fail"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/formats/tzx-format.json, conformance/formats/run-tzx-fixtures.mjs, conformance/formats/run-tzx-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.7 (Track C/B2, fidelity-tier method). dna/domain/file-formats.md FMT-TZX-HEADER-001 / FMT-TZX-ENDIAN-001 / FMT-TZX-BLOCK-STREAM-001 / FMT-TZX-DATA-0x10-001 / FMT-TZX-TURBO-0x11-001 / FMT-TZX-TONE-0x12-001 / FMT-TZX-PULSES-0x13-001 / FMT-TZX-PUREDATA-0x14-001 / FMT-TZX-PAUSE-0x20-001 / FMT-TZX-GROUP-0x21-0x22-001 / FMT-TZX-TEXT-0x30-001 / FMT-TZX-ROUNDTRIP-001. parseTzx/serializeTzx + TZX_SIGNATURE/TZX_VERSION modeled in @zx-vibes/machine (packages/machine/src/tzx-format.mjs, beside the .tap/.z80 codecs), driven via run-tzx-fixtures.mjs (kind tzx-format-query: a hand-authored 87-byte on-disk `file` is the parse authority and `tzx` is the serialize input; serializeMatchesFile + the serialize-byte cases pin the 0x10 WORD length vs the 0x11/0x14 3-byte length). Provenance contract: like .tap/.z80/.sna, .tzx is an external community file-format specification (pinned TZX v1.20, https://worldofspectrum.net/TZXformat.html), transcribed in full into the DNA (C2) — the URL is the layout authority, never a runtime fetch. Scope: header + the nine common block IDs; the remaining v1.20 IDs are rejected (later slices may extend). FIDELITY-TIER verification: two blind regenerations from the spec agreed byte-for-byte with the shipped model over thousands of differential checks (no DNA gap), and the self-test rejects a big-endian word reader, a turbo/pure-data length read as a WORD, a version-swap, and a parser that skips the signature check. Three malformed-rejection fixtures (bad signature / truncated block / unsupported ID) pin parseTzx throwing. The pulse-level tape→EAR consumption of these blocks is authored separately at W10.9 (TAPE-EAR-PULSES-001)."
+
+  - id: ROM-ARTIFACT-001
+    area: emulator
+    behavior: "the canonical 48K ROM is a 16384-byte opaque artifact mapped at 0x0000-0x3FFF whose identity is pinned by a manifest (size + sha256 + license/source); the vendored blob re-hashes to the pinned sha256, the mapping spans exactly 16384 addresses, and the only referenced entry point (LD-BYTES 0x0556) lies inside the ROM; a tampered blob, a wrong declared size, a missing blob, or a non-opaque manifest all fail"
+    tier: contract
+    provenance: decision:ADR-0024
+    fixtures: [conformance/rom/spectrum-48k-rom.manifest.json, conformance/rom/spectrum-48k.rom, conformance/rom/run-rom-fixtures.mjs, conformance/rom/run-rom-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.8 (Track D/C2, trivial-tier). dna/domain/memory-map.md MM-ROM-ARTIFACT-001 (decision:ADR-0024) pins the 16K ROM as an OPAQUE blob: the DNA fixes WHICH ROM (so any regeneration loads byte-identical firmware) but specifies NO ROM-routine behaviour (no rom-entry-points.md); only LD-BYTES 0x0556 is referenced, by the tape edge-load slice (W10.10, TAPE-EDGE-LOAD-001). The blob is vendored DNA-side at conformance/rom/spectrum-48k.rom (16384 bytes, sha256 d55daa43…cb42) so the conformance layer does not depend on the legacy packages/emulator or any product; run-rom-fixtures.mjs re-hashes it and asserts size/sha256/mapping/entry-point against spectrum-48k-rom.manifest.json. The self-test rejects a tampered blob, a wrong declared size, a missing blob, and a non-opaque manifest. ROM copyright Amstrad plc, redistributed by permission (notice retained in the manifest); per ADR-0024 published tarballs should resolve the ROM from a user path rather than vendoring it. The ROM/RAM region split itself is MM-LAYOUT-001 (hardware); this row pins the specific artifact."
+
+  - id: TAPE-EAR-PULSES-001
+    area: emulator
+    behavior: "a tape block body ([flag][data..][checksum]) is encoded as an EAR pulse stream (port 0xFE bit 6 toggling): a pilot tone of 2168 T pulses (8063 when flag<0x80 else 3223), then sync 667 T + 735 T, then every byte MSB-first as two pulses per bit (855 for 0, 1710 for 1); the total is pilotCount + 2 + 16*bodyLength; a flag-independent pilot count, a 0/1 bit-length swap, an LSB-first bit order, or a dropped sync pulse all fail"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/tape/tape-pulses.json, conformance/tape/run-tape-pulses-fixtures.mjs, conformance/tape/run-tape-pulses-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.9 (Track D/B3 pt 1, fidelity-tier). dna/domain/tape-loading.md TAPE-PULSE-TIMINGS-001 / -PILOT-001 / -SYNC-001 / -DATA-001 / -BLOCK-001 (provenance hardware: the 48K ROM SA-BYTES/LD-BYTES tape encoding; the T-state constants are the same values pinned with a version+URL as the TZX v1.20 turbo-block defaults at W10.7). blockToPulses/bytePulses + constants modeled in @zx-vibes/machine (packages/machine/src/tape-pulses.mjs, beside the .tap/.tzx codecs), driven via run-tape-pulses-fixtures.mjs (kind tape-pulses-query: a header block [00 55], a data block [ff 80 01], a bytePulses/empty case). The pulse stream feeds port 0xFE bit 6 (host-io-port-fe.md HOST-IO-PORTFE-READ-BITS-001); the ROM LD-BYTES routine that consumes it lands at W10.10 (TAPE-EDGE-LOAD-001). FIDELITY-TIER verification: two blind regenerations from the spec agreed pulse-for-pulse with the shipped model over thousands of random blocks + all 256 byte encodings (no DNA gap), and the self-test rejects a flag-independent pilot count, a 0/1 bit-length swap, an LSB-first bit order, and a dropped sync pulse."
+
+  - id: TAPE-EDGE-LOAD-001
+    area: emulator
+    behavior: "the real opaque 48K ROM LD-BYTES routine (0x0556) edge-loads a tape block byte-for-byte into RAM: a block body [flag][data..][checksum] is encoded to the EAR pulse stream (blockToPulses), fed onto port 0xFE bit 6 as a toggling edge stream sampled at a monotonic tape cursor, and read by LD-BYTES set up with IX=destination/DE=data count/A=flag/CARRY=load; the loaded RAM is byte-identical to the source data, LD-BYTES returns success (carry set), and the load finishes within a fixed T-state budget; a deck that never toggles b6, a 0/1 bit-length swap, a dropped sync pair, and a frame-modulo (non-monotonic) tape clock all fail to load"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/tape/edge-load.json, conformance/tape/run-tape-edge-load-fixtures.mjs, conformance/tape/run-tape-edge-load-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.10 (Track D/B3 pt 2, fidelity-tier; ADR-0024). dna/domain/tape-loading.md 'Edge loading' TAPE-EDGE-EARIN-001 / -CLASSIFY-001 / -LDBYTES-001 / -TRAILING-001 / -IDLE-001 / -CLOCK-001 (provenance hardware, except the issue-3 idle TAPE-EDGE-IDLE-001 = decision:ADR-0024). createTapeDeck (io {read,write}; b6 = tape level at the monotonic tape cursor, idling at the last b4 written) + edgeLoad/edgeLoadWithDeck modeled in @zx-vibes/machine (packages/machine/src/tape-edge-load.mjs, beside the pulse encoder + .tap/.tzx codecs); reuses blockToPulses (W10.9), the vendored ROM blob mapped at 0x0000 (W10.8, ROM-ARTIFACT-001 — only LD-BYTES 0x0556 referenced, ROM stays opaque), and the shipped Machine exec surface. CI smoke run-tape-edge-load-fixtures.mjs (kind tape-edge-load-query): a 24-byte DATA block (~7.5M T, budget 12M) + an 8-byte HEADER block exercising the 8063-pilot leader (~17.6M T, budget 25M). FABRICATION-FREE integration oracle (ADR-0024): the expected RAM IS the source bytes (assemble/encode/load only conformed components), never a hand-authored constant. The final bit needs a closing edge (TAPE-EDGE-TRAILING-001 — edgeLoad appends the inter-block pause's leading transition); the tape cursor is MONOTONIC across the ~100 frame wraps of a block load (TAPE-EDGE-CLOCK-001, mirrors HOST-IO-PORTFE-EVENT-CHRONO-001). Revises host-io-port-fe.md HOST-IO-PORTFE-READ-BITS-001 + adds HOST-IO-PORTFE-EARIN-IDLE-001 (issue-3 idle, decision:ADR-0024; issue 2 recorded as the alternative, not modeled) — drains gap E4. FIDELITY-TIER verification: two blind regenerations from the spec agreed on RAM-identity (no DNA gap); the self-test rejects a no-edge deck, a 0/1 bit-length swap, a dropped sync, and a frame-modulo tape clock, and unit-checks the issue-3 idle level. The full assemble->.tap->edge-load->RAM-identity oracle over a real program is the offline acceptance row TAPE-EDGE-LOAD-ACCEPT-001."
+
+  - id: TAPE-EDGE-LOAD-ACCEPT-001
+    area: emulator
+    behavior: "a full real program edge-loads byte-identically through the real ROM: a program assembled by @zx-vibes/asm is wrapped to a .tap (header block + data block) by serializeTap, round-tripped through parseTap, encoded to EAR pulses by blockToPulses, and edge-loaded block-by-block through LD-BYTES (0x0556); the loaded RAM equals the assembled bytes exactly — a closed, fabrication-free integration oracle composing only conformed components"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/tape/run-tape-edge-load-accept.mjs, conformance/rom/spectrum-48k.rom]
+    status: covered
+    notes: "OFFLINE ACCEPTANCE ROW, NOT the CI gate (like CPU-ZEXDOC-001 / CPU-ZEXALL-001). W10.10 (Track D, ADR-0024 integration oracle). The full assemble -> .tap -> parse -> edge-load -> RAM-identity loop over a real program runs the ROM for tens of millions of T-states per block; it is offline acceptance evidence, while CI carries the bounded TAPE-EDGE-LOAD-001 smoke. FABRICATION-FREE (ADR-0024): every component is already conformed (assembler W2; tapChecksum/serializeTap/parseTap W10.6; blockToPulses W10.9; the ROM blob W10.8; edgeLoad W10.10), so the expected value is 'the bytes we assembled', never a hand-authored constant. run-tape-edge-load-accept.mjs assembles a 115-byte CODE program (org 0x8000) + a 17-byte tape header, serializes to .tap, round-trips through parseTap, and edge-loads both blocks on one machine: the header (17 bytes -> 0x9000) and the code (115 bytes -> 0x8000) both load byte-identical, LD-BYTES returns success. Recorded offline pass 2026-06-29 (see .harness/decisions.md ADR-0024). This row flips covered only on a recorded complete offline pass."
+
+  - id: TAPE-INSTANT-LOAD-001
+    area: emulator
+    behavior: "the instant/trap loader reproduces the real ROM LD-BYTES result for the same tape block WITHOUT running the ROM or the pulse stream, in zero machine time: given the block body [flag][data..][checksum] and the IX=destination/DE=data count/A=flag contract it stores the DE data bytes to RAM, XOR-checksums flag+data+checksum, and returns the carry result; for the SAME block an instant load and the real-ROM edge load agree on the observable {ok, bytesLoaded, RAM} (including the flag-mismatch and corrupt-checksum failure cases) and both equal the source bytes; a model that ignores a flag mismatch, skips the checksum, stores the flag/checksum, or loads the wrong byte count diverges from the real ROM and fails"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/tape/instant-load.json, conformance/tape/run-tape-instant-load-fixtures.mjs, conformance/tape/run-tape-instant-load-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.11 (Track D/B5, fidelity-tier; ADR-0024). dna/domain/tape-loading.md 'Instant / trap loading' TAPE-INSTANT-CONCEPT-001 (decision:ADR-0024 — the trap mechanism: a software shortcut that loads in zero machine time) / TAPE-INSTANT-RESULT-001 / -FLAG-001 / -EQUIV-001 (provenance hardware — what it must PRODUCE is the documented LD-BYTES result, pinned by the equivalence to the real ROM, not an invented constant). instantLoad modeled in @zx-vibes/machine (packages/machine/src/tape-edge-load.mjs, beside edgeLoad). The oracle is instant == edge (TAPE-INSTANT-EQUIV-001): the CI runner run-tape-instant-load-fixtures.mjs (kind tape-instant-load-query) loads each block BOTH by the instant trap (no ROM, tStates 0) AND by the real ROM LD-BYTES edge-load (0x0556 over the W10.9 EAR pulse stream) and asserts they agree on {ok, bytesLoaded, RAM} and both equal the SOURCE bytes — a mutual cross-check against the real ROM, FABRICATION-FREE (expected.ram IS the source). Only the observable triplet is the contract; the loaders' internal `reason` string is not (the ROM may time out where instant names the cause). Two fixtures: a 24-byte data block (edge half ~7.5M T, budget 12M) + an 8-byte header block (8063-pilot leader, budget 25M). FIDELITY-TIER verification: the self-test anchors instant == edge against the real ROM on 5 judge blocks (well-formed data/header + flag-mismatch leaving RAM untouched + corrupt-checksum where data reaches RAM but carry resets — instant matches on the failure cases too), agrees with an independent spec-derived reference over 3072 cases across all 256 flags, and rejects four adversarial broken instant models (ignore-flag-mismatch / skip-checksum / store-flag-and-checksum / wrong-byte-count) that each diverge from the real ROM. Two blind regenerations from the spec agreed with the shipped model AND the real ROM over 3584 cases + the real-ROM anchors (no DNA gap). Closes the last open ADR-0024 gap (B5)."
+
+  # --- emulator: host-I/O event surface (W8 / ADR-0016) ---
+  - id: HOST-IO-PORT-FE-001
+    area: emulator
+    behavior: "OUT (0xFE) writes produce an ordered border/beeper event stream (border event per b0-2 change, beeper edge per b4 change) timestamped at the I/O cycle; redundant writes coalesce and a renderer that collapses a frame's writes to one final colour fails"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/host-io/port-fe-events.json, conformance/host-io/run-host-io-fixtures.mjs, conformance/host-io/run-host-io-fixtures-self-test.mjs, conformance/host-io/port-fe-event-model.mjs]
+    status: covered
+    notes: "S1 (R-W8-01, ADR-0016). Port 0xFE write event model in dna/domain/host-io-port-fe.md (HOST-IO-PORTFE-WRITE-BITS-001/-BORDER-001/-BEEPER-001/-EVENT-ORDER-001). Border = timed event stream not one colour/frame (C1); beeper edge on b4 change (C5). The reference extractor port-fe-event-model.mjs is the conformance model until a host-I/O package is regenerated (the role @zx-vibes/ula plays for timing); the fixture is the authority and run-host-io-fixtures-self-test.mjs rejects a collapse-to-final-colour extractor — the host-visible behavior the core gate missed. The IN (0xFE) read model is authored in the same domain file but exercised by S5 (keyboard)."
+
+  - id: HOST-IO-EVENT-CHRONO-001
+    area: emulator
+    behavior: "port-0xFE events are timestamped by a chronological frame-relative offset from the start of runFrame (monotonic across the frame wrap), not the ULA-frame modulo position which reorders edges once the machine clock drifts off zero"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/host-io/port-fe-event-time.json, conformance/host-io/run-host-io-fixtures.mjs, conformance/host-io/run-host-io-fixtures-self-test.mjs, conformance/host-io/port-fe-event-model.mjs]
+    status: covered
+    notes: "S2 (R-W8-02, ADR-0016) — C7. Rule HOST-IO-PORTFE-EVENT-CHRONO-001 in dna/domain/host-io-port-fe.md. A write sequence whose absolute machine clock crosses the frame wrap yields events in monotonic chronological order; the self-test proves a model that timestamps/sorts by the ULA-frame modulo reorders the edges and fails (the root cause of long-run audio deterioration). Display keeps the modulo raster position (S4)."
+
+  - id: HOST-IO-EVENT-IOTIME-001
+    area: emulator
+    behavior: "the port-0xFE event timestamp base is the contended-machine time at the I/O cycle (memory contention before the I/O cycle included); port-0xFE I/O-port contention is out of scope (no I/O-port stall added)"
+    tier: fidelity
+    provenance: decision:ADR-0016
+    fixtures: [conformance/host-io/port-fe-iotime.json, conformance/host-io/run-host-io-fixtures.mjs, conformance/host-io/run-host-io-fixtures-self-test.mjs]
+    status: covered
+    notes: "S2 (R-W8-02, ADR-0016 §4 default) — C2/C3. Rules HOST-IO-PORTFE-EVENT-BASE-001 / -IO-CONTENTION-001. An OUT (0xFE),A run through @zx-vibes/machine (exactContention) in contended RAM at frame T 14335 costs 21 T (10 T memory contention) vs 11 T uncontended — the event-time base includes memory contention and no I/O-port stall is added; the self-test catches a tampered (wrong) contention. The per-opcode intra-instruction I/O-cycle offset (HOST-IO-PORTFE-IO-OFFSET-001) is a tracked follow-up. Provisional/revisable default."
+
+  - id: KBD-MATRIX-001
+    area: emulator
+    behavior: "IN (0xFE) reads the 48K keyboard matrix: a 0 bit in the port high byte selects a half-row, the five key bits are active-low, and selected rows are ANDed (a key in an unselected row does not appear)"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/keyboard/keyboard-matrix.json, conformance/keyboard/run-keyboard-fixtures.mjs, conformance/keyboard/run-keyboard-fixtures-self-test.mjs, conformance/keyboard/keyboard-model.mjs]
+    status: covered
+    notes: "S5 (R-W8-05, hardware) — the documented 8x5 matrix read (KBD-MATRIX-001 in dna/product/keyboard-input.md, extending HOST-IO-PORTFE-READ-BITS-001). idle=0xFF, CAPS@0xFE=0xFE, Z@0xFE=0xFD, Z@0xFD(wrong row)=0xFF; the self-test rejects a read that ignores the half-row select. Matrix confirmed vs docs/reference/keyboard-input.md + the oracle SPECTRUM_KEYS."
+
+  # --- emulator: screen content — memory map + display-file decode (W10.1 / ADR-0021) ---
+  - id: SCREEN-ADDR-001
+    area: emulator
+    behavior: "the 48K display file (0x4000-0x57FF) decodes a pixel (x,y) to its byte via the non-linear thirds layout 0x4000 + third*0x800 + pixelRow*0x100 + charRow*0x20 + col, and the attribute file (0x5800-0x5AFF) maps the 8x8 cell linearly to 0x5800 + (y>>3)*32 + (x>>3); a linear (0x4000 + y*32 + col) decoder fails"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/screen/screen-address.json, conformance/screen/run-screen-fixtures.mjs, conformance/screen/run-screen-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.1 (Track A1, hardware). dna/domain/memory-map.md MM-LAYOUT-001 / MM-SCREEN-DISPLAY-FILE-001 / MM-SCREEN-ADDR-001 / MM-SCREEN-LINE-ADDR-001 / MM-ATTR-FILE-001 / MM-ATTR-ADDR-001. displayByteAddress/displayLineAddress/attributeAddress + region constants modeled in @zx-vibes/ula (packages/ula/src/screen-address.mjs), driven via run-screen-fixtures.mjs. Two blind regenerations from the spec agreed byte-for-byte over the full 256x192 space; the self-test rejects a linear decoder, a swapped pixel-row/char-row interleave, and a mislocated attribute file. Attribute byte->colour decode (INK/PAPER/BRIGHT/FLASH) is W10.2 (ADR-0022)."
+
+  - id: SCREEN-ATTR-DECODE-001
+    area: emulator
+    behavior: "the attribute byte decodes to a palette index 0..15: INK = b2-0, PAPER = b5-3, BRIGHT = b6 (+8 to the index), FLASH = b7; a pixel shows INK if its bitmap bit is set else PAPER, and when FLASH is set the INK/PAPER swap on the odd FLASH phase (the ULA inverts every 16 frames)"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/screen/attr-decode.json, conformance/screen/run-screen-fixtures.mjs, conformance/screen/run-screen-fixtures-self-test.mjs]
+    status: covered
+    notes: "W10.2 (Track A2/A3/A4, hardware, ADR-0022). dna/domain/memory-map.md MM-ATTR-BITS-001 / MM-ATTR-COLOUR-INDEX-001 / MM-ATTR-FLASH-001 / MM-PIXEL-COLOUR-001. attributeInk/Paper/Bright/Flash + ink/paperColorIndex + flashPhase + pixelColorIndex + FLASH_FRAMES modeled in @zx-vibes/ula (packages/ula/src/screen-attribute.mjs), driven via run-screen-fixtures.mjs (kind screen-decode-query). Two blind regenerations from the spec agreed byte-for-byte over all 256 attribute bytes x pixelOn x flash phase. The self-test rejects a decoder that ignores BRIGHT, mis-handles the FLASH swap, or swaps the INK/PAPER bit fields. Grounded by docs/reference/attributes-and-colour.md."
+
+  # --- gallery: screen palette index -> RGB (W10.2 / ADR-0022) ---
+  - id: SCREEN-PALETTE-001
+    area: gallery
+    behavior: "a palette index 0..15 renders to an RGB triple via the shared palette.yaml: base colour index&7 (b0 blue, b1 red, b2 green), BRIGHT = index>=8; a lit channel is 205 (non-bright) or 255 (bright), unlit 0; indices 2/5 match the border red/cyan"
+    tier: contract
+    provenance: decision:ADR-0022
+    fixtures: [conformance/screen/screen-palette.json, conformance/screen/run-palette-fixtures.mjs, conformance/screen/run-palette-fixtures-self-test.mjs, conformance/screen/screen-palette-model.mjs]
+    status: covered
+    notes: "W10.2 (Track A, gallery render policy, decision:ADR-0022). dna/product/screen-render.md SCREEN-PALETTE-001 + dna/product/palette.yaml (the single 16-entry table, shared with raster-border.md RASTER-PALETTE-001). screen-palette-model.mjs reads palette.yaml; the self-test rejects a wrong non-bright level (215, which would desync the border fixtures), a BRIGHT-dropping palette, and a BRIGHT-ignoring model. Non-bright 205 keeps the W8 raster fixtures byte-identical; the level is render policy (revisable)."
+
+  - id: SCREEN-FRAMEBUFFER-001
+    area: gallery
+    behavior: "a captured 6912-byte screen image (display file 0x4000-0x57FF + attribute file 0x5800-0x5AFF) plus a frame counter assembles into the 256x192 framebuffer: each pixel's display byte is at displayByteAddress(x,y), its bit is 7-(x&7) (MSB leftmost), its attribute byte is at attributeAddress(x,y), and the index is pixelColorIndex(attr, pixelOn, flashPhase(frame)) -> RGB via palette.yaml; a linear (non-thirds) decoder, an LSB-first bit order, a single-attribute screen, or an ignored FLASH phase all render a visibly wrong screen and fail"
+    tier: contract
+    provenance: decision:ADR-0022
+    fixtures: [conformance/screen/screen-framebuffer.json, conformance/screen/run-framebuffer-fixtures.mjs, conformance/screen/run-framebuffer-fixtures-self-test.mjs, conformance/screen/screen-framebuffer-model.mjs]
+    status: covered
+    notes: "W10.3 (Track A, gallery render integration, decision:ADR-0022). dna/product/screen-render.md SCREEN-FRAMEBUFFER-001 (Framebuffer assembly). screen-framebuffer-model.mjs composes the SHIPPED @zx-vibes/ula decode (displayByteAddress / attributeAddress / pixelColorIndex / flashPhase) with the bitmap-bit extraction (7-(x&7), MM-SCREEN-DISPLAY-FILE-001 MSB-leftmost) and the palette.yaml RGB (SCREEN-PALETTE-001). This is the INTEGRATION the per-decode rows (SCREEN-ADDR-001, SCREEN-ATTR-DECODE-001) miss: a renderer can pass both yet still assemble a broken screen (the W8 / consumer SAVE-pp symptom). Two blind regenerations from the spec agreed byte-for-byte with the shipped model over 4.1M pixels (7 screens x 12 frames). The self-test validates against an independent re-derivation and rejects linear (non-thirds) addressing, LSB-first bit order, a single-attribute screen, and an ignored FLASH phase."
+
+  # --- gallery: beeper audio (W8 / ADR-0016) ---
+  - id: AUDIO-DURATION-001
+    area: gallery
+    behavior: "a multi-second beeper capture has the fractional-exact sample count floor(tStates*sampleRate/3.5MHz) at 44.1 kHz and 48 kHz, with no per-frame rounding (a rounded samples/frame drifts ~28 ms/min)"
+    tier: contract
+    provenance: decision:ADR-0016
+    fixtures: [conformance/audio/audio-duration.json, conformance/audio/run-audio-fixtures.mjs, conformance/audio/run-audio-fixtures-self-test.mjs, conformance/audio/beeper-pcm-model.mjs]
+    status: covered
+    notes: "S3 (R-W8-03, ADR-0016) — C6. Gallery audio policy dna/product/beeper-output.md (BEEPER-PCM-FRACTIONAL-001/-CLOCK-001). 200 frames = 176117 samples @44.1k / 191692 @48k; the self-test rejects a rounded samples-per-frame resampler (drift). Edge stream is the emulator-owned port-0xFE b4 stream (HOST-IO-PORTFE-BEEPER-001)."
+
+  - id: AUDIO-EDGE-ORDER-001
+    area: gallery
+    behavior: "a beeper edge stream renders to the exact PCM sample array, each level transition landing at the right sample (edge order preserved)"
+    tier: contract
+    provenance: decision:ADR-0016
+    fixtures: [conformance/audio/audio-edge-order.json, conformance/audio/run-audio-fixtures.mjs, conformance/audio/run-audio-fixtures-self-test.mjs, conformance/audio/beeper-pcm-model.mjs]
+    status: covered
+    notes: "S3 (R-W8-03, ADR-0016). BEEPER-PCM-LEVEL-001: 1-bit level -> amplitude (level0/level1) on the global sample grid; the self-test rejects an edge-dropping renderer."
+
+  - id: AUDIO-CONTINUITY-001
+    area: gallery
+    behavior: "a capture split into two chunks (carrying the global sample grid + level state) equals the continuous capture sample-for-sample — no forced 50 Hz frame-boundary reset/click"
+    tier: contract
+    provenance: decision:ADR-0016
+    fixtures: [conformance/audio/audio-continuity.json, conformance/audio/run-audio-fixtures.mjs, conformance/audio/run-audio-fixtures-self-test.mjs, conformance/audio/beeper-pcm-model.mjs]
+    status: covered
+    notes: "S3 (R-W8-03, ADR-0016) — C8. BEEPER-PCM-CONTINUITY-001: the sample grid + conditioning state persist across frame boundaries; the self-test rejects a per-chunk grid-reset renderer (audible click)."
+
+  - id: AUDIO-JITTER-001
+    area: gallery
+    behavior: "a stable square-wave tone captures with sub-sample (<= 1) rising-edge jitter at 44.1 kHz and 48 kHz — a faithful, deterministic capture"
+    tier: contract
+    provenance: decision:ADR-0016
+    fixtures: [conformance/audio/audio-jitter.json, conformance/audio/run-audio-fixtures.mjs, conformance/audio/run-audio-fixtures-self-test.mjs, conformance/audio/beeper-pcm-model.mjs]
+    status: covered
+    notes: "S3 (R-W8-03, ADR-0016) — C9. BEEPER-PCM-CAPTURE-001: deterministic PCM capture is the conformance route (audible browser playback is manual acceptance only); the rising-edge jitter metric on a stable tone stays within one sample."
+
+  - id: KBD-BROWSERMAP-001
+    area: gallery
+    behavior: "the gallery maps a browser event.key to Spectrum matrix key(s): letters/digits directly (case-insensitive), named keys (Enter/Space/Shift/Control), and CAPS-SHIFT cursor/edit combinations"
+    tier: contract
+    provenance: decision:ADR-0016
+    fixtures: [conformance/keyboard/keyboard-browsermap.json, conformance/keyboard/run-keyboard-fixtures.mjs, conformance/keyboard/run-keyboard-fixtures-self-test.mjs, conformance/keyboard/keyboard-model.mjs]
+    status: covered
+    notes: "S5 (R-W8-05, decision:ADR-0016) host input policy KBD-BROWSERMAP-001. ArrowUp -> CAPS_SHIFT+7, Shift -> CAPS_SHIFT, Backspace -> CAPS_SHIFT+0; the self-test rejects a map that drops combos. Cross-checked vs the oracle PC_KEY_MAP (event.key), not copied."
+
+  - id: KBD-LATCH-001
+    area: gallery
+    behavior: "a key pressed and released before any 50 Hz scan observes it is latched as pressed for exactly one scan (a quick tap stays visible); a key held across a scan releases immediately"
+    tier: contract
+    provenance: decision:ADR-0016
+    fixtures: [conformance/keyboard/keyboard-latch.json, conformance/keyboard/run-keyboard-fixtures.mjs, conformance/keyboard/run-keyboard-fixtures-self-test.mjs, conformance/keyboard/keyboard-model.mjs]
+    status: covered
+    notes: "S5 (R-W8-05, decision:ADR-0016) host input-timing policy KBD-LATCH-001 — the quick-tap-visible-across-one-scan behavior the consumer relied on; the self-test rejects a latch-less keyboard that drops fast taps."
+
+  - id: RASTER-GEOMETRY-001
+    area: gallery
+    behavior: "visible raster geometry: a 320x240 canvas (256x192 active + 32 px / 24 line border), border-pixel classification, and the canvas-pixel -> frame T-state mapping (2 px/T from the frame-T-14335 display anchor)"
+    tier: contract
+    provenance: decision:ADR-0016
+    fixtures: [conformance/raster/raster-geometry.json, conformance/raster/run-raster-fixtures.mjs, conformance/raster/run-raster-fixtures-self-test.mjs, conformance/raster/raster-border-model.mjs]
+    status: covered
+    notes: "S4 (R-W8-04, ADR-0016 §4 DEFAULT — FLAGGED for user confirmation). dna/product/raster-border.md RASTER-GEOMETRY-001/-TSTATE-PIXEL-001: display timing hardware-anchored (T 14335, 224 T/line, 192 lines, 2 px/T); the 32 px/24-line visible margins + 320x240 canvas are the gallery rendering choice. pixelTState(32,24)=14335, (0,24)=14319, (160,120)=35903; the self-test rejects a wrong geometry. Revisable if the user has exact shell constants."
+
+  - id: RASTER-SAVE-PP-001
+    area: gallery
+    behavior: "SAVE tape output paints red/cyan border bands: sampling the canvas border pixels of a SAVE frame's border event stream contains both red (205,0,0) and cyan (0,205,205); a collapse-to-one-colour renderer fails"
+    tier: contract
+    provenance: decision:ADR-0016
+    fixtures: [conformance/raster/raster-save-pp.json, conformance/raster/run-raster-fixtures.mjs, conformance/raster/run-raster-fixtures-self-test.mjs, conformance/raster/raster-border-model.mjs]
+    status: covered
+    notes: "S4 (R-W8-04, ADR-0016) — C1, the headline acceptance the core gate missed. RASTER-SAVE-PP-001: a SAVE border stream (border toggling 2/5) rendered to the canvas yields exactly red + cyan over the sampled border pixels; the self-test rejects a collapse-to-final-colour border (no tape bands). GOLDEN PIXELS for user review: red (205,0,0), cyan (0,205,205)."
+
+  # --- toolkit (W4) ---
+  - id: CLI-EXIT-VERIFY-001
+    area: toolkit
+    behavior: "zxs verify exits 0 on pass and non-zero on failure"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/cli/verify-exit.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "Covered at the toolkit slice cutover (R-W4-05): the cli-fixtures runner executes the REGENERATED `zxs verify --json` against verify-exit.json — a passing project exits 0 with {ok:true,stage:verify}; an assembly-error project exits non-zero with {ok:false,stage:verify}. Asserts the exit-code + JSON-shape contract only, normalized via the cli-snapshot profile (ADR-0013, ADR-0015) — never byte-for-byte legacy output."
+
+  - id: RUN-BEEPER-001
+    area: toolkit
+    behavior: "run JSON reports audio.beeperEdges as an integer >= 0"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/cli/run-beeper-edges.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "Covered at the toolkit slice cutover (R-W4-05): the cli-fixtures runner executes the REGENERATED `zxs run --json` against run-beeper-edges.json — a routine toggling port 0xFE bit 4 reports audio.beeperEdges as a non-negative integer. Asserts the field type/shape (integer >= 0), not an exact edge count, normalized via the cli-snapshot profile (ADR-0013, ADR-0015)."
+
+  # --- scaffolding (W5) ---
+  - id: SCAFFOLD-VERIFY-001
+    area: scaffolding
+    behavior: "a generated 'game' project passes verify with the regenerated toolchain"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/cli/scaffold-game-verify.json]
+    status: uncovered
+    notes: "Deferred to the scaffolding regeneration phase (W5): needs the regenerated create-zx-vibes scaffolder + toolchain, which do not exist yet (still legacy). Recorded, not silent debt — see ADR-0013. Enforced at the scaffolding slice cutover."
+
+  # --- incidental example (must be present and marked, never tested) ---
+  - id: INC-LOG-001
+    area: toolkit
+    behavior: "human-readable log wording during build"
+    tier: incidental
+    provenance: decision:ADR-0001
+    fixtures: []
+    status: covered
+    notes: "explicitly unspecified; implementer's choice"

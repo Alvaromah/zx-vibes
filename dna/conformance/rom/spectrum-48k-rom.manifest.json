@@ -1,0 +1,34 @@
+{
+  "id": "ROM-ARTIFACT-001",
+  "area": "emulator",
+  "tier": "contract",
+  "provenance": "decision:ADR-0024",
+  "description": "Pins the identity of the canonical Sinclair ZX Spectrum 48K ROM as an OPAQUE artifact (ADR-0024): the machine maps these exact 16384 bytes at 0x0000-0x3FFF and executes them, but the DNA specifies no ROM-routine behaviour (no rom-entry-points.md). Only the LD-BYTES tape-load entry 0x0556 is referenced, by the tape edge-load slice (W10.10). The vendored blob is verified by size + sha256 so a regeneration loads the same ROM and drift is caught.",
+  "artifact": {
+    "name": "ZX Spectrum 48K ROM",
+    "localPath": "spectrum-48k.rom",
+    "bytes": 16384,
+    "sha256": "d55daa439b673b0e3f5897f99ac37ecb45f974d1862b4dadb85dec34af99cb42",
+    "vendored": true
+  },
+  "mapping": {
+    "start": 0,
+    "end": 16383,
+    "region": "0x0000-0x3FFF"
+  },
+  "opaque": true,
+  "referencedEntryPoints": {
+    "LD-BYTES": 1366
+  },
+  "license": {
+    "holder": "Amstrad plc",
+    "terms": "Amstrad permits free, unmodified redistribution of the 48K ZX Spectrum ROM as part of an emulator provided this copyright notice is retained; commercial use requires written permission.",
+    "notice": "The 48K ZX Spectrum ROM is copyright Amstrad plc, redistributed by their kind permission."
+  },
+  "source": {
+    "name": "Sinclair ZX Spectrum 48K ROM",
+    "summary": "The original 16K BASIC/firmware ROM of the 48K machine. Mined once from the project oracle (packages/emulator/rom/48k.rom) during reconstruction and vendored DNA-side; treated as an opaque blob per ADR-0024.",
+    "vendoredFrom": "packages/emulator/rom/48k.rom"
+  },
+  "publish": "Vendored under dna/conformance/ for the tape edge-load integration oracle (W10.10) and this identity check only. Per ADR-0024, published package tarballs should resolve the ROM from a user-supplied path rather than vendoring it."
+}

@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-ALU-SBC-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "alu-sbc-a-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    sbc a, b",
+          "    sbc a, c",
+          "    sbc a, d",
+          "    sbc a, e",
+          "    sbc a, h",
+          "    sbc a, l",
+          "    sbc a, (hl)",
+          "    sbc a, a",
+          "    sbc a, 0x12",
+          ""
+        ],
+        "options": {
+          "entryPath": "alu-sbc-a-source.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "alu-sbc-a-source",
+        "ok": true,
+        "bytesHex": "98999A9B9C9D9E9FDE12"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

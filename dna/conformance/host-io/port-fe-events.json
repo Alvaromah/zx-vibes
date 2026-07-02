@@ -1,0 +1,73 @@
+{
+  "id": "HOST-IO-PORT-FE-001",
+  "area": "emulator",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "host-io-events",
+    "cases": [
+      {
+        "name": "border-beeper-interleaved",
+        "writes": [
+          { "tFrame": 100, "value": "0x02" },
+          { "tFrame": 200, "value": "0x12" },
+          { "tFrame": 300, "value": "0x05" },
+          { "tFrame": 400, "value": "0x15" },
+          { "tFrame": 500, "value": "0x10" }
+        ]
+      },
+      {
+        "name": "redundant-writes-coalesce",
+        "writes": [
+          { "tFrame": 10, "value": "0x07" },
+          { "tFrame": 20, "value": "0x07" },
+          { "tFrame": 30, "value": "0x17" },
+          { "tFrame": 40, "value": "0x07" },
+          { "tFrame": 50, "value": "0x07" }
+        ]
+      },
+      {
+        "name": "tape-bands-red-cyan",
+        "writes": [
+          { "tFrame": 1000, "value": "0x02" },
+          { "tFrame": 2000, "value": "0x05" },
+          { "tFrame": 3000, "value": "0x02" },
+          { "tFrame": 4000, "value": "0x05" }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "border-beeper-interleaved",
+        "events": [
+          { "tFrame": 100, "kind": "border", "value": 2 },
+          { "tFrame": 200, "kind": "beeper", "level": 1 },
+          { "tFrame": 300, "kind": "border", "value": 5 },
+          { "tFrame": 300, "kind": "beeper", "level": 0 },
+          { "tFrame": 400, "kind": "beeper", "level": 1 },
+          { "tFrame": 500, "kind": "border", "value": 0 }
+        ]
+      },
+      {
+        "name": "redundant-writes-coalesce",
+        "events": [
+          { "tFrame": 10, "kind": "border", "value": 7 },
+          { "tFrame": 30, "kind": "beeper", "level": 1 },
+          { "tFrame": 40, "kind": "beeper", "level": 0 }
+        ]
+      },
+      {
+        "name": "tape-bands-red-cyan",
+        "events": [
+          { "tFrame": 1000, "kind": "border", "value": 2 },
+          { "tFrame": 2000, "kind": "border", "value": 5 },
+          { "tFrame": 3000, "kind": "border", "value": 2 },
+          { "tFrame": 4000, "kind": "border", "value": 5 }
+        ]
+      }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

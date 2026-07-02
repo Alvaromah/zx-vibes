@@ -1,0 +1,35 @@
+{
+  "id": "ASM-EMIT-EX-SP-HL-IXIY-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ex-sp-register-pair",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ex (sp),hl",
+          "    ex (sp),ix",
+          "    ex (sp),iy",
+          ""
+        ],
+        "options": {
+          "entryPath": "ex-sp-register-pair.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ex-sp-register-pair",
+        "ok": true,
+        "bytesHex": "E3DDE3FDE3"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

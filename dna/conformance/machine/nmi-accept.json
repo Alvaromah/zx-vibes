@@ -1,0 +1,24 @@
+{
+  "id": "MACHINE-NMI-ACCEPT-001",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "machine-nmi",
+    "note": "Non-maskable interrupt acceptance: edge-triggered and non-maskable (accepts with IFF1=1 and IFF1=0), IFF1<-0 with IFF2 PRESERVED (incl. IFF2 != IFF1), R bumped, HALT-exit return address, PC pushed high-byte-first, PC<-0x0066, 11 T-states (MACHINE-NMI-SAMPLE-001 / -ACCEPT-001 / -RETN-001).",
+    "cases": [
+      { "name": "nmi-iff1-set-accept", "registers": { "sp": "0xff00", "pc": "0x1234", "iff1": 1, "iff2": 1, "im": 1, "r": "0x10" } },
+      { "name": "nmi-non-maskable-iff1-clear", "registers": { "sp": "0xff00", "pc": "0x4321", "iff1": 0, "iff2": 0, "im": 1, "r": "0x00" } },
+      { "name": "nmi-iff2-preserved-when-differs", "registers": { "sp": "0x8000", "pc": "0xabcd", "iff1": 0, "iff2": 1, "im": 2, "r": "0x20" } },
+      { "name": "nmi-halt-exit-return-after-halt", "registers": { "sp": "0xff00", "pc": "0x8000", "iff1": 1, "iff2": 1, "im": 1, "r": "0x05" }, "halted": true }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "nmi-iff1-set-accept", "registers": { "pc": "0x0066", "sp": "0xfefe", "iff1": 0, "iff2": 1, "r": "0x11" }, "memory": { "0xfefe": "3412" }, "tStates": 11, "accepted": true },
+      { "name": "nmi-non-maskable-iff1-clear", "registers": { "pc": "0x0066", "sp": "0xfefe", "iff1": 0, "iff2": 0, "r": "0x01" }, "memory": { "0xfefe": "2143" }, "tStates": 11, "accepted": true },
+      { "name": "nmi-iff2-preserved-when-differs", "registers": { "pc": "0x0066", "sp": "0x7ffe", "iff1": 0, "iff2": 1, "r": "0x21" }, "memory": { "0x7ffe": "cdab" }, "tStates": 11, "accepted": true },
+      { "name": "nmi-halt-exit-return-after-halt", "registers": { "pc": "0x0066", "sp": "0xfefe", "iff1": 0, "iff2": 1, "r": "0x06" }, "memory": { "0xfefe": "0180" }, "tStates": 11, "accepted": true, "halted": false }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

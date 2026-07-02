@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-ED-BLOCK-COMPARE-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ed-block-compare",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    cpi",
+          "    cpd",
+          "    cpir",
+          "    cpdr",
+          ""
+        ],
+        "options": {
+          "entryPath": "ed-block-compare.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ed-block-compare",
+        "ok": true,
+        "bytesHex": "EDA1EDA9EDB1EDB9"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

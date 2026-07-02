@@ -1,0 +1,30 @@
+{
+  "id": "deterministic-run-v1",
+  "tier": "contract",
+  "provenance": "decision:ADR-0001",
+  "environment": {
+    "TZ": "UTC",
+    "LC_ALL": "C",
+    "LANG": "C",
+    "LC_CTYPE": "C",
+    "FORCE_COLOR": "0",
+    "NO_COLOR": "1"
+  },
+  "machine": {
+    "rngSeed": "0x5A78564D",
+    "frameCount": 2,
+    "tStatesPerFrame": 69888,
+    "totalTStates": 139776
+  },
+  "normalization": {
+    "profile": "cli-snapshot",
+    "fields": [
+      "version strings",
+      "absolute paths",
+      "timestamps",
+      "build hashes",
+      "ports",
+      "temporary directories"
+    ]
+  }
+}

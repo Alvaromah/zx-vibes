@@ -1,0 +1,151 @@
+[
+  {
+    "id": "FMT-Z80-V3-001",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "z80-roundtrip",
+      "note": "Round-trip a 48K machine state through writeZ80()/readZ80(): RAM + registers + border are preserved (dna/domain/snapshot-z80.md). Memory is sparse address->hex; only the listed cells (and registers/border) are asserted after the round-trip. Boundary cells exercise the three 48K page mappings (8/4/5); ED-heavy cells exercise the RLE marker.",
+      "cases": [
+        {
+          "name": "registers-and-boundaries",
+          "registers": {
+            "a": "0x12",
+            "f": "0x34",
+            "b": "0x56",
+            "c": "0x78",
+            "d": "0x9A",
+            "e": "0xBC",
+            "h": "0xDE",
+            "l": "0xF0",
+            "a_": "0x11",
+            "f_": "0x22",
+            "b_": "0x33",
+            "c_": "0x44",
+            "d_": "0x55",
+            "e_": "0x66",
+            "h_": "0x77",
+            "l_": "0x88",
+            "pc": "0xABCD",
+            "sp": "0x7F2A",
+            "i": "0x3F",
+            "r": "0xD9",
+            "iff1": "0x01",
+            "iff2": "0x01",
+            "im": "0x02",
+            "ixh": "0x12",
+            "ixl": "0x34",
+            "iyh": "0x56",
+            "iyl": "0x78"
+          },
+          "border": "0x05",
+          "memory": {
+            "0x4000": "01",
+            "0x7FFF": "FF",
+            "0x8000": "80",
+            "0xBFFF": "BF",
+            "0xC000": "C0",
+            "0xFFFF": "AB",
+            "0x6000": "EDEDEDEDED00112233",
+            "0x5000": "AAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "zeroed-state",
+          "registers": {
+            "pc": "0x0000",
+            "sp": "0x0000",
+            "im": "0x00"
+          },
+          "border": "0x00",
+          "memory": {
+            "0x4000": "00",
+            "0xFFFF": "00"
+          }
+        },
+        {
+          "name": "ed-heavy-ram",
+          "registers": {
+            "pc": "0x8000",
+            "sp": "0xFF00",
+            "i": "0x40",
+            "r": "0x7F",
+            "im": "0x01"
+          },
+          "border": "0x07",
+          "memory": {
+            "0x4000": "EDEDED",
+            "0x4010": "ED00ED01ED02",
+            "0xC000": "EDEDEDEDEDEDEDEDEDED"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "registers-and-boundaries"
+        },
+        {
+          "name": "zeroed-state"
+        },
+        {
+          "name": "ed-heavy-ram"
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "custom"
+    }
+  },
+  {
+    "id": "FMT-Z80-V3-DECODE-001",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "z80-decode",
+      "note": "Decode a pinned, hand-authored .z80 v3 48K snapshot blob (header + compressed pages 8 and 5) and assert the registers, border, version, and representative RAM cells. This pins the on-disk format (header offsets, the PC=0 v2/3 marker, the 54-byte v3 extra header, the page-block layout and RLE) to the documented spec, independently of writeZ80().",
+      "cases": [
+        {
+          "name": "pinned-v3-48k",
+          "bytes": "AABB0201CDAB000000803F59072143000000000000000000000000010101360000C00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006010877EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDED3E005505010599EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDEDFF00EDED3F00"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "pinned-v3-48k",
+          "registers": {
+            "a": "0xAA",
+            "f": "0xBB",
+            "b": "0x01",
+            "c": "0x02",
+            "h": "0xAB",
+            "l": "0xCD",
+            "d": "0x43",
+            "e": "0x21",
+            "sp": "0x8000",
+            "i": "0x3F",
+            "r": "0xD9",
+            "pc": "0xC000",
+            "iff1": "0x01",
+            "iff2": "0x01",
+            "im": "0x01"
+          },
+          "border": "0x03",
+          "version": "0x03",
+          "memory": {
+            "0x4000": "77",
+            "0x4001": "00",
+            "0x7FFF": "55",
+            "0xC000": "99"
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "custom"
+    }
+  }
+]

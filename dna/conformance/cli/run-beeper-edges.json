@@ -1,0 +1,31 @@
+[
+  {
+    "id": "RUN-BEEPER-001",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "cli-json-field",
+      "command": "zxs run --json",
+      "note": "Contract: the `zxs run --json` report exposes audio.beeperEdges as a non-negative integer (dna/product/cli.md CLI-PROD-OUT-RUN-AUDIO-001; dna/product/toolkit-runtime.md RT-PROD-RUN-005; dna/product/recipes-and-assertions.md ASSERT-PROD-BEEPER-001). Executed by the cli fixture runner (authored in R-W4-05) against the REGENERATED @zx-vibes/toolkit, normalized via the cli-snapshot profile. Asserts the field type/shape (integer >= 0), NOT an exact edge count (which is incidental to a program). Flips to covered when the regenerated toolkit passes it.",
+      "cases": [
+        {
+          "name": "beeper-program",
+          "program": "a short routine that toggles port 0xFE bit 4 to produce beeper edges",
+          "frames": 300,
+          "command": "zxs run --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "beeper-program",
+          "field": "audio.beeperEdges",
+          "type": "integer",
+          "min": 0
+        }
+      ]
+    },
+    "normalization": { "profile": "cli-snapshot" }
+  }
+]

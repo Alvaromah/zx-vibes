@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-ALU-ADD-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "alu-add-a-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    add a, b",
+          "    add a, c",
+          "    add a, d",
+          "    add a, e",
+          "    add a, h",
+          "    add a, l",
+          "    add a, (hl)",
+          "    add a, a",
+          "    add a, 0x12",
+          ""
+        ],
+        "options": {
+          "entryPath": "alu-add-a-source.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "alu-add-a-source",
+        "ok": true,
+        "bytesHex": "8081828384858687C612"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

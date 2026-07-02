@@ -1,0 +1,44 @@
+[
+  {
+    "id": "TAPE-INSTANT-LOAD-001",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "tape-instant-load-query",
+      "note": "instant == edge (tape-loading.md TAPE-INSTANT-EQUIV-001): a short DATA block (flag 0xFF) is loaded BOTH by the instant/trap loader (no ROM, no pulses, tStates 0) AND by the real ROM LD-BYTES edge-load (0x0556) over the W10.9 pulse stream; the two must agree on the observable result {ok, bytesLoaded, RAM} and both equal the source bytes. Same 24-byte data as TAPE-EDGE-LOAD-001 so the parallel is exact. The edge half is ~7.5M T; budget 12,000,000 bounds it. Fabrication-free: expected.ram IS the source bytes.",
+      "flag": 255,
+      "ix": 32768,
+      "data": "030a11181f262d343b424950575e656c737a81888f969da4",
+      "tStateBudget": 12000000
+    },
+    "expected": {
+      "ok": true,
+      "bytesLoaded": 24,
+      "ram": "030a11181f262d343b424950575e656c737a81888f969da4",
+      "instantEqualsEdge": true
+    },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "TAPE-INSTANT-LOAD-HEADER",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "tape-instant-load-query",
+      "note": "instant == edge for a HEADER flag (0x00 < 0x80 -> the 8063-pilot leader on the edge half), exercising the pilot-by-flag path of the real ROM against the flag-independent instant trap. 8 source data bytes -> body [0x00, ...data, checksum]. The edge half is ~17.6M T; budget 25,000,000.",
+      "flag": 0,
+      "ix": 32768,
+      "data": "0003414243440080",
+      "tStateBudget": 25000000
+    },
+    "expected": {
+      "ok": true,
+      "bytesLoaded": 8,
+      "ram": "0003414243440080",
+      "instantEqualsEdge": true
+    },
+    "normalization": { "profile": "custom" }
+  }
+]

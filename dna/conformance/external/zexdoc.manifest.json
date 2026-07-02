@@ -1,0 +1,35 @@
+{
+  "id": "EXT-ZEXDOC-001",
+  "suite": "zexdoc",
+  "area": "emulator",
+  "tier": "fidelity",
+  "provenance": "zexdoc",
+  "source": {
+    "name": "ZEXALL/ZEXDOC",
+    "url": "https://github.com/agn453/ZEXALL",
+    "vcs": "git",
+    "commit": "8f71d418bae69a476a5a0e5c6e122c8801b8d9f4",
+    "license": "GPL-2.0",
+    "licenseNotes": "Third-party external test suite metadata only; payloads are not vendored by this manifest.",
+    "artifacts": [
+      {
+        "path": "zexdoc.com",
+        "bytes": 8704,
+        "sha256": "34923a7ed82285d3038b2d54bd64899e12173eebb61f9d07b4fc72e78af2ae8f",
+        "vendored": false
+      },
+      {
+        "path": "zexdoc.z80",
+        "bytes": 38737,
+        "sha256": "20312a2bbada7d78b2935715f72247ebb90c2de66424f86f14fd67b930b81880",
+        "vendored": false
+      }
+    ]
+  },
+  "execution": {
+    "status": "manifest-only",
+    "passFail": "registry-only",
+    "report": "Source identity is pinned; CPU execution awaits a CP/M COM runner and reference adapter.",
+    "candidateCoverage": ["CPU-ZEXDOC-001"]
+  }
+}

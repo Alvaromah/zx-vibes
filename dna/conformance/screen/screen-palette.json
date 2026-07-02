@@ -1,0 +1,51 @@
+{
+  "id": "SCREEN-PALETTE-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0022",
+  "input": {
+    "kind": "screen-palette-query",
+    "note": "Gallery palette index 0..15 -> RGB triple (screen-render.md SCREEN-PALETTE-001, decision:ADR-0022). Reads the normative dna/product/palette.yaml. Asserts all 16 entries, the non-bright 205 / bright 255 level split, and that indices 2/5 match the border red/cyan of RASTER-PALETTE-001. A palette that drops BRIGHT or uses the wrong non-bright level fails (the self-test feeds a broken palette.yaml).",
+    "cases": [
+      { "name": "size", "query": "paletteSize" },
+      { "name": "i0-black", "query": "paletteRgb", "args": [0] },
+      { "name": "i1-blue", "query": "paletteRgb", "args": [1] },
+      { "name": "i2-red", "query": "paletteRgb", "args": [2] },
+      { "name": "i3-magenta", "query": "paletteRgb", "args": [3] },
+      { "name": "i4-green", "query": "paletteRgb", "args": [4] },
+      { "name": "i5-cyan", "query": "paletteRgb", "args": [5] },
+      { "name": "i6-yellow", "query": "paletteRgb", "args": [6] },
+      { "name": "i7-white", "query": "paletteRgb", "args": [7] },
+      { "name": "i8-bright-black", "query": "paletteRgb", "args": [8] },
+      { "name": "i9-bright-blue", "query": "paletteRgb", "args": [9] },
+      { "name": "i10-bright-red", "query": "paletteRgb", "args": [10] },
+      { "name": "i11-bright-magenta", "query": "paletteRgb", "args": [11] },
+      { "name": "i12-bright-green", "query": "paletteRgb", "args": [12] },
+      { "name": "i13-bright-cyan", "query": "paletteRgb", "args": [13] },
+      { "name": "i14-bright-yellow", "query": "paletteRgb", "args": [14] },
+      { "name": "i15-bright-white", "query": "paletteRgb", "args": [15] }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "size", "value": 16 },
+      { "name": "i0-black", "value": [0, 0, 0] },
+      { "name": "i1-blue", "value": [0, 0, 205] },
+      { "name": "i2-red", "value": [205, 0, 0] },
+      { "name": "i3-magenta", "value": [205, 0, 205] },
+      { "name": "i4-green", "value": [0, 205, 0] },
+      { "name": "i5-cyan", "value": [0, 205, 205] },
+      { "name": "i6-yellow", "value": [205, 205, 0] },
+      { "name": "i7-white", "value": [205, 205, 205] },
+      { "name": "i8-bright-black", "value": [0, 0, 0] },
+      { "name": "i9-bright-blue", "value": [0, 0, 255] },
+      { "name": "i10-bright-red", "value": [255, 0, 0] },
+      { "name": "i11-bright-magenta", "value": [255, 0, 255] },
+      { "name": "i12-bright-green", "value": [0, 255, 0] },
+      { "name": "i13-bright-cyan", "value": [0, 255, 255] },
+      { "name": "i14-bright-yellow", "value": [255, 255, 0] },
+      { "name": "i15-bright-white", "value": [255, 255, 255] }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

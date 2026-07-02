@@ -1,0 +1,65 @@
+{
+  "name": "@zx-vibes/toolkit",
+  "version": "0.1.0",
+  "description": "The zxs CLI: an agent-facing, JSON-first build/run/observe/verify toolkit over the @zx-vibes assembler and emulator cores (ZX Spectrum 48K). Regenerated from the DNA product specs.",
+  "license": "MIT",
+  "author": "Alvaro Mateos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alvaromah/zx-vibes.git",
+    "directory": "packages/toolkit"
+  },
+  "homepage": "https://alvaromah.github.io/zx-vibes/",
+  "bugs": {
+    "url": "https://github.com/Alvaromah/zx-vibes/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "zxs": "bin/zxs.js",
+    "zx-vibes": "bin/zxs.js",
+    "zxs-mcp": "bin/zxs-mcp.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "assets",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup && tsup --config tsup.player.config.ts",
+    "prepack": "pnpm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests bin",
+    "test": "vitest run",
+    "check:docs": "node scripts/check-docs.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@zx-vibes/asm": "workspace:*",
+    "@zx-vibes/machine": "workspace:*",
+    "@zx-vibes/ula": "workspace:*",
+    "commander": "^14.0.0",
+    "pngjs": "^7.0.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/pngjs": "^6.0.5",
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.8"
+  }
+}

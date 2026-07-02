@@ -1,0 +1,39 @@
+{
+  "id": "ASM-EMIT-LD-R-N-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-register-immediate-family",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld b, 0x10",
+          "    ld c, 0x11",
+          "    ld d, 0x12",
+          "    ld e, 0x13",
+          "    ld h, 0x14",
+          "    ld l, 0x15",
+          "    ld a, 0x16",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-register-immediate.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-register-immediate-family",
+        "ok": true,
+        "bytesHex": "06100E1116121E1326142E153E16"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

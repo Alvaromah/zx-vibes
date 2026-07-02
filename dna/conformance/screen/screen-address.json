@@ -1,0 +1,71 @@
+{
+  "id": "SCREEN-ADDR-001",
+  "area": "emulator",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "screen-address-query",
+    "note": "48K display-file + attribute-file address decode (memory-map.md MM-SCREEN-ADDR-001 / MM-ATTR-ADDR-001). displayByteAddress exercises the non-linear thirds layout: pixel-row step +0x100, character-row step +0x20, third step +0x800, column low bits, and the first/last byte of each file. A linear (0x4000 + y*32 + col) decoder fails the pixel-row/char-row cases.",
+    "cases": [
+      { "name": "disp-file-base", "query": "displayFileBase" },
+      { "name": "disp-file-end", "query": "displayFileEnd" },
+      { "name": "disp-file-size", "query": "displayFileSize" },
+      { "name": "attr-file-base", "query": "attrFileBase" },
+      { "name": "attr-file-end", "query": "attrFileEnd" },
+      { "name": "attr-file-size", "query": "attrFileSize" },
+
+      { "name": "disp-origin", "query": "displayByteAddress", "args": [0, 0] },
+      { "name": "disp-pixelrow-step", "query": "displayByteAddress", "args": [0, 1] },
+      { "name": "disp-pixelrow-7", "query": "displayByteAddress", "args": [0, 7] },
+      { "name": "disp-charrow-step", "query": "displayByteAddress", "args": [0, 8] },
+      { "name": "disp-charrow-7", "query": "displayByteAddress", "args": [0, 56] },
+      { "name": "disp-third1", "query": "displayByteAddress", "args": [0, 64] },
+      { "name": "disp-third2", "query": "displayByteAddress", "args": [0, 128] },
+      { "name": "disp-last-line", "query": "displayByteAddress", "args": [0, 191] },
+      { "name": "disp-col-step", "query": "displayByteAddress", "args": [8, 0] },
+      { "name": "disp-last-col", "query": "displayByteAddress", "args": [255, 0] },
+      { "name": "disp-last-byte", "query": "displayByteAddress", "args": [255, 191] },
+      { "name": "disp-mid", "query": "displayByteAddress", "args": [128, 96] },
+      { "name": "disp-line-addr", "query": "displayLineAddress", "args": [96] },
+
+      { "name": "attr-origin", "query": "attributeAddress", "args": [0, 0] },
+      { "name": "attr-last-col", "query": "attributeAddress", "args": [255, 0] },
+      { "name": "attr-row-step", "query": "attributeAddress", "args": [0, 8] },
+      { "name": "attr-last-row", "query": "attributeAddress", "args": [0, 191] },
+      { "name": "attr-last-byte", "query": "attributeAddress", "args": [255, 191] },
+      { "name": "attr-mid", "query": "attributeAddress", "args": [128, 96] }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "disp-file-base", "value": 16384 },
+      { "name": "disp-file-end", "value": 22527 },
+      { "name": "disp-file-size", "value": 6144 },
+      { "name": "attr-file-base", "value": 22528 },
+      { "name": "attr-file-end", "value": 23295 },
+      { "name": "attr-file-size", "value": 768 },
+
+      { "name": "disp-origin", "value": 16384 },
+      { "name": "disp-pixelrow-step", "value": 16640 },
+      { "name": "disp-pixelrow-7", "value": 18176 },
+      { "name": "disp-charrow-step", "value": 16416 },
+      { "name": "disp-charrow-7", "value": 16608 },
+      { "name": "disp-third1", "value": 18432 },
+      { "name": "disp-third2", "value": 20480 },
+      { "name": "disp-last-line", "value": 22496 },
+      { "name": "disp-col-step", "value": 16385 },
+      { "name": "disp-last-col", "value": 16415 },
+      { "name": "disp-last-byte", "value": 22527 },
+      { "name": "disp-mid", "value": 18576 },
+      { "name": "disp-line-addr", "value": 18560 },
+
+      { "name": "attr-origin", "value": 22528 },
+      { "name": "attr-last-col", "value": 22559 },
+      { "name": "attr-row-step", "value": 22560 },
+      { "name": "attr-last-row", "value": 23264 },
+      { "name": "attr-last-byte", "value": 23295 },
+      { "name": "attr-mid", "value": 22928 }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

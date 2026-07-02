@@ -1,0 +1,86 @@
+{
+  "id": "CPU-PREFIX-DDED-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "cpu-run",
+    "note": "DD/FD + ED prefix NONI. A DD or FD prefix immediately followed by an ED opcode acts as a 4 T NONI: the index prefix is abandoned (it selects no IX/IY half and no (IX+d) operand) and the ED instruction executes as if unprefixed. Run-to-budget so each case covers the NONI step plus the following ED instruction. Expected values are documented Z80 behavior (provenance z80-spec) for the decode rule and the FUSE 4 T NONI timing convention (as for ddfd00), corroborated by the zex-validated @zx-vibes/cpu reference. FUSE upstream has no DDED/FDED case, so this fixture is authored to close that net hole (a regeneration that routes ED into the index/base fallback decodes it as a PUSH-like base op instead). See .harness/intake-consumer-2026-06-28.md A1.",
+    "cases": [
+      {
+        "name": "dded44",
+        "registers": { "a": "12" },
+        "memory": { "0000": "DDED44" },
+        "budget": 5
+      },
+      {
+        "name": "fded44",
+        "registers": { "a": "12" },
+        "memory": { "0000": "FDED44" },
+        "budget": 5
+      },
+      {
+        "name": "dded57",
+        "registers": { "i": "3A", "iff2": "01" },
+        "memory": { "0000": "DDED57" },
+        "budget": 5
+      },
+      {
+        "name": "fded57",
+        "registers": { "i": "3A", "iff2": "01" },
+        "memory": { "0000": "FDED57" },
+        "budget": 5
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "dded44",
+        "registers": {
+          "a": "EE", "f": "BB", "b": "00", "c": "00", "d": "00", "e": "00", "h": "00", "l": "00",
+          "a_": "00", "f_": "00", "b_": "00", "c_": "00", "d_": "00", "e_": "00", "h_": "00", "l_": "00",
+          "pc": "0003", "sp": "0000", "i": "00", "r": "03", "iff1": "00", "iff2": "00", "im": "00",
+          "ixh": "00", "ixl": "00", "iyh": "00", "iyl": "00"
+        },
+        "memory": {},
+        "tStates": 12
+      },
+      {
+        "name": "fded44",
+        "registers": {
+          "a": "EE", "f": "BB", "b": "00", "c": "00", "d": "00", "e": "00", "h": "00", "l": "00",
+          "a_": "00", "f_": "00", "b_": "00", "c_": "00", "d_": "00", "e_": "00", "h_": "00", "l_": "00",
+          "pc": "0003", "sp": "0000", "i": "00", "r": "03", "iff1": "00", "iff2": "00", "im": "00",
+          "ixh": "00", "ixl": "00", "iyh": "00", "iyl": "00"
+        },
+        "memory": {},
+        "tStates": 12
+      },
+      {
+        "name": "dded57",
+        "registers": {
+          "a": "3A", "f": "2C", "b": "00", "c": "00", "d": "00", "e": "00", "h": "00", "l": "00",
+          "a_": "00", "f_": "00", "b_": "00", "c_": "00", "d_": "00", "e_": "00", "h_": "00", "l_": "00",
+          "pc": "0003", "sp": "0000", "i": "3A", "r": "03", "iff1": "00", "iff2": "01", "im": "00",
+          "ixh": "00", "ixl": "00", "iyh": "00", "iyl": "00"
+        },
+        "memory": {},
+        "tStates": 13
+      },
+      {
+        "name": "fded57",
+        "registers": {
+          "a": "3A", "f": "2C", "b": "00", "c": "00", "d": "00", "e": "00", "h": "00", "l": "00",
+          "a_": "00", "f_": "00", "b_": "00", "c_": "00", "d_": "00", "e_": "00", "h_": "00", "l_": "00",
+          "pc": "0003", "sp": "0000", "i": "3A", "r": "03", "iff1": "00", "iff2": "01", "im": "00",
+          "ixh": "00", "ixl": "00", "iyh": "00", "iyl": "00"
+        },
+        "memory": {},
+        "tStates": 13
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "custom"
+  }
+}

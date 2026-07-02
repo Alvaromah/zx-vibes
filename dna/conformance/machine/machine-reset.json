@@ -1,0 +1,46 @@
+{
+  "id": "MACHINE-RESET-001",
+  "area": "emulator",
+  "tier": "fidelity",
+  "provenance": "decision:ADR-0021",
+  "input": {
+    "kind": "machine-reset",
+    "note": "Power-on/reset state (machine-execution.md MACHINE-RESET-CONTROL-001 z80-spec + MACHINE-RESET-REGISTERS-001 / -RAM-001 decision:ADR-0021). Build a machine in an arbitrary dirtied state (registers + memory + nonzero clock), call reset(), and assert the documented state: PC/I/R=0, IM 0, IFF1=IFF2=0 (control); SP/AF and the GP/alternate/index registers all-bits-set (0xFF halves -> 0xFFFF pairs); RAM all-zero; clock 0; not halted. The dirty state proves reset does not depend on what came before.",
+    "cases": [
+      {
+        "name": "reset-from-dirty",
+        "registers": {
+          "a": "0x12", "f": "0x34", "b": "0x56", "c": "0x78", "d": "0x9a", "e": "0xbc",
+          "h": "0xde", "l": "0xf0", "a_": "0x11", "f_": "0x22", "b_": "0x33", "c_": "0x44",
+          "d_": "0x55", "e_": "0x66", "h_": "0x77", "l_": "0x88",
+          "pc": "0x4242", "sp": "0x1234", "i": "0x3f", "r": "0x55",
+          "iff1": "0x01", "iff2": "0x01", "im": "0x02", "memptr": "0xabcd",
+          "ixh": "0x01", "ixl": "0x02", "iyh": "0x03", "iyl": "0x04"
+        },
+        "memory": { "0x0000": "deadbeef", "0x4000": "ff", "0x8000": "a5", "0xffff": "c3" },
+        "clock": "0x1000"
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "reset-from-dirty",
+        "registers": {
+          "pc": "0x0000", "i": "0x00", "r": "0x00", "iff1": "0x00", "iff2": "0x00", "im": "0x00",
+          "sp": "0xffff",
+          "a": "0xff", "f": "0xff", "b": "0xff", "c": "0xff", "d": "0xff", "e": "0xff",
+          "h": "0xff", "l": "0xff",
+          "a_": "0xff", "f_": "0xff", "b_": "0xff", "c_": "0xff", "d_": "0xff", "e_": "0xff",
+          "h_": "0xff", "l_": "0xff",
+          "ixh": "0xff", "ixl": "0xff", "iyh": "0xff", "iyl": "0xff"
+        },
+        "memory": { "0x0000": "00000000", "0x4000": "00", "0x8000": "00", "0xffff": "00" },
+        "memoryAllZero": true,
+        "clock": 0,
+        "halted": false
+      }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

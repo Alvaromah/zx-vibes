@@ -1,0 +1,125 @@
+{
+  "id": "ASM-CLI-001",
+  "tier": "contract",
+  "provenance": "contract",
+  "input": {
+    "kind": "assembler-cli",
+    "files": [
+      {
+        "path": "wrap.bin",
+        "encoding": "hex",
+        "data": "013412"
+      }
+    ],
+    "cases": [
+      {
+        "name": "top-help",
+        "args": ["--help"]
+      },
+      {
+        "name": "assemble-help",
+        "args": ["assemble", "--help"]
+      },
+      {
+        "name": "disasm-help",
+        "args": ["disasm", "--help"]
+      },
+      {
+        "name": "version",
+        "args": ["--version"]
+      },
+      {
+        "name": "doctor-json",
+        "args": ["doctor", "--json"]
+      },
+      {
+        "name": "disasm-wrap",
+        "args": ["disasm", "<tmp>/wrap.bin", "--org", "0xFFFF", "--count", "1"]
+      },
+      {
+        "name": "bad-origin",
+        "args": ["disasm", "<tmp>/wrap.bin", "--org", "NaN"]
+      },
+      {
+        "name": "bad-count",
+        "args": ["disasm", "<tmp>/wrap.bin", "--count", "0"]
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "top-help",
+        "status": 0,
+        "stdoutContains": [
+          "Usage: zxasm [options] [command]",
+          "assemble [options] <file>",
+          "disasm [options] <bin>",
+          "doctor [options]",
+          "help [command]"
+        ],
+        "stderrExact": ""
+      },
+      {
+        "name": "assemble-help",
+        "status": 0,
+        "stdoutContains": [
+          "Usage: zxasm assemble [options] <file>",
+          "file                   entry .asm file",
+          "--out-dir <dir>        output directory (default: \"build\")",
+          "-I, --inc <path>       include search path",
+          "-D, --define <define>  define a symbol",
+          "--sandbox",
+          "--json"
+        ],
+        "stderrExact": ""
+      },
+      {
+        "name": "disasm-help",
+        "status": 0,
+        "stdoutContains": [
+          "Usage: zxasm disasm [options] <bin>",
+          "bin           raw binary file",
+          "--org <addr>  origin address (default: \"0x8000\")",
+          "--count <n>   instruction count"
+        ],
+        "stderrExact": ""
+      },
+      {
+        "name": "version",
+        "status": 0,
+        "stdoutExact": "<VERSION>\n",
+        "stderrExact": ""
+      },
+      {
+        "name": "doctor-json",
+        "status": 0,
+        "stdoutContains": [
+          "\"ok\": true",
+          "\"assembler\": \"@zx-vibes/asm\"",
+          "\"version\": \"<VERSION>\""
+        ],
+        "stderrExact": ""
+      },
+      {
+        "name": "disasm-wrap",
+        "status": 0,
+        "stdoutContains": ["LD BC,0x1234"],
+        "stderrExact": ""
+      },
+      {
+        "name": "bad-origin",
+        "status": 1,
+        "stderrContains": ["Invalid origin: 'NaN' must be a 16-bit address"]
+      },
+      {
+        "name": "bad-count",
+        "status": 1,
+        "stderrContains": ["Invalid instruction count: '0' must be a positive integer"]
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "cli-snapshot"
+  }
+}

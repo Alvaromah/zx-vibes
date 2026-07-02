@@ -1,0 +1,29 @@
+{
+  "id": "ASM-EMIT-CALL-NN-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "call-absolute-little-endian",
+        "sourceLines": ["    ORG 0x8000", "    call 0x1234", ""],
+        "options": {
+          "entryPath": "call-absolute.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "call-absolute-little-endian",
+        "ok": true,
+        "bytesHex": "CD3412"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

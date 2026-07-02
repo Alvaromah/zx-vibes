@@ -1,0 +1,40 @@
+{
+  "id": "ASM-EMIT-FDCB-BIT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "fdcb-bit",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    bit 0,(iy+5)",
+          "    bit 1,(iy+5)",
+          "    bit 2,(iy+5)",
+          "    bit 3,(iy+5)",
+          "    bit 4,(iy+5)",
+          "    bit 5,(iy+5)",
+          "    bit 6,(iy+5)",
+          "    bit 7,(iy+5)",
+          ""
+        ],
+        "options": {
+          "entryPath": "fdcb-bit.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "fdcb-bit",
+        "ok": true,
+        "bytesHex": "FDCB0546FDCB054EFDCB0556FDCB055EFDCB0566FDCB056EFDCB0576FDCB057E"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

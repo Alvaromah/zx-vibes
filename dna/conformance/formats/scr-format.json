@@ -1,0 +1,91 @@
+{
+  "id": "FORMAT-SCR-001",
+  "area": "emulator",
+  "tier": "contract",
+  "provenance": "hardware",
+  "input": {
+    "kind": "scr-format-query",
+    "note": "`.scr` raw screen dump (file-formats.md FMT-SCR-*): a headerless 6912-byte copy of memory 0x4000-0x5AFF, file offset o = address 0x4000 + o (display file 0..6143, attribute file 6144..6911). The runner builds `memory` (absolute addresses) and `file` (offsets); save queries read saveScr(memory), load queries load `file` into a 0xAA-filled memory and read it back. Boundaries: offsets 0/6143/6144/6911 map to 0x4000/0x57FF/0x5800/0x5AFF; load must not touch 0x3FFF or 0x5B00 (they stay 0xAA = 170). The self-test rejects a header-offset loader, an attribute-dropping save, a deinterleaving copy, and an out-of-region write.",
+    "memory": {
+      "fill": 0,
+      "writes": [
+        [16383, 238],
+        [16384, 18],
+        [16640, 90],
+        [18433, 154],
+        [22527, 52],
+        [22528, 86],
+        [22784, 188],
+        [23295, 120],
+        [23296, 204]
+      ]
+    },
+    "file": {
+      "fill": 0,
+      "writes": [
+        [0, 18],
+        [256, 90],
+        [2049, 154],
+        [6143, 52],
+        [6144, 86],
+        [6400, 188],
+        [6911, 120]
+      ]
+    },
+    "cases": [
+      { "name": "scr-size", "query": "scrSize" },
+      { "name": "scr-base", "query": "scrBase" },
+      { "name": "save-length", "query": "saveLength" },
+
+      { "name": "save-first-display", "query": "saveByte", "args": [0] },
+      { "name": "save-interleave", "query": "saveByte", "args": [256] },
+      { "name": "save-mid-display", "query": "saveByte", "args": [2049] },
+      { "name": "save-last-display", "query": "saveByte", "args": [6143] },
+      { "name": "save-first-attr", "query": "saveByte", "args": [6144] },
+      { "name": "save-mid-attr", "query": "saveByte", "args": [6400] },
+      { "name": "save-last-attr", "query": "saveByte", "args": [6911] },
+
+      { "name": "load-first-display", "query": "loadMemByte", "args": [16384] },
+      { "name": "load-interleave", "query": "loadMemByte", "args": [16640] },
+      { "name": "load-mid-display", "query": "loadMemByte", "args": [18433] },
+      { "name": "load-last-display", "query": "loadMemByte", "args": [22527] },
+      { "name": "load-first-attr", "query": "loadMemByte", "args": [22528] },
+      { "name": "load-mid-attr", "query": "loadMemByte", "args": [22784] },
+      { "name": "load-last-attr", "query": "loadMemByte", "args": [23295] },
+      { "name": "load-untouched-below", "query": "loadMemByte", "args": [16383] },
+      { "name": "load-untouched-above", "query": "loadMemByte", "args": [23296] },
+
+      { "name": "roundtrip-save-load-save", "query": "roundtripSaveLoadSave" },
+      { "name": "roundtrip-load-save-load", "query": "roundtripLoadSaveLoad" }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "scr-size", "value": 6912 },
+      { "name": "scr-base", "value": 16384 },
+      { "name": "save-length", "value": 6912 },
+
+      { "name": "save-first-display", "value": 18 },
+      { "name": "save-interleave", "value": 90 },
+      { "name": "save-mid-display", "value": 154 },
+      { "name": "save-last-display", "value": 52 },
+      { "name": "save-first-attr", "value": 86 },
+      { "name": "save-mid-attr", "value": 188 },
+      { "name": "save-last-attr", "value": 120 },
+
+      { "name": "load-first-display", "value": 18 },
+      { "name": "load-interleave", "value": 90 },
+      { "name": "load-mid-display", "value": 154 },
+      { "name": "load-last-display", "value": 52 },
+      { "name": "load-first-attr", "value": 86 },
+      { "name": "load-mid-attr", "value": 188 },
+      { "name": "load-last-attr", "value": 120 },
+      { "name": "load-untouched-below", "value": 170 },
+      { "name": "load-untouched-above", "value": 170 },
+
+      { "name": "roundtrip-save-load-save", "value": true },
+      { "name": "roundtrip-load-save-load", "value": true }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

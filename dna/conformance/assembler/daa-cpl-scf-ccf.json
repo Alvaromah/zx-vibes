@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-DAA-CPL-SCF-CCF-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "daa-cpl-scf-ccf",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    daa",
+          "    cpl",
+          "    scf",
+          "    ccf",
+          ""
+        ],
+        "options": {
+          "entryPath": "daa-cpl-scf-ccf.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "daa-cpl-scf-ccf",
+        "ok": true,
+        "bytesHex": "272F373F"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

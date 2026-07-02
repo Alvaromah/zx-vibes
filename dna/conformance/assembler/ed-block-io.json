@@ -1,0 +1,40 @@
+{
+  "id": "ASM-EMIT-ED-BLOCK-IO-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ed-block-io",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ini",
+          "    ind",
+          "    outi",
+          "    outd",
+          "    inir",
+          "    indr",
+          "    otir",
+          "    otdr",
+          ""
+        ],
+        "options": {
+          "entryPath": "ed-block-io.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ed-block-io",
+        "ok": true,
+        "bytesHex": "EDA2EDAAEDA3EDABEDB2EDBAEDB3EDBB"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

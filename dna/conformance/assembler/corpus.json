@@ -1,0 +1,20 @@
+{
+  "id": "ASM-CORPUS-001",
+  "tier": "contract",
+  "provenance": "contract",
+  "input": {
+    "kind": "assembler-corpus",
+    "entries": [
+      "starters/game/src/main.asm",
+      "starters/platformer/src/main.asm"
+    ]
+  },
+  "expected": {
+    "ok": true,
+    "count": 2,
+    "optionalSjasmplusComparison": "When sjasmplus is installed, the oracle also compares each entry's raw bytes against `sjasmplus --nologo --raw=<temp>/sj.bin <entry>`. This is fixture-authoring evidence, not a portable CI requirement."
+  },
+  "normalization": {
+    "profile": "json"
+  }
+}

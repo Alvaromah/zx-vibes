@@ -1,0 +1,21 @@
+{
+  "name": "zx-emulator-regen",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "conformance:self-test": "node dna/conformance/cpu/run-cpu-exec-fixtures-self-test.mjs && node dna/conformance/timing/run-timing-fixtures-self-test.mjs && node dna/conformance/audio/run-audio-fixtures-self-test.mjs && node dna/conformance/keyboard/run-keyboard-fixtures-self-test.mjs && node dna/conformance/raster/run-raster-fixtures-self-test.mjs",
+
+    "conformance:core": "node dna/conformance/cpu/run-cpu-exec-fixtures-self-test.mjs && node dna/conformance/cpu/run-fuse-suite.mjs --quiet && node dna/conformance/timing/run-timing-fixtures-self-test.mjs && node dna/conformance/timing/run-timing-fixtures.mjs --quiet && node dna/conformance/machine/run-machine-fixtures-self-test.mjs && node dna/conformance/machine/run-machine-fixtures.mjs --quiet && node dna/conformance/formats/run-format-fixtures-self-test.mjs && node dna/conformance/formats/run-format-fixtures.mjs --quiet",
+
+    "conformance:host-io": "node dna/conformance/host-io/run-host-io-fixtures-self-test.mjs && node dna/conformance/host-io/run-host-io-fixtures.mjs --quiet",
+
+    "conformance:emulator": "npm run conformance:core && npm run conformance:host-io",
+
+    "conformance:host-shell": "node dna/conformance/audio/run-audio-fixtures-self-test.mjs && node dna/conformance/audio/run-audio-fixtures.mjs --quiet && node dna/conformance/keyboard/run-keyboard-fixtures-self-test.mjs && node dna/conformance/keyboard/run-keyboard-fixtures.mjs --quiet && node dna/conformance/raster/run-raster-fixtures-self-test.mjs && node dna/conformance/raster/run-raster-fixtures.mjs --quiet",
+
+    "coverage:emulator": "node dna/conformance/coverage-check.mjs --area emulator",
+    "coverage:gallery": "node dna/conformance/coverage-check.mjs --area gallery",
+    "coverage:by-area": "node dna/conformance/coverage-check.mjs --by-area"
+  }
+}

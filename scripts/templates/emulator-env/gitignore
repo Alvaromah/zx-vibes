@@ -1,0 +1,10 @@
+node_modules/
+.cache/
+.tmp/
+*.log
+
+# Host assets — supply locally, keep the README placeholders tracked
+rom/*.rom
+tapes/*.z80
+tapes/*.tap
+tapes/*.tzx

@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-ALU-ADC-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "alu-adc-a-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    adc a, b",
+          "    adc a, c",
+          "    adc a, d",
+          "    adc a, e",
+          "    adc a, h",
+          "    adc a, l",
+          "    adc a, (hl)",
+          "    adc a, a",
+          "    adc a, 0x12",
+          ""
+        ],
+        "options": {
+          "entryPath": "alu-adc-a-source.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "alu-adc-a-source",
+        "ok": true,
+        "bytesHex": "88898A8B8C8D8E8FCE12"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

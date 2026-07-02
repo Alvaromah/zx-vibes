@@ -1,0 +1,29 @@
+{
+  "id": "AUDIO-CONTINUITY-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0016",
+  "input": {
+    "kind": "audio-continuity",
+    "cases": [
+      {
+        "name": "split-mid-capture",
+        "sampleRate": 44100,
+        "tStatesTotal": 800,
+        "splitTStates": 400,
+        "initialLevel": 0,
+        "edges": [
+          { "t": 100, "level": 1 },
+          { "t": 300, "level": 0 },
+          { "t": 500, "level": 1 }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "split-mid-capture", "continuous": true }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

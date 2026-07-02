@@ -1,0 +1,70 @@
+{
+  "id": "KBD-LATCH-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0016",
+  "input": {
+    "kind": "keyboard-latch",
+    "cases": [
+      {
+        "name": "quick-tap-visible-one-scan",
+        "events": [
+          { "op": "down", "key": "Z" },
+          { "op": "up", "key": "Z" },
+          { "op": "scan" },
+          { "op": "scan" }
+        ]
+      },
+      {
+        "name": "held-key-multi-scan",
+        "events": [
+          { "op": "down", "key": "Z" },
+          { "op": "scan" },
+          { "op": "scan" },
+          { "op": "up", "key": "Z" },
+          { "op": "scan" }
+        ]
+      },
+      {
+        "name": "tap-spanning-scan-releases",
+        "events": [
+          { "op": "down", "key": "Z" },
+          { "op": "scan" },
+          { "op": "up", "key": "Z" },
+          { "op": "scan" }
+        ]
+      },
+      {
+        "name": "two-quick-taps-both-latched",
+        "events": [
+          { "op": "down", "key": "Z" },
+          { "op": "up", "key": "Z" },
+          { "op": "down", "key": "X" },
+          { "op": "up", "key": "X" },
+          { "op": "scan" },
+          { "op": "scan" }
+        ]
+      },
+      {
+        "name": "release-without-press-ignored",
+        "events": [
+          { "op": "up", "key": "Z" },
+          { "op": "scan" },
+          { "op": "down", "key": "X" },
+          { "op": "up", "key": "X" },
+          { "op": "scan" }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "quick-tap-visible-one-scan", "scans": [["Z"], []] },
+      { "name": "held-key-multi-scan", "scans": [["Z"], ["Z"], []] },
+      { "name": "tap-spanning-scan-releases", "scans": [["Z"], []] },
+      { "name": "two-quick-taps-both-latched", "scans": [["X", "Z"], []] },
+      { "name": "release-without-press-ignored", "scans": [[], ["X"]] }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

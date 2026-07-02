@@ -1,0 +1,39 @@
+{
+  "id": "ASM-EMIT-OUT-C-R-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "out-c-register",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    out (c),b",
+          "    out (c),c",
+          "    out (c),d",
+          "    out (c),e",
+          "    out (c),h",
+          "    out (c),l",
+          "    out (c),a",
+          ""
+        ],
+        "options": {
+          "entryPath": "out-c-register.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "out-c-register",
+        "ok": true,
+        "bytesHex": "ED41ED49ED51ED59ED61ED69ED79"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "id": "ASM-EMIT-INDEX-HALF-ALU-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "index-half-alu",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    add a,ixh",
+          "    add a,ixl",
+          "    adc a,ixh",
+          "    adc a,ixl",
+          "    sub ixh",
+          "    sub ixl",
+          "    sbc a,ixh",
+          "    sbc a,ixl",
+          "    and ixh",
+          "    and ixl",
+          "    xor ixh",
+          "    xor ixl",
+          "    or ixh",
+          "    or ixl",
+          "    cp ixh",
+          "    cp ixl",
+          "    add a,iyh",
+          "    add a,iyl",
+          "    adc a,iyh",
+          "    adc a,iyl",
+          "    sub iyh",
+          "    sub iyl",
+          "    sbc a,iyh",
+          "    sbc a,iyl",
+          "    and iyh",
+          "    and iyl",
+          "    xor iyh",
+          "    xor iyl",
+          "    or iyh",
+          "    or iyl",
+          "    cp iyh",
+          "    cp iyl",
+          ""
+        ],
+        "options": {
+          "entryPath": "index-half-alu.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "index-half-alu",
+        "ok": true,
+        "bytesHex": "DD84DD85DD8CDD8DDD94DD95DD9CDD9DDDA4DDA5DDACDDADDDB4DDB5DDBCDDBDFD84FD85FD8CFD8DFD94FD95FD9CFD9DFDA4FDA5FDACFDADFDB4FDB5FDBCFDBD"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

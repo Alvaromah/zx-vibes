@@ -1,0 +1,29 @@
+{
+  "id": "ASM-EMIT-HALT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "halt-opcode",
+        "sourceLines": ["    ORG 0x8000", "    halt", ""],
+        "options": {
+          "entryPath": "halt.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "halt-opcode",
+        "ok": true,
+        "bytesHex": "76"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

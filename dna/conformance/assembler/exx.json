@@ -1,0 +1,29 @@
+{
+  "id": "ASM-EMIT-EXX-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "exx-shadow-registers",
+        "sourceLines": ["    ORG 0x8000", "    exx", ""],
+        "options": {
+          "entryPath": "exx.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "exx-shadow-registers",
+        "ok": true,
+        "bytesHex": "D9"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

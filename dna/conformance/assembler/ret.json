@@ -1,0 +1,29 @@
+{
+  "id": "ASM-EMIT-RET-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ret-opcode",
+        "sourceLines": ["    ORG 0x8000", "    ret", ""],
+        "options": {
+          "entryPath": "ret.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ret-opcode",
+        "ok": true,
+        "bytesHex": "C9"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

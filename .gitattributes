@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+*.png binary
+*.rom binary
+*.z80 binary
+*.sna binary
+*.tap binary
+*.tzx binary

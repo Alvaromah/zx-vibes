@@ -1,0 +1,20 @@
+{
+  "id": "AUDIO-DURATION-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0016",
+  "input": {
+    "kind": "audio-duration",
+    "cases": [
+      { "name": "200-frames-44k1", "tStates": 13977600, "sampleRate": 44100 },
+      { "name": "200-frames-48k", "tStates": 13977600, "sampleRate": 48000 }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "200-frames-44k1", "samples": 176117 },
+      { "name": "200-frames-48k", "samples": 191692 }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

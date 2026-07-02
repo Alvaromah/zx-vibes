@@ -1,0 +1,34 @@
+{
+  "id": "KBD-BROWSERMAP-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0016",
+  "input": {
+    "kind": "keyboard-browsermap",
+    "cases": [
+      { "name": "letter-lower", "key": "z" },
+      { "name": "letter-upper", "key": "Z" },
+      { "name": "digit", "key": "5" },
+      { "name": "enter", "key": "Enter" },
+      { "name": "space", "key": " " },
+      { "name": "shift-is-caps", "key": "Shift" },
+      { "name": "control-is-symbol", "key": "Control" },
+      { "name": "cursor-up", "key": "ArrowUp" },
+      { "name": "backspace-is-delete", "key": "Backspace" }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "letter-lower", "keys": ["Z"], "positions": [{ "row": 0, "bit": 1 }] },
+      { "name": "letter-upper", "keys": ["Z"], "positions": [{ "row": 0, "bit": 1 }] },
+      { "name": "digit", "keys": ["5"], "positions": [{ "row": 3, "bit": 4 }] },
+      { "name": "enter", "keys": ["ENTER"], "positions": [{ "row": 6, "bit": 0 }] },
+      { "name": "space", "keys": ["SPACE"], "positions": [{ "row": 7, "bit": 0 }] },
+      { "name": "shift-is-caps", "keys": ["CAPS_SHIFT"], "positions": [{ "row": 0, "bit": 0 }] },
+      { "name": "control-is-symbol", "keys": ["SYMBOL_SHIFT"], "positions": [{ "row": 7, "bit": 1 }] },
+      { "name": "cursor-up", "keys": ["CAPS_SHIFT", "7"], "positions": [{ "row": 0, "bit": 0 }, { "row": 4, "bit": 3 }] },
+      { "name": "backspace-is-delete", "keys": ["CAPS_SHIFT", "0"], "positions": [{ "row": 0, "bit": 0 }, { "row": 4, "bit": 0 }] }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

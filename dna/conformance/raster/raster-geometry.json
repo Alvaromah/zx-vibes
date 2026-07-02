@@ -1,0 +1,29 @@
+{
+  "id": "RASTER-GEOMETRY-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0016",
+  "input": {
+    "kind": "raster-geometry",
+    "canvas": { "width": 320, "height": 240, "borderLeft": 32, "borderTop": 24, "activeWidth": 256, "activeHeight": 192 },
+    "borderPixels": [
+      { "x": 0, "y": 0, "border": true },
+      { "x": 32, "y": 24, "border": false },
+      { "x": 160, "y": 120, "border": false },
+      { "x": 287, "y": 215, "border": false },
+      { "x": 319, "y": 239, "border": true },
+      { "x": 31, "y": 24, "border": true },
+      { "x": 288, "y": 24, "border": true },
+      { "x": 32, "y": 216, "border": true }
+    ],
+    "tStates": [
+      { "x": 32, "y": 24, "t": 14335 },
+      { "x": 0, "y": 24, "t": 14319 },
+      { "x": 288, "y": 24, "t": 14463 },
+      { "x": 32, "y": 25, "t": 14559 },
+      { "x": 160, "y": 120, "t": 35903 }
+    ]
+  },
+  "expected": { "ok": true },
+  "normalization": { "profile": "custom" }
+}

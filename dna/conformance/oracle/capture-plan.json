@@ -1,0 +1,58 @@
+{
+  "id": "oracle-capture-v1",
+  "tier": "contract",
+  "provenance": "decision:ADR-0001",
+  "oracle": {
+    "expectedBranch": "main",
+    "expectedCommit": "6c7d5e660cba76fcbb4a53beaa55f18062c2ff3c",
+    "dirtyPolicy": "reject"
+  },
+  "cases": [
+    {
+      "id": "ORACLE-CLI-ZXS-HELP-001",
+      "kind": "command",
+      "tier": "contract",
+      "provenance": "contract",
+      "description": "capture the oracle zxs top-level help snapshot",
+      "command": ["node", "packages/toolkit/bin/zxs.js", "--help"],
+      "cwd": ".",
+      "expectedExitCode": 0,
+      "normalization": { "profile": "cli-snapshot" },
+      "output": "cli/zxs-help.json"
+    },
+    {
+      "id": "ORACLE-CLI-ZXASM-HELP-001",
+      "kind": "command",
+      "tier": "contract",
+      "provenance": "contract",
+      "description": "capture the oracle zxasm top-level help snapshot",
+      "command": ["node", "packages/zx-vibes/bin/zxasm.js", "--help"],
+      "cwd": ".",
+      "expectedExitCode": 0,
+      "normalization": { "profile": "cli-snapshot" },
+      "output": "cli/zxasm-help.json"
+    },
+    {
+      "id": "ORACLE-SCREEN-BOOT-PNG-001",
+      "kind": "file",
+      "tier": "contract",
+      "provenance": "contract",
+      "description": "capture the oracle boot screen golden image hash",
+      "path": "packages/toolkit/tests/golden/boot-copyright.png",
+      "normalization": { "profile": "screen-hash" },
+      "output": "screen/boot-copyright.json",
+      "copyTo": "screen/boot-copyright.png"
+    },
+    {
+      "id": "ORACLE-FORMAT-PONG-Z80-001",
+      "kind": "file",
+      "tier": "contract",
+      "provenance": "contract",
+      "description": "capture the oracle gallery pong .z80 snapshot bytes",
+      "path": "packages/toolkit/gallery/games/pong-by-agent/game.z80",
+      "normalization": { "profile": "binary" },
+      "output": "formats/pong-by-agent-z80.json",
+      "copyTo": "formats/pong-by-agent.z80"
+    }
+  ]
+}

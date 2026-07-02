@@ -1,0 +1,96 @@
+{
+  "id": "ASM-EMIT-FDCB-ROT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "fdcb-rotate-shift",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    rlc (iy+5),b",
+          "    rlc (iy+5),c",
+          "    rlc (iy+5),d",
+          "    rlc (iy+5),e",
+          "    rlc (iy+5),h",
+          "    rlc (iy+5),l",
+          "    rlc (iy+5)",
+          "    rlc (iy+5),a",
+          "    rrc (iy+5),b",
+          "    rrc (iy+5),c",
+          "    rrc (iy+5),d",
+          "    rrc (iy+5),e",
+          "    rrc (iy+5),h",
+          "    rrc (iy+5),l",
+          "    rrc (iy+5)",
+          "    rrc (iy+5),a",
+          "    rl (iy+5),b",
+          "    rl (iy+5),c",
+          "    rl (iy+5),d",
+          "    rl (iy+5),e",
+          "    rl (iy+5),h",
+          "    rl (iy+5),l",
+          "    rl (iy+5)",
+          "    rl (iy+5),a",
+          "    rr (iy+5),b",
+          "    rr (iy+5),c",
+          "    rr (iy+5),d",
+          "    rr (iy+5),e",
+          "    rr (iy+5),h",
+          "    rr (iy+5),l",
+          "    rr (iy+5)",
+          "    rr (iy+5),a",
+          "    sla (iy+5),b",
+          "    sla (iy+5),c",
+          "    sla (iy+5),d",
+          "    sla (iy+5),e",
+          "    sla (iy+5),h",
+          "    sla (iy+5),l",
+          "    sla (iy+5)",
+          "    sla (iy+5),a",
+          "    sra (iy+5),b",
+          "    sra (iy+5),c",
+          "    sra (iy+5),d",
+          "    sra (iy+5),e",
+          "    sra (iy+5),h",
+          "    sra (iy+5),l",
+          "    sra (iy+5)",
+          "    sra (iy+5),a",
+          "    sll (iy+5),b",
+          "    sll (iy+5),c",
+          "    sll (iy+5),d",
+          "    sll (iy+5),e",
+          "    sll (iy+5),h",
+          "    sll (iy+5),l",
+          "    sll (iy+5)",
+          "    sll (iy+5),a",
+          "    srl (iy+5),b",
+          "    srl (iy+5),c",
+          "    srl (iy+5),d",
+          "    srl (iy+5),e",
+          "    srl (iy+5),h",
+          "    srl (iy+5),l",
+          "    srl (iy+5)",
+          "    srl (iy+5),a",
+          ""
+        ],
+        "options": {
+          "entryPath": "fdcb-rotate-shift.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "fdcb-rotate-shift",
+        "ok": true,
+        "bytesHex": "FDCB0500FDCB0501FDCB0502FDCB0503FDCB0504FDCB0505FDCB0506FDCB0507FDCB0508FDCB0509FDCB050AFDCB050BFDCB050CFDCB050DFDCB050EFDCB050FFDCB0510FDCB0511FDCB0512FDCB0513FDCB0514FDCB0515FDCB0516FDCB0517FDCB0518FDCB0519FDCB051AFDCB051BFDCB051CFDCB051DFDCB051EFDCB051FFDCB0520FDCB0521FDCB0522FDCB0523FDCB0524FDCB0525FDCB0526FDCB0527FDCB0528FDCB0529FDCB052AFDCB052BFDCB052CFDCB052DFDCB052EFDCB052FFDCB0530FDCB0531FDCB0532FDCB0533FDCB0534FDCB0535FDCB0536FDCB0537FDCB0538FDCB0539FDCB053AFDCB053BFDCB053CFDCB053DFDCB053EFDCB053F"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

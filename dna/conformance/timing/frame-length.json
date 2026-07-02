@@ -1,0 +1,36 @@
+{
+  "id": "TIM-FRAME-001",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "timing-query",
+    "note": "48K frame length (312x224=69888 T) + maskable interrupt held LOW for 32 T at frame start (ULA-TIME-FRAME-001 / ULA-TIME-INT-001).",
+    "cases": [
+      { "name": "frame-length", "query": "frameTStates" },
+      { "name": "interrupt-hold", "query": "interruptTStates" },
+      { "name": "int-active-start", "query": "interruptActive", "args": [0] },
+      { "name": "int-active-last", "query": "interruptActive", "args": [31] },
+      { "name": "int-inactive-after-hold", "query": "interruptActive", "args": [32] },
+      { "name": "int-inactive-mid-frame", "query": "interruptActive", "args": [40000] },
+      { "name": "int-inactive-frame-end", "query": "interruptActive", "args": [69887] },
+      { "name": "int-active-next-frame", "query": "interruptActive", "args": [69888] },
+      { "name": "int-active-next-frame-last", "query": "interruptActive", "args": [69919] },
+      { "name": "int-inactive-next-frame", "query": "interruptActive", "args": [69920] }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "frame-length", "value": 69888 },
+      { "name": "interrupt-hold", "value": 32 },
+      { "name": "int-active-start", "value": true },
+      { "name": "int-active-last", "value": true },
+      { "name": "int-inactive-after-hold", "value": false },
+      { "name": "int-inactive-mid-frame", "value": false },
+      { "name": "int-inactive-frame-end", "value": false },
+      { "name": "int-active-next-frame", "value": true },
+      { "name": "int-active-next-frame-last", "value": true },
+      { "name": "int-inactive-next-frame", "value": false }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

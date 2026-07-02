@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>zx-vibes — emulator demos</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; background: #14141a; color: #e6e6ee;
+         font: 16px/1.6 system-ui, sans-serif; display: grid; place-items: center; }
+  main { max-width: 760px; padding: 40px 24px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: #9a9aa6; margin: 0 0 28px; }
+  .cards { display: grid; gap: 14px; grid-template-columns: 1fr; }
+  a.card { display: block; text-decoration: none; color: inherit; background: #1e1e28;
+           border: 1px solid #2c2c38; border-radius: 10px; padding: 18px 20px;
+           transition: border-color .15s, transform .15s; }
+  a.card:hover { border-color: #7db3ff; transform: translateY(-2px); }
+  a.card.soon { opacity: .55; pointer-events: none; }
+  .card h2 { margin: 0 0 4px; font-size: 18px; }
+  .card p { margin: 0; color: #9a9aa6; font-size: 14px; }
+  .tag { float: right; font-size: 12px; color: #7db3ff; }
+  .tag.soon { color: #b98; }
+  footer { margin-top: 28px; color: #75757f; font-size: 13px; }
+  code { background:#262630; border-radius:4px; padding:1px 6px; }
+  a { color: #7db3ff; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ZX Spectrum, in your browser</h1>
+  <p class="sub">Three demos built on the reconstructed <code>@zx-vibes/machine</code> core. No install — just open one.</p>
+
+  <div class="cards">
+    <a class="card" href="basic.html">
+      <span class="tag">try it →</span>
+      <h2>Basic</h2>
+      <p>Boots the real BASIC ROM and lets you type. The smallest embed — drop it on your own page.</p>
+    </a>
+    <a class="card" href="medium.html">
+      <span class="tag">try it →</span>
+      <h2>Medium</h2>
+      <p>On-screen keyboard, load a program you built, pause / reset — a bit more to play with.</p>
+    </a>
+    <a class="card" href="full.html">
+      <span class="tag">try it →</span>
+      <h2>Full</h2>
+      <p>Insert a <code>.tap</code>/<code>.tzx</code> and <code>LOAD ""</code> a real game, with sound, border and joystick.</p>
+    </a>
+  </div>
+
+  <footer>
+    The bundled 48K ROM is © Amstrad plc, redistributed by permission — see <a href="NOTICE">NOTICE</a>.
+  </footer>
+</main>
+</body>
+</html>

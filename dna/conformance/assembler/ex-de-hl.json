@@ -1,0 +1,29 @@
+{
+  "id": "ASM-EMIT-EX-DE-HL-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ex-de-hl",
+        "sourceLines": ["    ORG 0x8000", "    ex de,hl", ""],
+        "options": {
+          "entryPath": "ex-de-hl.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ex-de-hl",
+        "ok": true,
+        "bytesHex": "EB"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

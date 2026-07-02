@@ -1,0 +1,127 @@
+{
+  "id": "SCREEN-ATTR-DECODE-001",
+  "area": "emulator",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "screen-decode-query",
+    "note": "48K attribute byte -> palette-index decode (memory-map.md MM-ATTR-BITS-001 / MM-ATTR-COLOUR-INDEX-001 / MM-ATTR-FLASH-001 / MM-PIXEL-COLOUR-001). Asserts the bit fields (b7 flash, b6 bright, b5-3 paper, b2-0 ink), the bright-adjusted ink/paper indices (0..15), the 16-frame FLASH phase, and pixelColorIndex across flash phases. A decoder that ignores BRIGHT, mis-handles the FLASH swap, or swaps the ink/paper bit fields fails.",
+    "cases": [
+      { "name": "ink-3838", "query": "attributeInk", "args": [56] },
+      { "name": "paper-38", "query": "attributePaper", "args": [56] },
+      { "name": "bright-38", "query": "attributeBright", "args": [56] },
+      { "name": "flash-38", "query": "attributeFlash", "args": [56] },
+
+      { "name": "ink-47", "query": "attributeInk", "args": [71] },
+      { "name": "paper-47", "query": "attributePaper", "args": [71] },
+      { "name": "bright-47", "query": "attributeBright", "args": [71] },
+      { "name": "flash-47", "query": "attributeFlash", "args": [71] },
+
+      { "name": "ink-c7", "query": "attributeInk", "args": [199] },
+      { "name": "paper-c7", "query": "attributePaper", "args": [199] },
+      { "name": "bright-c7", "query": "attributeBright", "args": [199] },
+      { "name": "flash-c7", "query": "attributeFlash", "args": [199] },
+
+      { "name": "ink-2a", "query": "attributeInk", "args": [42] },
+      { "name": "paper-2a", "query": "attributePaper", "args": [42] },
+      { "name": "flash-ff", "query": "attributeFlash", "args": [255] },
+      { "name": "bright-ff", "query": "attributeBright", "args": [255] },
+
+      { "name": "inkidx-38", "query": "inkColorIndex", "args": [56] },
+      { "name": "paperidx-38", "query": "paperColorIndex", "args": [56] },
+      { "name": "inkidx-47", "query": "inkColorIndex", "args": [71] },
+      { "name": "paperidx-47", "query": "paperColorIndex", "args": [71] },
+      { "name": "inkidx-4f", "query": "inkColorIndex", "args": [79] },
+      { "name": "paperidx-4f", "query": "paperColorIndex", "args": [79] },
+      { "name": "inkidx-2a", "query": "inkColorIndex", "args": [42] },
+      { "name": "paperidx-2a", "query": "paperColorIndex", "args": [42] },
+      { "name": "inkidx-ff", "query": "inkColorIndex", "args": [255] },
+      { "name": "paperidx-ff", "query": "paperColorIndex", "args": [255] },
+
+      { "name": "flashframes", "query": "flashFrames" },
+      { "name": "phase-0", "query": "flashPhase", "args": [0] },
+      { "name": "phase-15", "query": "flashPhase", "args": [15] },
+      { "name": "phase-16", "query": "flashPhase", "args": [16] },
+      { "name": "phase-31", "query": "flashPhase", "args": [31] },
+      { "name": "phase-32", "query": "flashPhase", "args": [32] },
+      { "name": "phase-48", "query": "flashPhase", "args": [48] },
+
+      { "name": "pix-38-on", "query": "pixelColorIndex", "args": [56, 1, 0] },
+      { "name": "pix-38-off", "query": "pixelColorIndex", "args": [56, 0, 0] },
+      { "name": "pix-38-on-ph1", "query": "pixelColorIndex", "args": [56, 1, 1] },
+      { "name": "pix-38-off-ph1", "query": "pixelColorIndex", "args": [56, 0, 1] },
+
+      { "name": "pix-47-on", "query": "pixelColorIndex", "args": [71, 1, 0] },
+      { "name": "pix-47-off", "query": "pixelColorIndex", "args": [71, 0, 0] },
+
+      { "name": "pix-c7-on-ph0", "query": "pixelColorIndex", "args": [199, 1, 0] },
+      { "name": "pix-c7-off-ph0", "query": "pixelColorIndex", "args": [199, 0, 0] },
+      { "name": "pix-c7-on-ph1", "query": "pixelColorIndex", "args": [199, 1, 1] },
+      { "name": "pix-c7-off-ph1", "query": "pixelColorIndex", "args": [199, 0, 1] },
+
+      { "name": "pix-ff-on-ph0", "query": "pixelColorIndex", "args": [255, 1, 0] },
+      { "name": "pix-ff-on-ph1", "query": "pixelColorIndex", "args": [255, 1, 1] },
+      { "name": "pix-00-on", "query": "pixelColorIndex", "args": [0, 1, 0] }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "ink-3838", "value": 0 },
+      { "name": "paper-38", "value": 7 },
+      { "name": "bright-38", "value": 0 },
+      { "name": "flash-38", "value": 0 },
+
+      { "name": "ink-47", "value": 7 },
+      { "name": "paper-47", "value": 0 },
+      { "name": "bright-47", "value": 1 },
+      { "name": "flash-47", "value": 0 },
+
+      { "name": "ink-c7", "value": 7 },
+      { "name": "paper-c7", "value": 0 },
+      { "name": "bright-c7", "value": 1 },
+      { "name": "flash-c7", "value": 1 },
+
+      { "name": "ink-2a", "value": 2 },
+      { "name": "paper-2a", "value": 5 },
+      { "name": "flash-ff", "value": 1 },
+      { "name": "bright-ff", "value": 1 },
+
+      { "name": "inkidx-38", "value": 0 },
+      { "name": "paperidx-38", "value": 7 },
+      { "name": "inkidx-47", "value": 15 },
+      { "name": "paperidx-47", "value": 8 },
+      { "name": "inkidx-4f", "value": 15 },
+      { "name": "paperidx-4f", "value": 9 },
+      { "name": "inkidx-2a", "value": 2 },
+      { "name": "paperidx-2a", "value": 5 },
+      { "name": "inkidx-ff", "value": 15 },
+      { "name": "paperidx-ff", "value": 15 },
+
+      { "name": "flashframes", "value": 16 },
+      { "name": "phase-0", "value": 0 },
+      { "name": "phase-15", "value": 0 },
+      { "name": "phase-16", "value": 1 },
+      { "name": "phase-31", "value": 1 },
+      { "name": "phase-32", "value": 0 },
+      { "name": "phase-48", "value": 1 },
+
+      { "name": "pix-38-on", "value": 0 },
+      { "name": "pix-38-off", "value": 7 },
+      { "name": "pix-38-on-ph1", "value": 0 },
+      { "name": "pix-38-off-ph1", "value": 7 },
+
+      { "name": "pix-47-on", "value": 15 },
+      { "name": "pix-47-off", "value": 8 },
+
+      { "name": "pix-c7-on-ph0", "value": 15 },
+      { "name": "pix-c7-off-ph0", "value": 8 },
+      { "name": "pix-c7-on-ph1", "value": 8 },
+      { "name": "pix-c7-off-ph1", "value": 15 },
+
+      { "name": "pix-ff-on-ph0", "value": 15 },
+      { "name": "pix-ff-on-ph1", "value": 15 },
+      { "name": "pix-00-on", "value": 0 }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

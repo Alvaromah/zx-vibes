@@ -1,0 +1,34 @@
+{
+  "id": "ASM-EMIT-LD-IXIY-NN-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-index-immediate-family",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld ix, 0x1234",
+          "    ld iy, 0x5678",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-index-immediate.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-index-immediate-family",
+        "ok": true,
+        "bytesHex": "DD213412FD217856"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

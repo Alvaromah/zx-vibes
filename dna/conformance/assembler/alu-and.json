@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-ALU-AND-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "alu-and-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    and b",
+          "    and c",
+          "    and d",
+          "    and e",
+          "    and h",
+          "    and l",
+          "    and (hl)",
+          "    and a",
+          "    and 0x12",
+          ""
+        ],
+        "options": {
+          "entryPath": "alu-and-source.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "alu-and-source",
+        "ok": true,
+        "bytesHex": "A0A1A2A3A4A5A6A7E612"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

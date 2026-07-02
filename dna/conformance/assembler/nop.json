@@ -1,0 +1,29 @@
+{
+  "id": "ASM-EMIT-NOP-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "nop-opcode",
+        "sourceLines": ["    ORG 0x8000", "    nop", ""],
+        "options": {
+          "entryPath": "nop.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "nop-opcode",
+        "ok": true,
+        "bytesHex": "00"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

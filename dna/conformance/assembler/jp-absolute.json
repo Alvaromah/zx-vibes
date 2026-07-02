@@ -1,0 +1,29 @@
+{
+  "id": "ASM-EMIT-JP-NN-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "jp-absolute-little-endian",
+        "sourceLines": ["    ORG 0x8000", "    jp 0x1234", ""],
+        "options": {
+          "entryPath": "jp-absolute.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "jp-absolute-little-endian",
+        "ok": true,
+        "bytesHex": "C33412"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-ALU-SUB-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "alu-sub-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    sub b",
+          "    sub c",
+          "    sub d",
+          "    sub e",
+          "    sub h",
+          "    sub l",
+          "    sub (hl)",
+          "    sub a",
+          "    sub 0x12",
+          ""
+        ],
+        "options": {
+          "entryPath": "alu-sub-source.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "alu-sub-source",
+        "ok": true,
+        "bytesHex": "9091929394959697D612"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

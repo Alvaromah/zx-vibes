@@ -1,0 +1,42 @@
+{
+  "id": "ASM-EMIT-JP-CC-NN-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "jp-conditional-absolute-all-conditions",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    jp nz,target",
+          "    jp z,target",
+          "    jp nc,target",
+          "    jp c,target",
+          "    jp po,target",
+          "    jp pe,target",
+          "    jp p,target",
+          "    jp m,target",
+          "target:",
+          "    nop",
+          ""
+        ],
+        "options": {
+          "entryPath": "jp-conditional-absolute.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "jp-conditional-absolute-all-conditions",
+        "ok": true,
+        "bytesHex": "C21880CA1880D21880DA1880E21880EA1880F21880FA188000"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

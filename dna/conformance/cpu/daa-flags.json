@@ -1,0 +1,380 @@
+[
+  {
+    "id": "CPU-FLAG-DAA-001",
+    "tier": "fidelity",
+    "provenance": "z80-spec",
+    "input": {
+      "kind": "cpu-step",
+      "note": "DAA (opcode 0x27) flag computation: S Z H P/V C and the undocumented 5/3 bits, for N=0 (after add) and N=1 (after sub) with every H/C combination and the +06/+60/+66 corrections. Expected A/F derived from the documented DAA correction algorithm (z80-cpu-execution.md [Z80-EXEC-DAA-001]/[Z80-EXEC-DAA-FLAGS-001]) by an independent reference that agrees with @zx-vibes/cpu over all 256xN/H/C inputs and is corroborated end-to-end by zexall. Opcode preloaded at PC; unspecified registers default to 0.",
+      "cases": [
+        {
+          "name": "add-none",
+          "registers": {
+            "a": "42",
+            "f": "00"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-low-gt9",
+          "registers": {
+            "a": "0A",
+            "f": "00"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-hflag",
+          "registers": {
+            "a": "13",
+            "f": "10"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-high-gt99",
+          "registers": {
+            "a": "A3",
+            "f": "00"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-both",
+          "registers": {
+            "a": "9B",
+            "f": "00"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-cflag",
+          "registers": {
+            "a": "31",
+            "f": "01"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-cf-low",
+          "registers": {
+            "a": "29",
+            "f": "01"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-99-parity",
+          "registers": {
+            "a": "93",
+            "f": "10"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-zero-carry",
+          "registers": {
+            "a": "9A",
+            "f": "00"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "sub-none",
+          "registers": {
+            "a": "42",
+            "f": "02"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "sub-hborrow",
+          "registers": {
+            "a": "16",
+            "f": "12"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "sub-cflag",
+          "registers": {
+            "a": "F3",
+            "f": "03"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "sub-both",
+          "registers": {
+            "a": "66",
+            "f": "13"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "sub-9-noborrow",
+          "registers": {
+            "a": "90",
+            "f": "03"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-sign",
+          "registers": {
+            "a": "90",
+            "f": "00"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-undoc-53",
+          "registers": {
+            "a": "22",
+            "f": "00"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "add-undoc-3",
+          "registers": {
+            "a": "88",
+            "f": "10"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        },
+        {
+          "name": "sub-zero",
+          "registers": {
+            "a": "00",
+            "f": "02"
+          },
+          "memory": {
+            "0000": "27"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "add-none",
+          "registers": {
+            "a": "42",
+            "f": "04",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-low-gt9",
+          "registers": {
+            "a": "10",
+            "f": "10",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-hflag",
+          "registers": {
+            "a": "19",
+            "f": "08",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-high-gt99",
+          "registers": {
+            "a": "03",
+            "f": "05",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-both",
+          "registers": {
+            "a": "01",
+            "f": "11",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-cflag",
+          "registers": {
+            "a": "91",
+            "f": "81",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-cf-low",
+          "registers": {
+            "a": "89",
+            "f": "89",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-99-parity",
+          "registers": {
+            "a": "99",
+            "f": "8C",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-zero-carry",
+          "registers": {
+            "a": "00",
+            "f": "55",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "sub-none",
+          "registers": {
+            "a": "42",
+            "f": "06",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "sub-hborrow",
+          "registers": {
+            "a": "10",
+            "f": "02",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "sub-cflag",
+          "registers": {
+            "a": "93",
+            "f": "87",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "sub-both",
+          "registers": {
+            "a": "00",
+            "f": "47",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "sub-9-noborrow",
+          "registers": {
+            "a": "30",
+            "f": "27",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-sign",
+          "registers": {
+            "a": "90",
+            "f": "84",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-undoc-53",
+          "registers": {
+            "a": "22",
+            "f": "24",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "add-undoc-3",
+          "registers": {
+            "a": "8E",
+            "f": "8C",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        },
+        {
+          "name": "sub-zero",
+          "registers": {
+            "a": "00",
+            "f": "46",
+            "pc": "0001",
+            "r": "01"
+          },
+          "tStates": 4
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "custom"
+    }
+  }
+]

@@ -1,0 +1,34 @@
+{
+  "id": "ASM-EMIT-IO-N-A-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "io-immediate-accumulator",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    out (0xFE),a",
+          "    in a,(0xFE)",
+          ""
+        ],
+        "options": {
+          "entryPath": "io-immediate-accumulator.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "io-immediate-accumulator",
+        "ok": true,
+        "bytesHex": "D3FEDBFE"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

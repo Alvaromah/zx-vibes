@@ -1,0 +1,30 @@
+{
+  "id": "AUDIO-EDGE-ORDER-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0016",
+  "input": {
+    "kind": "audio-edge-order",
+    "cases": [
+      {
+        "name": "three-edges",
+        "sampleRate": 44100,
+        "tStatesTotal": 800,
+        "initialLevel": 0,
+        "level0": -1,
+        "level1": 1,
+        "edges": [
+          { "t": 100, "level": 1 },
+          { "t": 300, "level": 0 },
+          { "t": 500, "level": 1 }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "three-edges", "samples": [-1, -1, 1, 1, -1, -1, -1, 1, 1, 1] }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

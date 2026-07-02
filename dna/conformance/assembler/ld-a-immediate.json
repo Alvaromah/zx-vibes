@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-a-immediate-mid",
+        "sourceLines": ["    ORG 0x8000", "    ld a, 0x42", ""],
+        "options": {
+          "entryPath": "ld-a-immediate-mid.asm"
+        }
+      },
+      {
+        "name": "ld-a-immediate-max",
+        "sourceLines": ["    ORG 0x8000", "    ld a, 0xff", ""],
+        "options": {
+          "entryPath": "ld-a-immediate-max.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-a-immediate-mid",
+        "ok": true,
+        "bytesHex": "3E42"
+      },
+      {
+        "name": "ld-a-immediate-max",
+        "ok": true,
+        "bytesHex": "3EFF"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@zx-vibes-examples/tooling",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Build + test machinery for the zx-vibes emulator demos: bundles examples/zxspectrum.js (esbuild, ROM embedded) and runs the headless boot smoke. Not needed to try the demos — just open examples/index.html.",
+  "type": "module",
+  "scripts": {
+    "bundle": "node build.mjs",
+    "screenshot": "node screenshot.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@zx-vibes/machine": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "pngjs": "^7.0.0"
+  }
+}

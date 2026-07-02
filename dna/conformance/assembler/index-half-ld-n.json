@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-INDEX-HALF-LD-N-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "index-half-ld-n",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld ixh,0x11",
+          "    ld ixl,0x22",
+          "    ld iyh,0x33",
+          "    ld iyl,0x44",
+          ""
+        ],
+        "options": {
+          "entryPath": "index-half-ld-n.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "index-half-ld-n",
+        "ok": true,
+        "bytesHex": "DD2611DD2E22FD2633FD2E44"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

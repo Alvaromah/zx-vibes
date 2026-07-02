@@ -1,0 +1,42 @@
+{
+  "id": "HOST-IO-EVENT-IOTIME-001",
+  "area": "emulator",
+  "tier": "fidelity",
+  "provenance": "decision:ADR-0016",
+  "input": {
+    "kind": "host-io-iotime",
+    "cases": [
+      {
+        "name": "out-fe-contended-exact",
+        "exact": true,
+        "clock": 14335,
+        "registers": { "pc": "0x4000", "a": "0x02" },
+        "memory": { "0x4000": "D3FE" }
+      },
+      {
+        "name": "out-fe-uncontended-exact",
+        "exact": true,
+        "clock": 14335,
+        "registers": { "pc": "0x8000", "a": "0x02" },
+        "memory": { "0x8000": "D3FE" }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "out-fe-contended-exact",
+        "contention": 10,
+        "tStates": 21,
+        "writes": [{ "portLow": "0xFE", "value": 2 }]
+      },
+      {
+        "name": "out-fe-uncontended-exact",
+        "contention": 0,
+        "tStates": 11,
+        "writes": [{ "portLow": "0xFE", "value": 2 }]
+      }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

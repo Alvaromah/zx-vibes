@@ -1,0 +1,30 @@
+{
+  "id": "MACHINE-CONTENTION-001",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "machine-run",
+    "note": "Per-access memory contention threaded onto the executed stream (MACHINE-CONTENTION-ACCESS-001 / -CLOCK-001 / -CPU-CONTRACT-001). Interrupts disabled; each access samples @zx-vibes/ula contentionDelay at (instruction-start clock + contention so far). Contended display window starts at frame T 14335; pattern 6,5,4,3,2,1,0,0. Expected delays: fetch@14335 col0->6; @14345 col10%8=2->4; LD A,(HL) read; INC (HL) read+write accumulation.",
+    "cases": [
+      { "name": "nop-uncontended-pc-in-window", "registers": { "pc": "0x8000" }, "memory": { "0x8000": "00" }, "clock": 14335, "steps": 1 },
+      { "name": "nop-contended-pc-fetch", "registers": { "pc": "0x4000" }, "memory": { "0x4000": "00" }, "clock": 14335, "steps": 1 },
+      { "name": "ld-a-hl-contended-read", "registers": { "pc": "0x8000", "h": "0x40", "l": "0x00" }, "memory": { "0x8000": "7e", "0x4000": "ab" }, "clock": 14335, "steps": 1 },
+      { "name": "ld-a-hl-contended-addr-outside-window", "registers": { "pc": "0x8000", "h": "0x40", "l": "0x00" }, "memory": { "0x8000": "7e", "0x4000": "ab" }, "clock": 0, "steps": 1 },
+      { "name": "ld-a-hl-uncontended-addr-in-window", "registers": { "pc": "0x8000", "h": "0x90", "l": "0x00" }, "memory": { "0x8000": "7e", "0x9000": "cd" }, "clock": 14335, "steps": 1 },
+      { "name": "inc-hl-two-contended-accesses", "registers": { "pc": "0x8000", "h": "0x40", "l": "0x00" }, "memory": { "0x8000": "34", "0x4000": "7f" }, "clock": 14335, "steps": 1 },
+      { "name": "two-nops-contended-clock-progression", "registers": { "pc": "0x4000" }, "memory": { "0x4000": "0000" }, "clock": 14335, "steps": 2 }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "nop-uncontended-pc-in-window", "registers": { "pc": "0x8001" }, "clock": 14339, "contention": 0, "tStates": 4 },
+      { "name": "nop-contended-pc-fetch", "registers": { "pc": "0x4001" }, "clock": 14345, "contention": 6, "tStates": 10 },
+      { "name": "ld-a-hl-contended-read", "registers": { "a": "0xab", "pc": "0x8001" }, "clock": 14348, "contention": 6, "tStates": 13 },
+      { "name": "ld-a-hl-contended-addr-outside-window", "registers": { "a": "0xab" }, "clock": 7, "contention": 0, "tStates": 7 },
+      { "name": "ld-a-hl-uncontended-addr-in-window", "registers": { "a": "0xcd" }, "clock": 14342, "contention": 0, "tStates": 7 },
+      { "name": "inc-hl-two-contended-accesses", "registers": { "pc": "0x8001" }, "memory": { "0x4000": "80" }, "clock": 14352, "contention": 6, "tStates": 17 },
+      { "name": "two-nops-contended-clock-progression", "registers": { "pc": "0x4002" }, "clock": 14353, "contention": 10, "tStates": 18 }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

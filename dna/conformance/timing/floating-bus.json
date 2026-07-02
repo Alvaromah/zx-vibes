@@ -1,0 +1,116 @@
+[
+  {
+    "id": "BUS-FLOATING-001",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "floating-bus-query",
+      "cases": [
+        { "name": "port-FE-even-driven", "query": "portFloats", "args": [254] },
+        { "name": "port-FF-odd-floats", "query": "portFloats", "args": [255] },
+        { "name": "port-00-even-driven", "query": "portFloats", "args": [0] },
+        { "name": "port-1F-odd-floats", "query": "portFloats", "args": [31] },
+        { "name": "port-7FFE-even-driven", "query": "portFloats", "args": [32766] },
+        { "name": "port-FFFF-odd-floats", "query": "portFloats", "args": [65535] },
+
+        { "name": "fetch-t0-vblank", "query": "activeFetch", "args": [0] },
+        { "name": "fetch-t14334-preborder", "query": "activeFetch", "args": [14334] },
+        { "name": "fetch-t14335-firstline", "query": "activeFetch", "args": [14335] },
+        { "name": "fetch-t14462-lastcontended", "query": "activeFetch", "args": [14462] },
+        { "name": "fetch-t14463-borderafter", "query": "activeFetch", "args": [14463] },
+        { "name": "fetch-t57246-lastdisplay", "query": "activeFetch", "args": [57246] },
+        { "name": "fetch-t57343-bottomborder", "query": "activeFetch", "args": [57343] },
+
+        { "name": "idle-t0-value", "query": "floatingBusValue", "args": [0] },
+        { "name": "idle-t0-modeled", "query": "floatingBusModeled", "args": [0] },
+        { "name": "idle-t14334-value", "query": "floatingBusValue", "args": [14334] },
+        { "name": "idle-t14334-modeled", "query": "floatingBusModeled", "args": [14334] },
+        { "name": "idle-t14463-value", "query": "floatingBusValue", "args": [14463] },
+        { "name": "idle-t14463-modeled", "query": "floatingBusModeled", "args": [14463] },
+        { "name": "idle-t15605-midlineborder-value", "query": "floatingBusValue", "args": [15605] },
+        { "name": "idle-t15605-midlineborder-modeled", "query": "floatingBusModeled", "args": [15605] },
+        { "name": "idle-t57247-value", "query": "floatingBusValue", "args": [57247] },
+        { "name": "idle-t57247-modeled", "query": "floatingBusModeled", "args": [57247] },
+        { "name": "idle-t57343-bottomborder-value", "query": "floatingBusValue", "args": [57343] },
+        { "name": "idle-t57343-bottomborder-modeled", "query": "floatingBusModeled", "args": [57343] },
+        { "name": "idle-t69887-lastframeT-value", "query": "floatingBusValue", "args": [69887] },
+        { "name": "idle-t69887-lastframeT-modeled", "query": "floatingBusModeled", "args": [69887] }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "port-FE-even-driven", "value": false },
+        { "name": "port-FF-odd-floats", "value": true },
+        { "name": "port-00-even-driven", "value": false },
+        { "name": "port-1F-odd-floats", "value": true },
+        { "name": "port-7FFE-even-driven", "value": false },
+        { "name": "port-FFFF-odd-floats", "value": true },
+
+        { "name": "fetch-t0-vblank", "value": false },
+        { "name": "fetch-t14334-preborder", "value": false },
+        { "name": "fetch-t14335-firstline", "value": true },
+        { "name": "fetch-t14462-lastcontended", "value": true },
+        { "name": "fetch-t14463-borderafter", "value": false },
+        { "name": "fetch-t57246-lastdisplay", "value": true },
+        { "name": "fetch-t57343-bottomborder", "value": false },
+
+        { "name": "idle-t0-value", "value": 255 },
+        { "name": "idle-t0-modeled", "value": true },
+        { "name": "idle-t14334-value", "value": 255 },
+        { "name": "idle-t14334-modeled", "value": true },
+        { "name": "idle-t14463-value", "value": 255 },
+        { "name": "idle-t14463-modeled", "value": true },
+        { "name": "idle-t15605-midlineborder-value", "value": 255 },
+        { "name": "idle-t15605-midlineborder-modeled", "value": true },
+        { "name": "idle-t57247-value", "value": 255 },
+        { "name": "idle-t57247-modeled", "value": true },
+        { "name": "idle-t57343-bottomborder-value", "value": 255 },
+        { "name": "idle-t57343-bottomborder-modeled", "value": true },
+        { "name": "idle-t69887-lastframeT-value", "value": 255 },
+        { "name": "idle-t69887-lastframeT-modeled", "value": true }
+      ]
+    },
+    "normalization": { "profile": "json" },
+    "notes": "Scoped hardware facts (ULA-FLOATBUS-PORT-001 / -IDLE-001): the ULA drives even ports (A0=0) and an IN from an odd, undriven port reads the floating bus; outside the display-fetch window (contended window of ULA-TIME-CONTENTION-WINDOW-001, anchor 14335) the idle bus floats to 0xFF with modeled=true. activeFetch pins the window boundary. The in-window timing-exact byte is the deferred A5 timing (BUS-FLOATING-DEFER-001)."
+  },
+  {
+    "id": "BUS-FLOATING-DEFER-001",
+    "tier": "fidelity",
+    "provenance": "decision:ADR-0026",
+    "input": {
+      "kind": "floating-bus-query",
+      "cases": [
+        { "name": "deferred-t14335-firstfetch-value", "query": "floatingBusValue", "args": [14335] },
+        { "name": "deferred-t14335-firstfetch-modeled", "query": "floatingBusModeled", "args": [14335] },
+        { "name": "deferred-t14384-legacy0x4000-value", "query": "floatingBusValue", "args": [14384] },
+        { "name": "deferred-t14384-legacy0x4000-modeled", "query": "floatingBusModeled", "args": [14384] },
+        { "name": "deferred-t14462-lastcontended-value", "query": "floatingBusValue", "args": [14462] },
+        { "name": "deferred-t14462-lastcontended-modeled", "query": "floatingBusModeled", "args": [14462] },
+        { "name": "deferred-t14559-line1-value", "query": "floatingBusValue", "args": [14559] },
+        { "name": "deferred-t14559-line1-modeled", "query": "floatingBusModeled", "args": [14559] },
+        { "name": "deferred-t35903-midscreen-value", "query": "floatingBusValue", "args": [35903] },
+        { "name": "deferred-t35903-midscreen-modeled", "query": "floatingBusModeled", "args": [35903] },
+        { "name": "deferred-t57246-lastdisplay-value", "query": "floatingBusValue", "args": [57246] },
+        { "name": "deferred-t57246-lastdisplay-modeled", "query": "floatingBusModeled", "args": [57246] }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "deferred-t14335-firstfetch-value", "value": null },
+        { "name": "deferred-t14335-firstfetch-modeled", "value": false },
+        { "name": "deferred-t14384-legacy0x4000-value", "value": null },
+        { "name": "deferred-t14384-legacy0x4000-modeled", "value": false },
+        { "name": "deferred-t14462-lastcontended-value", "value": null },
+        { "name": "deferred-t14462-lastcontended-modeled", "value": false },
+        { "name": "deferred-t14559-line1-value", "value": null },
+        { "name": "deferred-t14559-line1-modeled", "value": false },
+        { "name": "deferred-t35903-midscreen-value", "value": null },
+        { "name": "deferred-t35903-midscreen-modeled", "value": false },
+        { "name": "deferred-t57246-lastdisplay-value", "value": null },
+        { "name": "deferred-t57246-lastdisplay-modeled", "value": false }
+      ]
+    },
+    "normalization": { "profile": "json" },
+    "notes": "The deferral made executable (ULA-FLOATBUS-DEFER-001, decision:ADR-0026): inside the display-fetch window the value is the ULA-fetched display/attribute byte, but the exact T->byte phase mapping is the deferred active-area pixel timing (A5, ADR-0021). The model reports modeled=false (value null) rather than fabricating a byte. Note t=14384 is exactly where the rejected legacy geometry maps 0x4000 — we defer it, not pin it."
+  }
+]

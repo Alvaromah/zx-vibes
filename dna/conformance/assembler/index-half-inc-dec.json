@@ -1,0 +1,40 @@
+{
+  "id": "ASM-EMIT-INDEX-HALF-INC-DEC-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "index-half-inc-dec",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    inc ixh",
+          "    dec ixh",
+          "    inc ixl",
+          "    dec ixl",
+          "    inc iyh",
+          "    dec iyh",
+          "    inc iyl",
+          "    dec iyl",
+          ""
+        ],
+        "options": {
+          "entryPath": "index-half-inc-dec.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "index-half-inc-dec",
+        "ok": true,
+        "bytesHex": "DD24DD25DD2CDD2DFD24FD25FD2CFD2D"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

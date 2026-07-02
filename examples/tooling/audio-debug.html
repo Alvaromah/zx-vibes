@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ZX audio debug — tono conocido de 520 Hz</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; background: #111; color: #ddd; padding: 24px; max-width: 720px; margin: auto; }
+  h2 { margin: 0 0 6px; } p { color: #9a9aa6; }
+  button { font-size: 18px; padding: 12px 22px; margin: 12px 0; cursor: pointer; border-radius: 8px; border: 0; background: #3a6; color: #fff; }
+  button:disabled { background: #444; cursor: default; }
+  canvas { display: block; width: 320px; image-rendering: pixelated; background: #000; margin: 10px 0; border-radius: 4px; }
+  pre { background: #000; padding: 12px; border-radius: 6px; white-space: pre-wrap; font: 13px/1.5 ui-monospace, monospace; }
+  .big { font-size: 15px; }
+</style>
+</head>
+<body>
+<h2>ZX audio debug</h2>
+<p>Reproduce un <b>tono limpio de 520 Hz</b> generado por el emulador (sin teclado, sin ROM: un bucle que conmuta el altavoz a intervalo fijo) y graba 6 s de la salida real de audio del navegador. Un solo botón, sin consola.</p>
+<button id="go">▶ Sonido + grabar 6 s</button>
+<canvas id="s" width="320" height="240"></canvas>
+<pre id="log">Listo. Pulsa el botón (sube un poco el volumen). Deberías oír un tono continuo.</pre>
+
+<script src="../zxspectrum.js"></script>
+<script>
+  // Tap: record whatever gets connected to the audio destination, preferably via
+  // an AudioWorklet (audio-thread capture). A ScriptProcessor tap runs on the
+  // main thread and drops render quanta under load — polluting the very
+  // measurement — so it is only the fallback. The hook lets the graph connect
+  // and play immediately, then splices the tap in asynchronously (well before
+  // the 500 ms settle that precedes recording).
+  const CAP_MAX = 48000 * 8; const capBuf = new Float32Array(CAP_MAX); let capLen = 0;
+  let recSR = 0, recording = false, tapped = false, tapKind = 'pendiente';
+  const TAP_SRC = `
+class DebugTapProcessor extends AudioWorkletProcessor {
+  process(inputs, outputs) {
+    const inp = inputs[0] && inputs[0][0];
+    if (inp) {
+      outputs[0][0].set(inp);
+      const copy = inp.slice(0);
+      this.port.postMessage(copy, [copy.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('debug-tap', DebugTapProcessor);`;
+  const orig = AudioNode.prototype.connect;
+  AudioNode.prototype.connect = function (dest, ...rest) {
+    if (!tapped && dest instanceof AudioDestinationNode) {
+      tapped = true;
+      const ctx = dest.context; recSR = ctx.sampleRate;
+      const src = this;
+      const ret = orig.call(src, dest); // audio flows now; the tap splices in below
+      const onChunk = (c) => { if (recording && capLen + c.length <= CAP_MAX) { capBuf.set(c, capLen); capLen += c.length; } };
+      const splice = (tap) => { src.disconnect(dest); orig.call(src, tap); orig.call(tap, dest); };
+      const url = URL.createObjectURL(new Blob([TAP_SRC], { type: 'application/javascript' }));
+      ctx.audioWorklet.addModule(url)
+        .catch((e1) => {
+          log('tap blob: rechazado (' + (e1 && e1.name) + ': ' + (e1 && e1.message) + '); probando data:...');
+          return ctx.audioWorklet.addModule('data:text/javascript;base64,' + btoa(TAP_SRC));
+        })
+        .then(() => {
+          URL.revokeObjectURL(url);
+          const tap = new AudioWorkletNode(ctx, 'debug-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+          tap.port.onmessage = (e) => onChunk(e.data);
+          splice(tap); tapKind = 'AudioWorklet';
+        }, (e2) => {
+          log('tap data: rechazado (' + (e2 && e2.name) + ': ' + (e2 && e2.message) + ')');
+          URL.revokeObjectURL(url);
+          const tap = ctx.createScriptProcessor(4096, 1, 1);
+          tap.onaudioprocess = (e) => {
+            const inp = e.inputBuffer.getChannelData(0);
+            e.outputBuffer.getChannelData(0).set(inp);    // passthrough so it still plays
+            onChunk(inp);
+          };
+          splice(tap); tapKind = 'ScriptProcessor';
+        });
+      return ret;
+    }
+    return orig.call(this, dest, ...rest);
+  };
+
+  const logEl = document.getElementById('log');
+  const log = (m) => { logEl.textContent += '\n' + m; };
+
+  // A tight Z80 loop at 0x8000: DI; LD A,0x17; loop: OUT(0xFE),A; LD B,0; DJNZ; XOR 0x10; JR loop
+  const ROUTINE = [0xF3, 0x3E, 0x17, 0xD3, 0xFE, 0x06, 0x00, 0x10, 0xFE, 0xEE, 0x10, 0x18, 0xF6];
+  const zx = ZXSpectrum.create();
+  zx.attach(document.getElementById('s'), { keyboard: false });
+  const injectTone = () => {
+    ROUTINE.forEach((b, i) => { zx.machine.memory[0x8000 + i] = b; });
+    zx.machine.registers.pc = 0x8000;
+    zx.machine.registers.sp = 0xff00;
+  };
+  injectTone();
+
+  function encodeWav(d, sr) {
+    const n = d.length, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true);
+    v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) { let x = Math.max(-1, Math.min(1, d[i])); v.setInt16(44 + i * 2, x * 32767, true); }
+    return new Blob([b], { type: 'audio/wav' });
+  }
+
+  document.getElementById('go').onclick = async () => {
+    const btn = document.getElementById('go'); btn.disabled = true;
+    logEl.textContent = 'Arrancando audio... (página servida via ' + location.protocol + ')';
+    zx.setSound(true);          // user gesture -> creates AudioContext + graph -> tap inserted
+    injectTone();
+    zx.start();
+    await new Promise((r) => setTimeout(r, 500)); // let the tone settle (and the async taps splice in)
+    log('Salida del emulador: ' + (zx._worklet ? 'AudioWorklet' : (zx._node ? 'ScriptProcessorNode' : 'ninguna (!)')) + ' · tap de grabación: ' + tapKind);
+    capLen = 0; recording = true; log('● Grabando 6 s (deberías estar oyendo el tono)...');
+    await new Promise((r) => setTimeout(r, 6000));
+    recording = false; zx.stop();
+
+    const n = capLen;
+    if (!n) { log('No se capturó audio. ¿El navegador bloqueó el sonido? Reintenta.'); btn.disabled = false; return; }
+    const d = capBuf.subarray(0, n);
+
+    // per-second zero-crossing pitch (robust warble/glitch detector)
+    const rep = [];
+    for (let s = 0; s + recSR <= n; s += recSR) {
+      const iv = []; let L = -1;
+      for (let i = s + 1; i < s + recSR; i++) if (d[i - 1] < 0 && d[i] >= 0) { if (L >= 0) iv.push(i - L); L = i; }
+      if (iv.length < 5) { rep.push('mudo'); continue; }
+      const m = iv.reduce((a, b) => a + b, 0) / iv.length;
+      const sd = Math.sqrt(iv.reduce((a, b) => a + (b - m) ** 2, 0) / iv.length);
+      rep.push((recSR / m).toFixed(0) + 'Hz±' + sd.toFixed(1));
+    }
+    // Waveform splices and holds, via rising-crossing intervals over the whole
+    // capture. (A flat "frozen samples" detector no longer works: the DC-blocking
+    // high-pass in the graph turns any hold into an exponential settle.)
+    const cr = [];
+    for (let i = 1; i < n; i++) if (d[i - 1] < 0 && d[i] >= 0) cr.push(i);
+    const ivAll = [];
+    for (let i = 1; i < cr.length; i++) ivAll.push(cr[i] - cr[i - 1]);
+    const med = [...ivAll].sort((a, b) => a - b)[ivAll.length >> 1] || 0;
+    const splices = ivAll.filter((x) => Math.abs(x - med) > med * 0.15).length;
+    const gaps = ivAll.filter((x) => x > med * 2.5).length;
+
+    log('Capturado ' + (n / recSR).toFixed(1) + ' s @ ' + recSR + ' Hz');
+    log('Pitch por segundo: ' + rep.join('  '));
+    log('Periodo mediano: ' + med.toFixed(1) + ' muestras (' + (recSR / med).toFixed(1) + ' Hz)');
+    log('Empalmes (intervalos >15% fuera): ' + splices + ' · huecos >2.5 periodos (holds): ' + gaps);
+    const unstable = gaps > 0 || splices > 4 || rep.some((x) => x !== 'mudo' && parseFloat(x.split('±')[1]) > 2);
+    log(unstable
+      ? '>> INESTABLE: quedan empalmes/huecos en la señal capturada'
+      : '>> ESTABLE: la reproduccion del navegador es limpia');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(encodeWav(d, recSR));
+    a.download = 'zx-real-capture.wav'; a.click();
+    log('⬇ Descargado zx-real-capture.wav — mandamelo.');
+    btn.disabled = false;
+  };
+</script>
+</body>
+</html>

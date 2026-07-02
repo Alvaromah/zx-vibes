@@ -1,0 +1,58 @@
+[
+  {
+    "id": "CPU-EXEC-INC-R-001",
+    "tier": "fidelity",
+    "provenance": "fuse",
+    "input": {
+      "kind": "cpu-step",
+      "note": "INC r per-opcode cases transcribed from the FUSE Z80 test suite (one case per register opcode). registers/memory are hex; unspecified registers default to 0x00 and PC to 0x0000. The opcode byte is preloaded in memory at PC.",
+      "cases": [
+        { "name": "inc-b-fuse", "registers": { "b": "FF" }, "memory": { "0000": "04" } },
+        { "name": "inc-c-fuse", "registers": { "c": "7F" }, "memory": { "0000": "0C" } },
+        { "name": "inc-d-fuse", "registers": { "d": "27" }, "memory": { "0000": "14" } },
+        { "name": "inc-e-fuse", "registers": { "e": "AA" }, "memory": { "0000": "1C" } },
+        { "name": "inc-h-fuse", "registers": { "h": "72" }, "memory": { "0000": "24" } },
+        { "name": "inc-l-fuse", "registers": { "l": "26" }, "memory": { "0000": "2C" } },
+        { "name": "inc-a-fuse", "registers": { "a": "CF" }, "memory": { "0000": "3C" } }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "inc-b-fuse", "registers": { "b": "00", "f": "50", "pc": "0001", "r": "01" }, "tStates": 4 },
+        { "name": "inc-c-fuse", "registers": { "c": "80", "f": "94", "pc": "0001", "r": "01" }, "tStates": 4 },
+        { "name": "inc-d-fuse", "registers": { "d": "28", "f": "28", "pc": "0001", "r": "01" }, "tStates": 4 },
+        { "name": "inc-e-fuse", "registers": { "e": "AB", "f": "A8", "pc": "0001", "r": "01" }, "tStates": 4 },
+        { "name": "inc-h-fuse", "registers": { "h": "73", "f": "20", "pc": "0001", "r": "01" }, "tStates": 4 },
+        { "name": "inc-l-fuse", "registers": { "l": "27", "f": "20", "pc": "0001", "r": "01" }, "tStates": 4 },
+        { "name": "inc-a-fuse", "registers": { "a": "D0", "f": "90", "pc": "0001", "r": "01" }, "tStates": 4 }
+      ]
+    },
+    "normalization": {
+      "profile": "custom"
+    }
+  },
+  {
+    "id": "CPU-EXEC-INC-R-BOUNDARY-001",
+    "tier": "fidelity",
+    "provenance": "z80-spec",
+    "input": {
+      "kind": "cpu-step",
+      "note": "Spec-derived boundary cases for flag corners a single FUSE input per opcode does not reach: zero with carry preserved, mid-value half carry, and 0x7F signed overflow.",
+      "cases": [
+        { "name": "inc-a-zero-carry-preserved", "registers": { "a": "FF", "f": "01" }, "memory": { "0000": "3C" } },
+        { "name": "inc-l-half-carry-mid", "registers": { "l": "0F" }, "memory": { "0000": "2C" } },
+        { "name": "inc-a-overflow-sign", "registers": { "a": "7F" }, "memory": { "0000": "3C" } }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "inc-a-zero-carry-preserved", "registers": { "a": "00", "f": "51", "pc": "0001" }, "tStates": 4 },
+        { "name": "inc-l-half-carry-mid", "registers": { "l": "10", "f": "10", "pc": "0001" }, "tStates": 4 },
+        { "name": "inc-a-overflow-sign", "registers": { "a": "80", "f": "94", "pc": "0001" }, "tStates": 4 }
+      ]
+    },
+    "normalization": {
+      "profile": "custom"
+    }
+  }
+]

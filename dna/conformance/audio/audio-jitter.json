@@ -1,0 +1,20 @@
+{
+  "id": "AUDIO-JITTER-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0016",
+  "input": {
+    "kind": "audio-jitter",
+    "cases": [
+      { "name": "tone-44k1", "sampleRate": 44100, "tStatesTotal": 200000, "halfPeriodT": 1000, "initialLevel": 1 },
+      { "name": "tone-48k", "sampleRate": 48000, "tStatesTotal": 200000, "halfPeriodT": 1000, "initialLevel": 1 }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "tone-44k1", "maxJitterSamples": 1 },
+      { "name": "tone-48k", "maxJitterSamples": 1 }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

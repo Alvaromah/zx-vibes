@@ -1,0 +1,116 @@
+[
+  {
+    "id": "TAPE-EAR-PULSES-001",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "tape-pulses-query",
+      "note": "HEADER block (tape-loading.md TAPE-PULSE-*): body [00 55] (flag 0x00 < 0x80 => header pilot). Pulse stream = 8063 pilot pulses of 2168 T, then sync 667 T + 735 T, then each byte MSB-first as two pulses/bit (855 for 0, 1710 for 1). Total = 8063 + 2 + 16*2 = 8097. Byte 0x00 = sixteen 855 T pulses; byte 0x55 (01010101) MSB-first = 0,1,0,1,0,1,0,1 => 855,855,1710,1710,... Indices: 8062 last pilot, 8063 sync1, 8064 sync2, 8065 first data pulse, 8081 byte1 bit7 pulse, 8083 byte1 bit6 pulse.",
+      "bytes": "0055",
+      "cases": [
+        { "name": "pulse-count", "query": "pulseCount" },
+        { "name": "pilot-run", "query": "pilotRun" },
+        { "name": "first-pilot", "query": "pulseAt", "args": [0] },
+        { "name": "last-pilot", "query": "pulseAt", "args": [8062] },
+        { "name": "sync1", "query": "pulseAt", "args": [8063] },
+        { "name": "sync2", "query": "pulseAt", "args": [8064] },
+        { "name": "byte0-bit7-a", "query": "pulseAt", "args": [8065] },
+        { "name": "byte0-bit7-b", "query": "pulseAt", "args": [8066] },
+        { "name": "byte1-bit7", "query": "pulseAt", "args": [8081] },
+        { "name": "byte1-bit6", "query": "pulseAt", "args": [8083] },
+        { "name": "byte1-bit5", "query": "pulseAt", "args": [8085] },
+        { "name": "last-pulse", "query": "pulseAt", "args": [8096] }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "pulse-count", "value": 8097 },
+        { "name": "pilot-run", "value": 8063 },
+        { "name": "first-pilot", "value": 2168 },
+        { "name": "last-pilot", "value": 2168 },
+        { "name": "sync1", "value": 667 },
+        { "name": "sync2", "value": 735 },
+        { "name": "byte0-bit7-a", "value": 855 },
+        { "name": "byte0-bit7-b", "value": 855 },
+        { "name": "byte1-bit7", "value": 855 },
+        { "name": "byte1-bit6", "value": 1710 },
+        { "name": "byte1-bit5", "value": 855 },
+        { "name": "last-pulse", "value": 1710 }
+      ]
+    },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "TAPE-EAR-PULSES-DATA",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "tape-pulses-query",
+      "note": "DATA block: body [ff 80 01] (flag 0xFF >= 0x80 => data pilot 3223). Total = 3223 + 2 + 16*3 = 3273. Byte 0xFF = sixteen 1710 T pulses; byte 0x80 (10000000) MSB-first => 1710,1710 then fourteen 855; byte 0x01 (00000001) => fourteen 855 then 1710,1710. Indices: 3222 last pilot, 3223 sync1, 3225 byte0 first pulse, 3241 byte1 bit7, 3243 byte1 bit6, 3271 byte2 bit0 pulse.",
+      "bytes": "ff8001",
+      "cases": [
+        { "name": "pulse-count", "query": "pulseCount" },
+        { "name": "pilot-run", "query": "pilotRun" },
+        { "name": "last-pilot", "query": "pulseAt", "args": [3222] },
+        { "name": "sync1", "query": "pulseAt", "args": [3223] },
+        { "name": "sync2", "query": "pulseAt", "args": [3224] },
+        { "name": "byte0-bit7", "query": "pulseAt", "args": [3225] },
+        { "name": "byte1-bit7", "query": "pulseAt", "args": [3241] },
+        { "name": "byte1-bit6", "query": "pulseAt", "args": [3243] },
+        { "name": "byte2-bit1", "query": "pulseAt", "args": [3269] },
+        { "name": "byte2-bit0", "query": "pulseAt", "args": [3271] },
+        { "name": "byte2-bit0-b", "query": "pulseAt", "args": [3272] }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "pulse-count", "value": 3273 },
+        { "name": "pilot-run", "value": 3223 },
+        { "name": "last-pilot", "value": 2168 },
+        { "name": "sync1", "value": 667 },
+        { "name": "sync2", "value": 735 },
+        { "name": "byte0-bit7", "value": 1710 },
+        { "name": "byte1-bit7", "value": 1710 },
+        { "name": "byte1-bit6", "value": 855 },
+        { "name": "byte2-bit1", "value": 855 },
+        { "name": "byte2-bit0", "value": 1710 },
+        { "name": "byte2-bit0-b", "value": 1710 }
+      ]
+    },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "TAPE-EAR-PULSES-BYTE",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "tape-pulses-query",
+      "note": "bytePulses(byte): 16 pulses, MSB first, two equal pulses per bit. 0xA3 = 10100011 => bit7=1,bit6=0,bit5=1,bit4=0,bit3=0,bit2=0,bit1=1,bit0=1. Also checks the empty-body rejection (blockToPulses([]) throws).",
+      "bytes": "",
+      "cases": [
+        { "name": "byte-bit7", "query": "bytePulseAt", "args": [163, 0] },
+        { "name": "byte-bit7-b", "query": "bytePulseAt", "args": [163, 1] },
+        { "name": "byte-bit6", "query": "bytePulseAt", "args": [163, 2] },
+        { "name": "byte-bit5", "query": "bytePulseAt", "args": [163, 4] },
+        { "name": "byte-bit1", "query": "bytePulseAt", "args": [163, 12] },
+        { "name": "byte-bit0", "query": "bytePulseAt", "args": [163, 14] },
+        { "name": "empty-body-throws", "query": "throws" }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "byte-bit7", "value": 1710 },
+        { "name": "byte-bit7-b", "value": 1710 },
+        { "name": "byte-bit6", "value": 855 },
+        { "name": "byte-bit5", "value": 1710 },
+        { "name": "byte-bit1", "value": 1710 },
+        { "name": "byte-bit0", "value": 1710 },
+        { "name": "empty-body-throws", "value": true }
+      ]
+    },
+    "normalization": { "profile": "custom" }
+  }
+]

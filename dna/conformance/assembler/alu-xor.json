@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-ALU-XOR-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "alu-xor-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    xor b",
+          "    xor c",
+          "    xor d",
+          "    xor e",
+          "    xor h",
+          "    xor l",
+          "    xor (hl)",
+          "    xor a",
+          "    xor 0x12",
+          ""
+        ],
+        "options": {
+          "entryPath": "alu-xor-source.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "alu-xor-source",
+        "ok": true,
+        "bytesHex": "A8A9AAABACADAEAFEE12"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

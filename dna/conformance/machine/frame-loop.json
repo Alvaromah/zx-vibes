@@ -1,0 +1,22 @@
+{
+  "id": "MACHINE-FRAME-001",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "machine-frame",
+    "note": "One frame of the machine loop: boundary INT sampling + at-most-one acceptance integrated with HALT and the post-EI delay (MACHINE-FRAME-LOOP-001). halt-sync accepts once and re-halts at the ISR; masked (IFF1=0) accepts nothing and hangs in HALT; ei-delay proves the interrupt waits one instruction after EI (return address is 0x8002, the HALT after the NOP, not 0x8001).",
+    "cases": [
+      { "name": "halt-sync-im1", "registers": { "pc": "0x8000", "sp": "0xff00", "iff1": 1, "iff2": 1, "im": 1 }, "memory": { "0x8000": "76", "0x0038": "f376" }, "clock": 0 },
+      { "name": "masked-di-halt-hang", "registers": { "pc": "0x8000", "sp": "0xff00", "iff1": 0, "im": 1 }, "memory": { "0x8000": "76" }, "clock": 0 },
+      { "name": "ei-delays-interrupt-one-instruction", "registers": { "pc": "0x8000", "sp": "0xff00", "iff1": 0, "iff2": 0, "im": 1 }, "memory": { "0x8000": "fb0076", "0x0038": "f376" }, "clock": 0 }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "halt-sync-im1", "registers": { "pc": "0x0039", "sp": "0xfefe", "iff1": 0 }, "memory": { "0xfefe": "0080" }, "accepted": 1, "halted": true, "clock": 1, "tStates": 69889 },
+      { "name": "masked-di-halt-hang", "registers": { "pc": "0x8000", "sp": "0xff00", "iff1": 0 }, "accepted": 0, "halted": true, "clock": 0, "tStates": 69888 },
+      { "name": "ei-delays-interrupt-one-instruction", "registers": { "pc": "0x0039", "sp": "0xfefe", "iff1": 0 }, "memory": { "0xfefe": "0280" }, "accepted": 1, "halted": true, "clock": 1, "tStates": 69889 }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

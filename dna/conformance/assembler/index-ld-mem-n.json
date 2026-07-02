@@ -1,0 +1,34 @@
+{
+  "id": "ASM-EMIT-INDEX-LD-MEM-N-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "index-ld-mem-n",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld (ix+5),0x12",
+          "    ld (iy-3),0x34",
+          ""
+        ],
+        "options": {
+          "entryPath": "index-ld-mem-n.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "index-ld-mem-n",
+        "ok": true,
+        "bytesHex": "DD360512FD36FD34"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

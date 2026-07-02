@@ -1,0 +1,48 @@
+{
+  "id": "ASM-EMIT-INDEX-ALU-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "index-alu-mem",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    add a,(ix+5)",
+          "    adc a,(ix+5)",
+          "    sub (ix+5)",
+          "    sbc a,(ix+5)",
+          "    and (ix+5)",
+          "    xor (ix+5)",
+          "    or (ix+5)",
+          "    cp (ix+5)",
+          "    add a,(iy+5)",
+          "    adc a,(iy+5)",
+          "    sub (iy+5)",
+          "    sbc a,(iy+5)",
+          "    and (iy+5)",
+          "    xor (iy+5)",
+          "    or (iy+5)",
+          "    cp (iy+5)",
+          ""
+        ],
+        "options": {
+          "entryPath": "index-alu-mem.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "index-alu-mem",
+        "ok": true,
+        "bytesHex": "DD8605DD8E05DD9605DD9E05DDA605DDAE05DDB605DDBE05FD8605FD8E05FD9605FD9E05FDA605FDAE05FDB605FDBE05"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

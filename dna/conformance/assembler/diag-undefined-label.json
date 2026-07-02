@@ -1,0 +1,35 @@
+{
+  "id": "ASM-DIAG-001",
+  "tier": "contract",
+  "provenance": "contract",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "undefined-label-with-hint",
+        "source": "    ORG 0x8000\nstart:\n    call draw_sprtie\ndraw_sprite:\n    ret\n",
+        "options": {
+          "entryPath": "bad-label.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "undefined-label-with-hint",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Label not found: draw_sprtie",
+            "hint": "Did you mean 'draw_sprite'?"
+          }
+        ]
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "json"
+  }
+}

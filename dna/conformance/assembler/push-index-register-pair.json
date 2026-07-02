@@ -1,0 +1,34 @@
+{
+  "id": "ASM-EMIT-PUSH-IXIY-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "push-index-register-pair",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    push ix",
+          "    push iy",
+          ""
+        ],
+        "options": {
+          "entryPath": "push-index-register-pair.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "push-index-register-pair",
+        "ok": true,
+        "bytesHex": "DDE5FDE5"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

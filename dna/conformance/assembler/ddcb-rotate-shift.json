@@ -1,0 +1,96 @@
+{
+  "id": "ASM-EMIT-DDCB-ROT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ddcb-rotate-shift",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    rlc (ix+5),b",
+          "    rlc (ix+5),c",
+          "    rlc (ix+5),d",
+          "    rlc (ix+5),e",
+          "    rlc (ix+5),h",
+          "    rlc (ix+5),l",
+          "    rlc (ix+5)",
+          "    rlc (ix+5),a",
+          "    rrc (ix+5),b",
+          "    rrc (ix+5),c",
+          "    rrc (ix+5),d",
+          "    rrc (ix+5),e",
+          "    rrc (ix+5),h",
+          "    rrc (ix+5),l",
+          "    rrc (ix+5)",
+          "    rrc (ix+5),a",
+          "    rl (ix+5),b",
+          "    rl (ix+5),c",
+          "    rl (ix+5),d",
+          "    rl (ix+5),e",
+          "    rl (ix+5),h",
+          "    rl (ix+5),l",
+          "    rl (ix+5)",
+          "    rl (ix+5),a",
+          "    rr (ix+5),b",
+          "    rr (ix+5),c",
+          "    rr (ix+5),d",
+          "    rr (ix+5),e",
+          "    rr (ix+5),h",
+          "    rr (ix+5),l",
+          "    rr (ix+5)",
+          "    rr (ix+5),a",
+          "    sla (ix+5),b",
+          "    sla (ix+5),c",
+          "    sla (ix+5),d",
+          "    sla (ix+5),e",
+          "    sla (ix+5),h",
+          "    sla (ix+5),l",
+          "    sla (ix+5)",
+          "    sla (ix+5),a",
+          "    sra (ix+5),b",
+          "    sra (ix+5),c",
+          "    sra (ix+5),d",
+          "    sra (ix+5),e",
+          "    sra (ix+5),h",
+          "    sra (ix+5),l",
+          "    sra (ix+5)",
+          "    sra (ix+5),a",
+          "    sll (ix+5),b",
+          "    sll (ix+5),c",
+          "    sll (ix+5),d",
+          "    sll (ix+5),e",
+          "    sll (ix+5),h",
+          "    sll (ix+5),l",
+          "    sll (ix+5)",
+          "    sll (ix+5),a",
+          "    srl (ix+5),b",
+          "    srl (ix+5),c",
+          "    srl (ix+5),d",
+          "    srl (ix+5),e",
+          "    srl (ix+5),h",
+          "    srl (ix+5),l",
+          "    srl (ix+5)",
+          "    srl (ix+5),a",
+          ""
+        ],
+        "options": {
+          "entryPath": "ddcb-rotate-shift.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ddcb-rotate-shift",
+        "ok": true,
+        "bytesHex": "DDCB0500DDCB0501DDCB0502DDCB0503DDCB0504DDCB0505DDCB0506DDCB0507DDCB0508DDCB0509DDCB050ADDCB050BDDCB050CDDCB050DDDCB050EDDCB050FDDCB0510DDCB0511DDCB0512DDCB0513DDCB0514DDCB0515DDCB0516DDCB0517DDCB0518DDCB0519DDCB051ADDCB051BDDCB051CDDCB051DDDCB051EDDCB051FDDCB0520DDCB0521DDCB0522DDCB0523DDCB0524DDCB0525DDCB0526DDCB0527DDCB0528DDCB0529DDCB052ADDCB052BDDCB052CDDCB052DDDCB052EDDCB052FDDCB0530DDCB0531DDCB0532DDCB0533DDCB0534DDCB0535DDCB0536DDCB0537DDCB0538DDCB0539DDCB053ADDCB053BDDCB053CDDCB053DDDCB053EDDCB053F"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

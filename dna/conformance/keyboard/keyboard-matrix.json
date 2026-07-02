@@ -1,0 +1,34 @@
+{
+  "id": "KBD-MATRIX-001",
+  "area": "emulator",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "keyboard-matrix",
+    "cases": [
+      { "name": "idle-row0", "pressed": [], "portHigh": "0xFE" },
+      { "name": "caps-row0", "pressed": ["CAPS_SHIFT"], "portHigh": "0xFE" },
+      { "name": "z-row0", "pressed": ["Z"], "portHigh": "0xFE" },
+      { "name": "space-row7", "pressed": ["SPACE"], "portHigh": "0x7F" },
+      { "name": "enter-row6", "pressed": ["ENTER"], "portHigh": "0xBF" },
+      { "name": "a-read-row1", "pressed": ["A", "Z"], "portHigh": "0xFD" },
+      { "name": "z-read-row0", "pressed": ["A", "Z"], "portHigh": "0xFE" },
+      { "name": "z-all-rows", "pressed": ["Z"], "portHigh": "0x00" },
+      { "name": "z-wrong-row", "pressed": ["Z"], "portHigh": "0xFD" }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "idle-row0", "byte": "0xFF" },
+      { "name": "caps-row0", "byte": "0xFE" },
+      { "name": "z-row0", "byte": "0xFD" },
+      { "name": "space-row7", "byte": "0xFE" },
+      { "name": "enter-row6", "byte": "0xFE" },
+      { "name": "a-read-row1", "byte": "0xFE" },
+      { "name": "z-read-row0", "byte": "0xFD" },
+      { "name": "z-all-rows", "byte": "0xFD" },
+      { "name": "z-wrong-row", "byte": "0xFF" }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

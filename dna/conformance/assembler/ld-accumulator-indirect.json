@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-LD-ACC-BCDE-IND-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-accumulator-indirect-bc-de",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld a,(bc)",
+          "    ld a,(de)",
+          "    ld (bc),a",
+          "    ld (de),a",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-accumulator-indirect.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-accumulator-indirect-bc-de",
+        "ok": true,
+        "bytesHex": "0A1A0212"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

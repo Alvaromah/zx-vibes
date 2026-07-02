@@ -1,0 +1,265 @@
+{
+  "id": "MACHINE-CONTENTION-MCYCLE-001",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "machine-run",
+    "note": "M-cycle-exact contention (MACHINE-CONTENTION-MCYCLE-001 / dna/domain/machine-execution.md). With exact:true each memory M-cycle is sampled at its true in-instruction T-offset AND internal no-MREQ cycles are charged (e.g. ADD HL,rr's 7 IR cycles, INC (HL)'s RMW cycle). Expected delays = @zx-vibes/ula contentionDelay replayed over the FUSE-validated M-cycle schedule (window from frame T 14335, pattern 6,5,4,3,2,1,0,0). ld-a-ix-d-fallback is an inexact instruction: the model falls back to the conformed per-access value (no silent debt, C5).",
+    "cases": [
+      {
+        "name": "ld-a-hl-exact-offset",
+        "registers": {
+          "pc": "0x8000",
+          "h": "0x40",
+          "l": "0x00"
+        },
+        "memory": {
+          "0x4000": "AB",
+          "0x8000": "7E"
+        },
+        "clock": 14335,
+        "exact": true,
+        "steps": 1
+      },
+      {
+        "name": "inc-hl-exact-internal",
+        "registers": {
+          "pc": "0x8000",
+          "h": "0x40",
+          "l": "0x00"
+        },
+        "memory": {
+          "0x4000": "7F",
+          "0x8000": "34"
+        },
+        "clock": 14335,
+        "exact": true,
+        "steps": 1
+      },
+      {
+        "name": "add-hl-bc-ir-contended",
+        "registers": {
+          "pc": "0x8000",
+          "i": "0x40",
+          "r": "0x00",
+          "h": "0x12",
+          "l": "0x34",
+          "b": "0x00",
+          "c": "0x01"
+        },
+        "memory": {
+          "0x8000": "09"
+        },
+        "clock": 14335,
+        "exact": true,
+        "steps": 1
+      },
+      {
+        "name": "dec-hl-exact-internal",
+        "registers": {
+          "pc": "0xC000",
+          "h": "0x50",
+          "l": "0x00"
+        },
+        "memory": {
+          "0x5000": "01",
+          "0xC000": "35"
+        },
+        "clock": 14345,
+        "exact": true,
+        "steps": 1
+      },
+      {
+        "name": "rlc-hl-exact",
+        "registers": {
+          "pc": "0x8000",
+          "h": "0x40",
+          "l": "0x00"
+        },
+        "memory": {
+          "0x4000": "80",
+          "0x8000": "CB06"
+        },
+        "clock": 14335,
+        "exact": true,
+        "steps": 1
+      },
+      {
+        "name": "ldi-de-contended",
+        "registers": {
+          "pc": "0x8000",
+          "h": "0x90",
+          "l": "0x00",
+          "d": "0x40",
+          "e": "0x00",
+          "b": "0x00",
+          "c": "0x02"
+        },
+        "memory": {
+          "0x8000": "EDA0",
+          "0x9000": "55"
+        },
+        "clock": 14335,
+        "exact": true,
+        "steps": 1
+      },
+      {
+        "name": "inc-ix-d-exact",
+        "registers": {
+          "pc": "0x8000",
+          "ixh": "0x40",
+          "ixl": "0x00"
+        },
+        "memory": {
+          "0x4000": "10",
+          "0x8000": "DD3400"
+        },
+        "clock": 14335,
+        "exact": true,
+        "steps": 1
+      },
+      {
+        "name": "push-bc-stack-contended",
+        "registers": {
+          "pc": "0x8000",
+          "sp": "0x4002",
+          "b": "0xAA",
+          "c": "0xBB"
+        },
+        "memory": {
+          "0x8000": "C5"
+        },
+        "clock": 14335,
+        "exact": true,
+        "steps": 1
+      },
+      {
+        "name": "ld-a-ix-d-fallback",
+        "registers": {
+          "pc": "0x8000",
+          "ixh": "0x40",
+          "ixl": "0x00"
+        },
+        "memory": {
+          "0x4000": "99",
+          "0x8000": "DD7E00"
+        },
+        "clock": 14335,
+        "exact": true,
+        "steps": 1
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-a-hl-exact-offset",
+        "contention": 2,
+        "tStates": 9,
+        "clock": 14344,
+        "registers": {
+          "a": "0xAB",
+          "pc": "0x8001"
+        }
+      },
+      {
+        "name": "inc-hl-exact-internal",
+        "contention": 7,
+        "tStates": 18,
+        "clock": 14353,
+        "registers": {
+          "pc": "0x8001"
+        },
+        "memory": {
+          "0x4000": "80"
+        }
+      },
+      {
+        "name": "add-hl-bc-ir-contended",
+        "contention": 20,
+        "tStates": 31,
+        "clock": 14366,
+        "registers": {
+          "h": "0x12",
+          "l": "0x35",
+          "pc": "0x8001"
+        }
+      },
+      {
+        "name": "dec-hl-exact-internal",
+        "contention": 5,
+        "tStates": 16,
+        "clock": 14361,
+        "registers": {
+          "pc": "0xC001"
+        },
+        "memory": {
+          "0x5000": "00"
+        }
+      },
+      {
+        "name": "rlc-hl-exact",
+        "contention": 11,
+        "tStates": 26,
+        "clock": 14361,
+        "registers": {
+          "pc": "0x8002"
+        },
+        "memory": {
+          "0x4000": "01"
+        }
+      },
+      {
+        "name": "ldi-de-contended",
+        "contention": 8,
+        "tStates": 24,
+        "clock": 14359,
+        "registers": {
+          "pc": "0x8002"
+        },
+        "memory": {
+          "0x4000": "55"
+        }
+      },
+      {
+        "name": "inc-ix-d-exact",
+        "contention": 11,
+        "tStates": 34,
+        "clock": 14369,
+        "registers": {
+          "pc": "0x8003"
+        },
+        "memory": {
+          "0x4000": "11"
+        }
+      },
+      {
+        "name": "push-bc-stack-contended",
+        "contention": 6,
+        "tStates": 17,
+        "clock": 14352,
+        "registers": {
+          "sp": "0x4000",
+          "pc": "0x8001"
+        },
+        "memory": {
+          "0x4000": "BB",
+          "0x4001": "AA"
+        }
+      },
+      {
+        "name": "ld-a-ix-d-fallback",
+        "contention": 6,
+        "tStates": 25,
+        "clock": 14360,
+        "registers": {
+          "a": "0x99",
+          "pc": "0x8003"
+        }
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "custom"
+  }
+}

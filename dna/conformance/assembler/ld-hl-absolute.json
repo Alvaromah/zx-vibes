@@ -1,0 +1,34 @@
+{
+  "id": "ASM-EMIT-LD-HL-NN-IND-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-hl-absolute",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld hl,(0x1234)",
+          "    ld (0x5678),hl",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-hl-absolute.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-hl-absolute",
+        "ok": true,
+        "bytesHex": "2A3412227856"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "id": "ASM-EMIT-INC-DEC-HL-IND-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "inc-dec-hl-indirect",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    inc (hl)",
+          "    dec (hl)",
+          ""
+        ],
+        "options": {
+          "entryPath": "inc-dec-hl-indirect.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "inc-dec-hl-indirect",
+        "ok": true,
+        "bytesHex": "3435"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

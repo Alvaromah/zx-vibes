@@ -1,0 +1,40 @@
+{
+  "id": "ASM-EMIT-RET-CC-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ret-conditional-all-conditions",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ret nz",
+          "    ret z",
+          "    ret nc",
+          "    ret c",
+          "    ret po",
+          "    ret pe",
+          "    ret p",
+          "    ret m",
+          ""
+        ],
+        "options": {
+          "entryPath": "ret-conditional.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ret-conditional-all-conditions",
+        "ok": true,
+        "bytesHex": "C0C8D0D8E0E8F0F8"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

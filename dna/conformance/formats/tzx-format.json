@@ -1,0 +1,223 @@
+[
+  {
+    "id": "FORMAT-TZX-001",
+    "area": "emulator",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "tzx-format-query",
+      "note": "`.tzx` tape image (file-formats.md FMT-TZX-*, pinned TZX v1.20): a 10-byte header (\"ZXTape!\" 1A major minor) followed by typed blocks, each introduced by a 1-byte ID. Every multi-byte field is little-endian; the 0x11/0x14 data length is a 3-byte LE value, the 0x10 length is a 2-byte WORD. This well-formed 87-byte file exercises all nine modeled block IDs in order: 0x30 text, 0x10 standard data, 0x21 group start, 0x12 pure tone, 0x13 pulse sequence, 0x11 turbo data (3-byte length), 0x14 pure data (3-byte length), 0x20 pause, 0x22 group end. The runner parses `file` (the on-disk authority) and independently serializes `tzx`; serializeMatchesFile pins serialize against the hand-authored bytes; the serialize-byte cases at offsets 24/25 (0x10 WORD length) and 63-65 / 78-80 (0x11/0x14 3-byte length) pin the length-field widths.",
+      "file": "5a5854617065211a01143009545a58205731302e3710e80303000011222103475250127808940c13036400c8002c011178089b02df025703ae06970c08e80304000041424344145703ae0608e803020000ff0020e80322",
+      "tzx": {
+        "version": { "major": 1, "minor": 20 },
+        "blocks": [
+          { "id": 48, "text": "TZX W10.7" },
+          { "id": 16, "pause": 1000, "data": "001122" },
+          { "id": 33, "name": "GRP" },
+          { "id": 18, "pulseLength": 2168, "pulseCount": 3220 },
+          { "id": 19, "pulses": [100, 200, 300] },
+          { "id": 17, "pilot": 2168, "sync1": 667, "sync2": 735, "zero": 855, "one": 1710, "pilotPulses": 3223, "usedBits": 8, "pause": 1000, "data": "41424344" },
+          { "id": 20, "zero": 855, "one": 1710, "usedBits": 8, "pause": 1000, "data": "ff00" },
+          { "id": 32, "pause": 1000 },
+          { "id": 34 }
+        ]
+      },
+      "cases": [
+        { "name": "file-length", "query": "fileLength" },
+        { "name": "version-major", "query": "versionMajor" },
+        { "name": "version-minor", "query": "versionMinor" },
+        { "name": "block-count", "query": "blockCount" },
+
+        { "name": "block0-id", "query": "blockId", "args": [0] },
+        { "name": "block1-id", "query": "blockId", "args": [1] },
+        { "name": "block2-id", "query": "blockId", "args": [2] },
+        { "name": "block3-id", "query": "blockId", "args": [3] },
+        { "name": "block4-id", "query": "blockId", "args": [4] },
+        { "name": "block5-id", "query": "blockId", "args": [5] },
+        { "name": "block6-id", "query": "blockId", "args": [6] },
+        { "name": "block7-id", "query": "blockId", "args": [7] },
+        { "name": "block8-id", "query": "blockId", "args": [8] },
+
+        { "name": "text-0x30", "query": "blockText", "args": [0] },
+
+        { "name": "data-0x10-pause", "query": "blockField", "args": [1, "pause"] },
+        { "name": "data-0x10-len", "query": "blockDataLength", "args": [1] },
+        { "name": "data-0x10-byte0", "query": "blockDataByte", "args": [1, 0] },
+        { "name": "data-0x10-byte2", "query": "blockDataByte", "args": [1, 2] },
+
+        { "name": "group-0x21-name", "query": "blockName", "args": [2] },
+
+        { "name": "tone-0x12-pulse-length", "query": "blockField", "args": [3, "pulseLength"] },
+        { "name": "tone-0x12-pulse-count", "query": "blockField", "args": [3, "pulseCount"] },
+
+        { "name": "pulses-0x13-count", "query": "blockPulseCount", "args": [4] },
+        { "name": "pulses-0x13-first", "query": "blockPulse", "args": [4, 0] },
+        { "name": "pulses-0x13-last", "query": "blockPulse", "args": [4, 2] },
+
+        { "name": "turbo-0x11-pilot", "query": "blockField", "args": [5, "pilot"] },
+        { "name": "turbo-0x11-sync1", "query": "blockField", "args": [5, "sync1"] },
+        { "name": "turbo-0x11-sync2", "query": "blockField", "args": [5, "sync2"] },
+        { "name": "turbo-0x11-zero", "query": "blockField", "args": [5, "zero"] },
+        { "name": "turbo-0x11-one", "query": "blockField", "args": [5, "one"] },
+        { "name": "turbo-0x11-pilot-pulses", "query": "blockField", "args": [5, "pilotPulses"] },
+        { "name": "turbo-0x11-used-bits", "query": "blockField", "args": [5, "usedBits"] },
+        { "name": "turbo-0x11-pause", "query": "blockField", "args": [5, "pause"] },
+        { "name": "turbo-0x11-data-len", "query": "blockDataLength", "args": [5] },
+        { "name": "turbo-0x11-data0", "query": "blockDataByte", "args": [5, 0] },
+        { "name": "turbo-0x11-data3", "query": "blockDataByte", "args": [5, 3] },
+
+        { "name": "puredata-0x14-zero", "query": "blockField", "args": [6, "zero"] },
+        { "name": "puredata-0x14-one", "query": "blockField", "args": [6, "one"] },
+        { "name": "puredata-0x14-used-bits", "query": "blockField", "args": [6, "usedBits"] },
+        { "name": "puredata-0x14-pause", "query": "blockField", "args": [6, "pause"] },
+        { "name": "puredata-0x14-data-len", "query": "blockDataLength", "args": [6] },
+        { "name": "puredata-0x14-data0", "query": "blockDataByte", "args": [6, 0] },
+        { "name": "puredata-0x14-data1", "query": "blockDataByte", "args": [6, 1] },
+
+        { "name": "pause-0x20", "query": "blockField", "args": [7, "pause"] },
+
+        { "name": "serialize-length", "query": "serializeLength" },
+        { "name": "serialize-sig0", "query": "serializeByte", "args": [0] },
+        { "name": "serialize-sig6", "query": "serializeByte", "args": [6] },
+        { "name": "serialize-eot", "query": "serializeByte", "args": [7] },
+        { "name": "serialize-major", "query": "serializeByte", "args": [8] },
+        { "name": "serialize-minor", "query": "serializeByte", "args": [9] },
+        { "name": "serialize-0x10-len-low", "query": "serializeByte", "args": [24] },
+        { "name": "serialize-0x10-len-high", "query": "serializeByte", "args": [25] },
+        { "name": "serialize-0x11-len-b0", "query": "serializeByte", "args": [63] },
+        { "name": "serialize-0x11-len-b1", "query": "serializeByte", "args": [64] },
+        { "name": "serialize-0x11-len-b2", "query": "serializeByte", "args": [65] },
+        { "name": "serialize-0x11-data0", "query": "serializeByte", "args": [66] },
+        { "name": "serialize-0x14-len-b0", "query": "serializeByte", "args": [78] },
+        { "name": "serialize-0x14-len-b1", "query": "serializeByte", "args": [79] },
+        { "name": "serialize-0x14-len-b2", "query": "serializeByte", "args": [80] },
+
+        { "name": "serialize-matches-file", "query": "serializeMatchesFile" },
+        { "name": "roundtrip-parse-serialize", "query": "roundtripParseSerialize" },
+        { "name": "roundtrip-serialize-parse", "query": "roundtripSerializeParse" }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "file-length", "value": 87 },
+        { "name": "version-major", "value": 1 },
+        { "name": "version-minor", "value": 20 },
+        { "name": "block-count", "value": 9 },
+
+        { "name": "block0-id", "value": 48 },
+        { "name": "block1-id", "value": 16 },
+        { "name": "block2-id", "value": 33 },
+        { "name": "block3-id", "value": 18 },
+        { "name": "block4-id", "value": 19 },
+        { "name": "block5-id", "value": 17 },
+        { "name": "block6-id", "value": 20 },
+        { "name": "block7-id", "value": 32 },
+        { "name": "block8-id", "value": 34 },
+
+        { "name": "text-0x30", "value": "TZX W10.7" },
+
+        { "name": "data-0x10-pause", "value": 1000 },
+        { "name": "data-0x10-len", "value": 3 },
+        { "name": "data-0x10-byte0", "value": 0 },
+        { "name": "data-0x10-byte2", "value": 34 },
+
+        { "name": "group-0x21-name", "value": "GRP" },
+
+        { "name": "tone-0x12-pulse-length", "value": 2168 },
+        { "name": "tone-0x12-pulse-count", "value": 3220 },
+
+        { "name": "pulses-0x13-count", "value": 3 },
+        { "name": "pulses-0x13-first", "value": 100 },
+        { "name": "pulses-0x13-last", "value": 300 },
+
+        { "name": "turbo-0x11-pilot", "value": 2168 },
+        { "name": "turbo-0x11-sync1", "value": 667 },
+        { "name": "turbo-0x11-sync2", "value": 735 },
+        { "name": "turbo-0x11-zero", "value": 855 },
+        { "name": "turbo-0x11-one", "value": 1710 },
+        { "name": "turbo-0x11-pilot-pulses", "value": 3223 },
+        { "name": "turbo-0x11-used-bits", "value": 8 },
+        { "name": "turbo-0x11-pause", "value": 1000 },
+        { "name": "turbo-0x11-data-len", "value": 4 },
+        { "name": "turbo-0x11-data0", "value": 65 },
+        { "name": "turbo-0x11-data3", "value": 68 },
+
+        { "name": "puredata-0x14-zero", "value": 855 },
+        { "name": "puredata-0x14-one", "value": 1710 },
+        { "name": "puredata-0x14-used-bits", "value": 8 },
+        { "name": "puredata-0x14-pause", "value": 1000 },
+        { "name": "puredata-0x14-data-len", "value": 2 },
+        { "name": "puredata-0x14-data0", "value": 255 },
+        { "name": "puredata-0x14-data1", "value": 0 },
+
+        { "name": "pause-0x20", "value": 1000 },
+
+        { "name": "serialize-length", "value": 87 },
+        { "name": "serialize-sig0", "value": 90 },
+        { "name": "serialize-sig6", "value": 33 },
+        { "name": "serialize-eot", "value": 26 },
+        { "name": "serialize-major", "value": 1 },
+        { "name": "serialize-minor", "value": 20 },
+        { "name": "serialize-0x10-len-low", "value": 3 },
+        { "name": "serialize-0x10-len-high", "value": 0 },
+        { "name": "serialize-0x11-len-b0", "value": 4 },
+        { "name": "serialize-0x11-len-b1", "value": 0 },
+        { "name": "serialize-0x11-len-b2", "value": 0 },
+        { "name": "serialize-0x11-data0", "value": 65 },
+        { "name": "serialize-0x14-len-b0", "value": 2 },
+        { "name": "serialize-0x14-len-b1", "value": 0 },
+        { "name": "serialize-0x14-len-b2", "value": 0 },
+
+        { "name": "serialize-matches-file", "value": true },
+        { "name": "roundtrip-parse-serialize", "value": true },
+        { "name": "roundtrip-serialize-parse", "value": true }
+      ]
+    },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "FORMAT-TZX-REJECT-BAD-SIGNATURE",
+    "area": "emulator",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "tzx-format-query",
+      "note": "FMT-TZX-HEADER-001: a file whose 8-byte signature is not exactly \"ZXTape!\\x1A\" is not a valid .tzx and parseTzx must throw. This is a 10-byte header with byte 6 changed from 0x21 ('!') to 0x22 ('\\\"').",
+      "file": "5a5854617065221a0114",
+      "tzx": { "blocks": [] },
+      "cases": [{ "name": "bad-signature-rejected", "query": "parseThrows" }]
+    },
+    "expected": { "cases": [{ "name": "bad-signature-rejected", "value": true }] },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "FORMAT-TZX-REJECT-TRUNCATED",
+    "area": "emulator",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "tzx-format-query",
+      "note": "FMT-TZX-BLOCK-STREAM-001: a 0x10 block declares data length 5 (05 00) but only one body byte follows, so the body runs past EOF and parseTzx must throw. Header + 10 e803 0500 ff.",
+      "file": "5a5854617065211a011410e8030500ff",
+      "tzx": { "blocks": [] },
+      "cases": [{ "name": "truncated-rejected", "query": "parseThrows" }]
+    },
+    "expected": { "cases": [{ "name": "truncated-rejected", "value": true }] },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "FORMAT-TZX-REJECT-UNSUPPORTED-ID",
+    "area": "emulator",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "tzx-format-query",
+      "note": "FMT-TZX-BLOCK-STREAM-001: block ID 0x15 (direct recording) is outside this slice's modeled set; the parser cannot safely compute its length and must reject it rather than guess. Header + a lone 0x15 ID byte.",
+      "file": "5a5854617065211a011415",
+      "tzx": { "blocks": [] },
+      "cases": [{ "name": "unsupported-id-rejected", "query": "parseThrows" }]
+    },
+    "expected": { "cases": [{ "name": "unsupported-id-rejected", "value": true }] },
+    "normalization": { "profile": "custom" }
+  }
+]

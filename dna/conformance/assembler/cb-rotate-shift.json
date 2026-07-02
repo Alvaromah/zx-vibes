@@ -1,0 +1,96 @@
+{
+  "id": "ASM-EMIT-CB-ROT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "cb-rotate-shift",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    rlc b",
+          "    rlc c",
+          "    rlc d",
+          "    rlc e",
+          "    rlc h",
+          "    rlc l",
+          "    rlc (hl)",
+          "    rlc a",
+          "    rrc b",
+          "    rrc c",
+          "    rrc d",
+          "    rrc e",
+          "    rrc h",
+          "    rrc l",
+          "    rrc (hl)",
+          "    rrc a",
+          "    rl b",
+          "    rl c",
+          "    rl d",
+          "    rl e",
+          "    rl h",
+          "    rl l",
+          "    rl (hl)",
+          "    rl a",
+          "    rr b",
+          "    rr c",
+          "    rr d",
+          "    rr e",
+          "    rr h",
+          "    rr l",
+          "    rr (hl)",
+          "    rr a",
+          "    sla b",
+          "    sla c",
+          "    sla d",
+          "    sla e",
+          "    sla h",
+          "    sla l",
+          "    sla (hl)",
+          "    sla a",
+          "    sra b",
+          "    sra c",
+          "    sra d",
+          "    sra e",
+          "    sra h",
+          "    sra l",
+          "    sra (hl)",
+          "    sra a",
+          "    sll b",
+          "    sll c",
+          "    sll d",
+          "    sll e",
+          "    sll h",
+          "    sll l",
+          "    sll (hl)",
+          "    sll a",
+          "    srl b",
+          "    srl c",
+          "    srl d",
+          "    srl e",
+          "    srl h",
+          "    srl l",
+          "    srl (hl)",
+          "    srl a",
+          ""
+        ],
+        "options": {
+          "entryPath": "cb-rotate-shift.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "cb-rotate-shift",
+        "ok": true,
+        "bytesHex": "CB00CB01CB02CB03CB04CB05CB06CB07CB08CB09CB0ACB0BCB0CCB0DCB0ECB0FCB10CB11CB12CB13CB14CB15CB16CB17CB18CB19CB1ACB1BCB1CCB1DCB1ECB1FCB20CB21CB22CB23CB24CB25CB26CB27CB28CB29CB2ACB2BCB2CCB2DCB2ECB2FCB30CB31CB32CB33CB34CB35CB36CB37CB38CB39CB3ACB3BCB3CCB3DCB3ECB3F"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

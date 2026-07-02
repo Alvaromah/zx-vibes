@@ -1,0 +1,41 @@
+{
+  "id": "ASM-EMIT-ALU-CP-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "alu-cp-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    cp b",
+          "    cp c",
+          "    cp d",
+          "    cp e",
+          "    cp h",
+          "    cp l",
+          "    cp (hl)",
+          "    cp a",
+          "    cp 0x12",
+          ""
+        ],
+        "options": {
+          "entryPath": "alu-cp-source.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "alu-cp-source",
+        "ok": true,
+        "bytesHex": "B8B9BABBBCBDBEBFFE12"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

@@ -1,0 +1,4 @@
+build/
+.zxs/
+screen.png
+*.log

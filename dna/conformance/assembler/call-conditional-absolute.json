@@ -1,0 +1,42 @@
+{
+  "id": "ASM-EMIT-CALL-CC-NN-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "call-conditional-absolute-all-conditions",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    call nz,target",
+          "    call z,target",
+          "    call nc,target",
+          "    call c,target",
+          "    call po,target",
+          "    call pe,target",
+          "    call p,target",
+          "    call m,target",
+          "target:",
+          "    ret",
+          ""
+        ],
+        "options": {
+          "entryPath": "call-conditional-absolute.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "call-conditional-absolute-all-conditions",
+        "ok": true,
+        "bytesHex": "C41880CC1880D41880DC1880E41880EC1880F41880FC1880C9"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-PUSH-QQ-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "push-register-pair",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    push bc",
+          "    push de",
+          "    push hl",
+          "    push af",
+          ""
+        ],
+        "options": {
+          "entryPath": "push-register-pair.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "push-register-pair",
+        "ok": true,
+        "bytesHex": "C5D5E5F5"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

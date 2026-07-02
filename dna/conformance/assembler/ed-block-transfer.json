@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-ED-BLOCK-TRANSFER-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ed-block-transfer",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ldi",
+          "    ldd",
+          "    ldir",
+          "    lddr",
+          ""
+        ],
+        "options": {
+          "entryPath": "ed-block-transfer.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ed-block-transfer",
+        "ok": true,
+        "bytesHex": "EDA0EDA8EDB0EDB8"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

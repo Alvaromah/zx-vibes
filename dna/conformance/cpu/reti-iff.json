@@ -1,0 +1,50 @@
+{
+  "id": "CPU-RETI-IFF-001",
+  "tier": "fidelity",
+  "provenance": "hardware",
+  "input": {
+    "kind": "cpu-step",
+    "note": "RETI (ED 4D) restores the maskable-interrupt flip-flop IFF1 from IFF2, exactly like RETN. This is verified Z80 silicon behavior (FUSE and zexall agree; 'The Undocumented Z80 Documented' §5.4); the official Zilog manual documents the IFF1 restore only for RETN. The pinned FUSE ED4D case enters with IFF2=0, so it cannot distinguish a RETI that restores IFF1 from one that leaves it unchanged. These two cases close that net hole by entering with IFF1 != IFF2 in BOTH directions: a RETI that does not copy IFF2 into IFF1 fails at least one. Backs dna/domain/z80-opcodes.md Z80-OPC-RETN-RETI-001.",
+    "cases": [
+      {
+        "name": "reti_iff_restore_set",
+        "registers": { "sp": "6000", "iff1": "00", "iff2": "01" },
+        "memory": { "0000": "ED4D", "6000": "4242" }
+      },
+      {
+        "name": "reti_iff_restore_clear",
+        "registers": { "sp": "6000", "iff1": "01", "iff2": "00" },
+        "memory": { "0000": "ED4D", "6000": "4242" }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "reti_iff_restore_set",
+        "registers": {
+          "a": "00", "f": "00", "b": "00", "c": "00", "d": "00", "e": "00", "h": "00", "l": "00",
+          "a_": "00", "f_": "00", "b_": "00", "c_": "00", "d_": "00", "e_": "00", "h_": "00", "l_": "00",
+          "pc": "4242", "sp": "6002", "i": "00", "r": "02", "iff1": "01", "iff2": "01", "im": "00",
+          "ixh": "00", "ixl": "00", "iyh": "00", "iyl": "00"
+        },
+        "memory": {},
+        "tStates": 14
+      },
+      {
+        "name": "reti_iff_restore_clear",
+        "registers": {
+          "a": "00", "f": "00", "b": "00", "c": "00", "d": "00", "e": "00", "h": "00", "l": "00",
+          "a_": "00", "f_": "00", "b_": "00", "c_": "00", "d_": "00", "e_": "00", "h_": "00", "l_": "00",
+          "pc": "4242", "sp": "6002", "i": "00", "r": "02", "iff1": "00", "iff2": "00", "im": "00",
+          "ixh": "00", "ixl": "00", "iyh": "00", "iyl": "00"
+        },
+        "memory": {},
+        "tStates": 14
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "custom"
+  }
+}

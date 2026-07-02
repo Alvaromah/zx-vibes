@@ -1,0 +1,25 @@
+{
+  "name": "@zx-vibes/machine",
+  "version": "0.1.0",
+  "description": "Regenerated 48K ZX Spectrum machine layer for zx-vibes: joins @zx-vibes/cpu and @zx-vibes/ula with interrupt acceptance and per-access memory contention, derived from the DNA and decided by the machine conformance fixtures.",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./interrupt": "./src/interrupt.mjs",
+    "./machine": "./src/machine.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": ["src"],
+  "dependencies": {
+    "@zx-vibes/cpu": "workspace:*",
+    "@zx-vibes/ula": "workspace:*"
+  },
+  "scripts": {
+    "test": "node ../../dna/conformance/machine/run-machine-fixtures.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

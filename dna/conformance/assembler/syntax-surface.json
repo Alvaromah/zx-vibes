@@ -1,0 +1,406 @@
+{
+  "id": "ASM-SYNTAX-001",
+  "tier": "contract",
+  "provenance": "contract",
+  "input": {
+    "kind": "assembler-api",
+    "files": [
+      {
+        "path": "inc/defs.asm",
+        "lines": ["VALUE EQU CLI_VALUE + 1", ""]
+      },
+      {
+        "path": "local.asm",
+        "lines": ["LOCAL_VALUE EQU 0x22", ""]
+      },
+      {
+        "path": "main.asm",
+        "lines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x8000",
+          "    INCLUDE <defs.asm>",
+          "    INCLUDE \"local.asm\"",
+          "start:",
+          "    ld a, VALUE",
+          "    ld b, LOCAL_VALUE",
+          "    INCBIN \"data.bin\", 1, 3",
+          "    INSERT <more.bin>",
+          "end:",
+          "    ASSERT end == start + 9, \"size mismatch\"",
+          ""
+        ]
+      },
+      {
+        "path": "data.bin",
+        "encoding": "hex",
+        "data": "1011121314"
+      },
+      {
+        "path": "inc/more.bin",
+        "encoding": "hex",
+        "data": "2021"
+      }
+    ],
+    "cases": [
+      {
+        "name": "game-authoring-forms",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "main",
+          "    ld a, -1",
+          "    ld b, 0Fh",
+          "    db 'ZX'",
+          "    ALIGN 8",
+          "next",
+          "    ret",
+          ""
+        ],
+        "options": {
+          "entryPath": "forms.asm"
+        }
+      },
+      {
+        "name": "data-directive-aliases",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "CONST = 0x42",
+          "start:",
+          "    DEFM \"ABC\",0x21",
+          "    DM 'ZX'",
+          "    DZ \"OK\"",
+          "    DC \"END\"",
+          "    D24 0x123456",
+          "    DEFD 0x12345678",
+          "    DD 0x01020304",
+          "    DWORD 0xAABBCCDD",
+          "    DB CONST",
+          ""
+        ],
+        "options": {
+          "entryPath": "data-aliases.asm"
+        }
+      },
+      {
+        "name": "expression-helpers",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "addr = 0x9123",
+          "    DB LOW addr, HIGH addr",
+          "    DB low(0x1234), high(0x1234)",
+          "    DB 1 && 0, 1 && 2, 0 || 0, 0 || 2, !0, !2",
+          "    DB 1 == 1, 1 == 2",
+          "    DB 10101010b, 0b01010101",
+          "    DB \"A\" + 1",
+          "    DB 1 shl 3, 8 shr 1, 7 mod 4",
+          ""
+        ],
+        "options": {
+          "entryPath": "expr-helpers.asm"
+        }
+      },
+      {
+        "name": "file-includes-defines-and-binary-inputs",
+        "mode": "assembleFile",
+        "entry": "<tmp>/main.asm",
+        "options": {
+          "includePaths": ["<tmp>/inc"],
+          "defines": {
+            "CLI_VALUE": "0x44"
+          }
+        }
+      },
+      {
+        "name": "conditionals-skip-inactive-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "FLAG EQU 1",
+          "    IFDEF DEBUG",
+          "    db 1",
+          "    ELSE",
+          "    db 2",
+          "    ENDIF",
+          "    IFNDEF MISSING",
+          "    db 3",
+          "    ENDIF",
+          "    IF FLAG == 1",
+          "    db 4",
+          "    ELSEIF DEBUG == 2",
+          "    db 5",
+          "    ELSE",
+          "    db 6",
+          "    ENDIF",
+          "    IF 0",
+          "    INCLUDE \"missing.asm\"",
+          "    db unknown_symbol",
+          "    ENDIF",
+          ""
+        ],
+        "options": {
+          "entryPath": "conditionals.asm",
+          "defines": {
+            "DEBUG": true
+          }
+        }
+      },
+      {
+        "name": "source-defines-and-undefines",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "BASE EQU 0x40",
+          "    DEFINE FOO BASE + 2",
+          "    IFDEF FOO",
+          "    db FOO",
+          "    ELSE",
+          "    db 0",
+          "    ENDIF",
+          "    UNDEFINE FOO",
+          "    IFNDEF FOO",
+          "    db 0x11",
+          "    ELSE",
+          "    db 0",
+          "    ENDIF",
+          "    DEFINE FLAG",
+          "    IFDEF FLAG",
+          "    db 0x22",
+          "    ENDIF",
+          ""
+        ],
+        "options": {
+          "entryPath": "source-defines.asm"
+        }
+      },
+      {
+        "name": "ifdef-ignores-equ-labels",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "FOO EQU 1",
+          "    IFDEF FOO",
+          "    db 0",
+          "    ELSE",
+          "    db FOO",
+          "    ENDIF",
+          ""
+        ],
+        "options": {
+          "entryPath": "ifdef-equ.asm"
+        }
+      },
+      {
+        "name": "repetition-with-counters",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "COUNT EQU 2",
+          "    DUP COUNT + 1, idx",
+          "    db idx",
+          "      REPT 2",
+          "      db idx + 4",
+          "      ENDR",
+          "    EDUP",
+          "    DUP 0",
+          "    INCLUDE \"missing.asm\"",
+          "    db unknown_symbol",
+          "    EDUP",
+          "    db 9",
+          ""
+        ],
+        "options": {
+          "entryPath": "repeats.asm"
+        }
+      },
+      {
+        "name": "macro-expansion",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "Pair MACRO left,right",
+          "    db left,right",
+          "ENDM",
+          "LoopByte MACRO value",
+          ".loop:",
+          "    db value",
+          "    jr .loop",
+          "ENDM",
+          "Table MACRO base",
+          "    DUP 2, idx",
+          "    db base + idx",
+          "    EDUP",
+          "ENDM",
+          "start:",
+          "    LoopByte 1",
+          "    LoopByte 2",
+          "    Pair 3,4",
+          "    Table 5",
+          ""
+        ],
+        "options": {
+          "entryPath": "macros.asm"
+        }
+      },
+      {
+        "name": "directive-style-macros",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    MACRO Pair left,right",
+          "    db left,right",
+          "    ENDM",
+          "    MACRO Emit",
+          "    db 3",
+          "    ENDM",
+          "    MACRO LoopByte value",
+          ".loop:",
+          "    db value",
+          "    jr .loop",
+          "    ENDM",
+          "    Pair 1,2",
+          "    Emit",
+          "    LoopByte 4",
+          "    LoopByte 5",
+          ""
+        ],
+        "options": {
+          "entryPath": "directive-macros.asm"
+        }
+      },
+      {
+        "name": "module-label-scopes",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "outside:",
+          "    db 0xAA",
+          "    MODULE Foo",
+          "start:",
+          "    dw outside",
+          "local:",
+          "    dw start",
+          "main:",
+          ".loop:",
+          "    jr .loop",
+          "    MODULE Bar",
+          "hit:",
+          "    dw Foo.start",
+          "    ENDMODULE",
+          "    dw Bar.hit",
+          "    ENDMODULE",
+          "    dw Foo.start, Foo.local, Foo.main.loop, Foo.Bar.hit",
+          ""
+        ],
+        "options": {
+          "entryPath": "modules.asm"
+        }
+      },
+      {
+        "name": "end-terminates-source",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "start:",
+          "    db 1",
+          "    END start",
+          "    db 2",
+          ""
+        ],
+        "options": {
+          "entryPath": "end-indented.asm"
+        }
+      },
+      {
+        "name": "unsupported-define-equals-syntax",
+        "sourceLines": ["    ORG 0x8000", "    DEFINE FOO=1", ""],
+        "options": {
+          "entryPath": "define-invalid-syntax.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "game-authoring-forms",
+        "ok": true,
+        "bytesHex": "3EFF060F5A580000C9",
+        "symbols": [
+          { "name": "main", "value": 32768 },
+          { "name": "next", "value": 32776 }
+        ]
+      },
+      {
+        "name": "data-directive-aliases",
+        "ok": true,
+        "bytesHex": "414243215A584F4B00454EC45634127856341204030201DDCCBBAA42",
+        "symbols": [{ "name": "CONST", "value": 66 }]
+      },
+      {
+        "name": "expression-helpers",
+        "ok": true,
+        "bytesHex": "2391341200FF00FFFF00FF00AA5542080403"
+      },
+      {
+        "name": "file-includes-defines-and-binary-inputs",
+        "ok": true,
+        "bytesHex": "3E4506221112132021",
+        "symbols": [
+          { "name": "VALUE", "value": 69 },
+          { "name": "LOCAL_VALUE", "value": 34 }
+        ]
+      },
+      {
+        "name": "conditionals-skip-inactive-source",
+        "ok": true,
+        "bytesHex": "010304"
+      },
+      {
+        "name": "source-defines-and-undefines",
+        "ok": true,
+        "bytesHex": "421122"
+      },
+      {
+        "name": "ifdef-ignores-equ-labels",
+        "ok": true,
+        "bytesHex": "01"
+      },
+      {
+        "name": "repetition-with-counters",
+        "ok": true,
+        "bytesHex": "00040401050502060609"
+      },
+      {
+        "name": "macro-expansion",
+        "ok": true,
+        "bytesHex": "0118FD0218FD03040506"
+      },
+      {
+        "name": "directive-style-macros",
+        "ok": true,
+        "bytesHex": "0102030418FD0518FD"
+      },
+      {
+        "name": "module-label-scopes",
+        "ok": true,
+        "bytesHex": "AA0080018018FE018007800180038005800780",
+        "symbols": [
+          { "name": "outside", "value": 32768 },
+          { "name": "Foo.start", "value": 32769 },
+          { "name": "Foo.local", "value": 32771 },
+          { "name": "Foo.main.loop", "value": 32773 },
+          { "name": "Foo.Bar.hit", "value": 32775 }
+        ]
+      },
+      {
+        "name": "end-terminates-source",
+        "ok": true,
+        "bytesHex": "01"
+      },
+      {
+        "name": "unsupported-define-equals-syntax",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Invalid DEFINE syntax: FOO=1"
+          }
+        ]
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "json"
+  }
+}

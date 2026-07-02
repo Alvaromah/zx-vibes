@@ -1,0 +1,35 @@
+{
+  "id": "ASM-EMIT-IM-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "interrupt-mode",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    im 0",
+          "    im 1",
+          "    im 2",
+          ""
+        ],
+        "options": {
+          "entryPath": "interrupt-mode.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "interrupt-mode",
+        "ok": true,
+        "bytesHex": "ED46ED56ED5E"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

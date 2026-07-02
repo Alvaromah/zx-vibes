@@ -1,0 +1,104 @@
+{
+  "id": "CPU-FUSE-BUDGET-DD-001",
+  "tier": "fidelity",
+  "provenance": "fuse",
+  "input": {
+    "kind": "cpu-run",
+    "note": "FUSE Z80 multi-instruction (run-to-budget) cases, dd group: DJNZ/block-op loops and prefix NONI timing. Each case runs whole opcodes until its input budget T-states; expected tStates is the final accumulated count.",
+    "cases": [
+      {
+        "name": "dd00",
+        "registers": {},
+        "memory": {
+          "0000": "DD0000"
+        },
+        "budget": 9
+      },
+      {
+        "name": "ddfd00",
+        "registers": {},
+        "memory": {
+          "0000": "DDFD0000"
+        },
+        "budget": 13
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "dd00",
+        "registers": {
+          "a": "00",
+          "f": "00",
+          "b": "00",
+          "c": "00",
+          "d": "00",
+          "e": "00",
+          "h": "00",
+          "l": "00",
+          "a_": "00",
+          "f_": "00",
+          "b_": "00",
+          "c_": "00",
+          "d_": "00",
+          "e_": "00",
+          "h_": "00",
+          "l_": "00",
+          "ixh": "00",
+          "ixl": "00",
+          "iyh": "00",
+          "iyl": "00",
+          "sp": "0000",
+          "pc": "0003",
+          "memptr": "00",
+          "i": "00",
+          "r": "03",
+          "iff1": "00",
+          "iff2": "00",
+          "im": "00"
+        },
+        "memory": {},
+        "tStates": 12
+      },
+      {
+        "name": "ddfd00",
+        "registers": {
+          "a": "00",
+          "f": "00",
+          "b": "00",
+          "c": "00",
+          "d": "00",
+          "e": "00",
+          "h": "00",
+          "l": "00",
+          "a_": "00",
+          "f_": "00",
+          "b_": "00",
+          "c_": "00",
+          "d_": "00",
+          "e_": "00",
+          "h_": "00",
+          "l_": "00",
+          "ixh": "00",
+          "ixl": "00",
+          "iyh": "00",
+          "iyl": "00",
+          "sp": "0000",
+          "pc": "0004",
+          "memptr": "00",
+          "i": "00",
+          "r": "04",
+          "iff1": "00",
+          "iff2": "00",
+          "im": "00"
+        },
+        "memory": {},
+        "tStates": 16
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "custom"
+  }
+}

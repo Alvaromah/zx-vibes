@@ -1,0 +1,20 @@
+{
+  "name": "@zx-vibes/ula",
+  "version": "0.1.0",
+  "description": "Regenerated 48K ZX Spectrum ULA timing model for zx-vibes, derived from the DNA and decided by the timing conformance fixtures.",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./timing": "./src/ula-timing.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": ["src"],
+  "scripts": {
+    "test": "node ../../dna/conformance/timing/run-timing-fixtures.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

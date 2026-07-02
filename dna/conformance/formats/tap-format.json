@@ -1,0 +1,150 @@
+[
+  {
+    "id": "FORMAT-TAP-001",
+    "area": "emulator",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "tap-format-query",
+      "note": "`.tap` tape image (file-formats.md FMT-TAP-*): a flat concatenation of blocks with no header/footer/global length. Each block = [len:2 LE][flag][data..][checksum]; len counts flag+data+checksum (LE), checksum = XOR of flag and every data byte. This well-formed file has 3 blocks: a 17-byte header (flag 0x00), a 4-byte data block (flag 0xFF — exercises flag-in-checksum), and an EMPTY-data block (flag 0x2A, L=2, checksum=flag). The runner parses `file` (the on-disk authority) and independently serializes `blocks`; serializeMatchesFile pins serialize against the hand-authored bytes. file = 13 00 00 [17 hdr bytes] 02 | 06 00 ff deadbeef dd | 02 00 2a 2a (33 bytes).",
+      "file": "130000036162636465666768696a008000800a00020600ffdeadbeefdd02002a2a",
+      "blocks": [
+        { "flag": 0, "data": "036162636465666768696a008000800a00" },
+        { "flag": 255, "data": "deadbeef" },
+        { "flag": 42, "data": "" }
+      ],
+      "cases": [
+        { "name": "file-length", "query": "fileLength" },
+        { "name": "block-count", "query": "blockCount" },
+
+        { "name": "flag-header", "query": "blockFlag", "args": [0] },
+        { "name": "flag-data", "query": "blockFlag", "args": [1] },
+        { "name": "flag-arbitrary", "query": "blockFlag", "args": [2] },
+
+        { "name": "data-len-header", "query": "blockDataLength", "args": [0] },
+        { "name": "data-len-data", "query": "blockDataLength", "args": [1] },
+        { "name": "data-len-empty", "query": "blockDataLength", "args": [2] },
+
+        { "name": "checksum-header", "query": "blockChecksum", "args": [0] },
+        { "name": "checksum-data-flagff", "query": "blockChecksum", "args": [1] },
+        { "name": "checksum-empty-equals-flag", "query": "blockChecksum", "args": [2] },
+
+        { "name": "data-byte-first", "query": "blockDataByte", "args": [0, 0] },
+        { "name": "data-byte-last-header", "query": "blockDataByte", "args": [0, 16] },
+        { "name": "data-byte-data0", "query": "blockDataByte", "args": [1, 0] },
+        { "name": "data-byte-data3", "query": "blockDataByte", "args": [1, 3] },
+
+        { "name": "checksum-of-header", "query": "checksumOf", "args": [0] },
+        { "name": "checksum-of-data", "query": "checksumOf", "args": [1] },
+        { "name": "checksum-of-empty", "query": "checksumOf", "args": [2] },
+
+        { "name": "serialize-length", "query": "serializeLength" },
+        { "name": "serialize-len0-low", "query": "serializeByte", "args": [0] },
+        { "name": "serialize-len0-high", "query": "serializeByte", "args": [1] },
+        { "name": "serialize-flag0", "query": "serializeByte", "args": [2] },
+        { "name": "serialize-cksum0", "query": "serializeByte", "args": [20] },
+        { "name": "serialize-len1-low", "query": "serializeByte", "args": [21] },
+        { "name": "serialize-flag1", "query": "serializeByte", "args": [23] },
+        { "name": "serialize-cksum1", "query": "serializeByte", "args": [28] },
+        { "name": "serialize-len2-low", "query": "serializeByte", "args": [29] },
+        { "name": "serialize-len2-high", "query": "serializeByte", "args": [30] },
+        { "name": "serialize-flag2", "query": "serializeByte", "args": [31] },
+        { "name": "serialize-cksum2", "query": "serializeByte", "args": [32] },
+
+        { "name": "serialize-matches-file", "query": "serializeMatchesFile" },
+        { "name": "roundtrip-parse-serialize", "query": "roundtripParseSerialize" },
+        { "name": "roundtrip-serialize-parse", "query": "roundtripSerializeParse" }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "file-length", "value": 33 },
+        { "name": "block-count", "value": 3 },
+
+        { "name": "flag-header", "value": 0 },
+        { "name": "flag-data", "value": 255 },
+        { "name": "flag-arbitrary", "value": 42 },
+
+        { "name": "data-len-header", "value": 17 },
+        { "name": "data-len-data", "value": 4 },
+        { "name": "data-len-empty", "value": 0 },
+
+        { "name": "checksum-header", "value": 2 },
+        { "name": "checksum-data-flagff", "value": 221 },
+        { "name": "checksum-empty-equals-flag", "value": 42 },
+
+        { "name": "data-byte-first", "value": 3 },
+        { "name": "data-byte-last-header", "value": 0 },
+        { "name": "data-byte-data0", "value": 222 },
+        { "name": "data-byte-data3", "value": 239 },
+
+        { "name": "checksum-of-header", "value": 2 },
+        { "name": "checksum-of-data", "value": 221 },
+        { "name": "checksum-of-empty", "value": 42 },
+
+        { "name": "serialize-length", "value": 33 },
+        { "name": "serialize-len0-low", "value": 19 },
+        { "name": "serialize-len0-high", "value": 0 },
+        { "name": "serialize-flag0", "value": 0 },
+        { "name": "serialize-cksum0", "value": 2 },
+        { "name": "serialize-len1-low", "value": 6 },
+        { "name": "serialize-flag1", "value": 255 },
+        { "name": "serialize-cksum1", "value": 221 },
+        { "name": "serialize-len2-low", "value": 2 },
+        { "name": "serialize-len2-high", "value": 0 },
+        { "name": "serialize-flag2", "value": 42 },
+        { "name": "serialize-cksum2", "value": 42 },
+
+        { "name": "serialize-matches-file", "value": true },
+        { "name": "roundtrip-parse-serialize", "value": true },
+        { "name": "roundtrip-serialize-parse", "value": true }
+      ]
+    },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "FORMAT-TAP-REJECT-BAD-CHECKSUM",
+    "area": "emulator",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "tap-format-query",
+      "note": "FMT-TAP-CHECKSUM-001: a block whose stored checksum does not equal XOR(flag, data) is corrupt and parseTap must throw. Same bytes as FORMAT-TAP-001 with block 0's checksum byte (offset 20) flipped 0x02 -> 0xFD.",
+      "file": "130000036162636465666768696a008000800a00fd0600ffdeadbeefdd02002a2a",
+      "blocks": [],
+      "cases": [{ "name": "bad-checksum-rejected", "query": "parseThrows" }]
+    },
+    "expected": { "cases": [{ "name": "bad-checksum-rejected", "value": true }] },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "FORMAT-TAP-REJECT-TRUNCATED",
+    "area": "emulator",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "tap-format-query",
+      "note": "FMT-TAP-BLOCK-001: the last block's declared length runs past the end of the file. FORMAT-TAP-001 bytes minus the final byte (block 2 declares L=2 but only its flag remains), so parseTap must throw.",
+      "file": "130000036162636465666768696a008000800a00020600ffdeadbeefdd02002a",
+      "blocks": [],
+      "cases": [{ "name": "truncated-rejected", "query": "parseThrows" }]
+    },
+    "expected": { "cases": [{ "name": "truncated-rejected", "value": true }] },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "FORMAT-TAP-REJECT-OVERRUN",
+    "area": "emulator",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "tap-format-query",
+      "note": "FMT-TAP-LENGTH-001: a single block declares length 5 (05 00) but only one body byte follows, so the body runs past EOF and parseTap must throw.",
+      "file": "0500ff",
+      "blocks": [],
+      "cases": [{ "name": "overrun-rejected", "query": "parseThrows" }]
+    },
+    "expected": { "cases": [{ "name": "overrun-rejected", "value": true }] },
+    "normalization": { "profile": "custom" }
+  }
+]

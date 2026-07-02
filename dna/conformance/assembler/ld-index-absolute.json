@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-LD-IXIY-NN-IND-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-index-absolute-family",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld ix, (0x1234)",
+          "    ld iy, (0x1234)",
+          "    ld (0x5678), ix",
+          "    ld (0x5678), iy",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-index-absolute.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-index-absolute-family",
+        "ok": true,
+        "bytesHex": "DD2A3412FD2A3412DD227856FD227856"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

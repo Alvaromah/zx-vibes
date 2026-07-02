@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-INC-DEC-IXIY-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "inc-dec-index-register-pair",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    inc ix",
+          "    inc iy",
+          "    dec ix",
+          "    dec iy",
+          ""
+        ],
+        "options": {
+          "entryPath": "inc-dec-index-register-pair.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "inc-dec-index-register-pair",
+        "ok": true,
+        "bytesHex": "DD23FD23DD2BFD2B"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

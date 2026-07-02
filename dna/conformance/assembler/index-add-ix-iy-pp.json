@@ -1,0 +1,40 @@
+{
+  "id": "ASM-EMIT-INDEX-ADD-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "index-add-ix-iy-pp",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    add ix,bc",
+          "    add ix,de",
+          "    add ix,ix",
+          "    add ix,sp",
+          "    add iy,bc",
+          "    add iy,de",
+          "    add iy,iy",
+          "    add iy,sp",
+          ""
+        ],
+        "options": {
+          "entryPath": "index-add-ix-iy-pp.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "index-add-ix-iy-pp",
+        "ok": true,
+        "bytesHex": "DD09DD19DD29DD39FD09FD19FD29FD39"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

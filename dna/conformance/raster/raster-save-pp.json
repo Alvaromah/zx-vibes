@@ -1,0 +1,20 @@
+{
+  "id": "RASTER-SAVE-PP-001",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0016",
+  "input": {
+    "kind": "raster-save-pp",
+    "toggle": { "from": 2, "to": 5, "periodT": 218, "frameT": 69888 },
+    "initialBorder": 2,
+    "sampleStride": 8,
+    "expectExactly": true
+  },
+  "expected": {
+    "colors": [
+      [205, 0, 0],
+      [0, 205, 205]
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

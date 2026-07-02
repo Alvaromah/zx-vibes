@@ -1,0 +1,39 @@
+{
+  "id": "ASM-EMIT-IN-R-C-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "in-c-register",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    in b,(c)",
+          "    in c,(c)",
+          "    in d,(c)",
+          "    in e,(c)",
+          "    in h,(c)",
+          "    in l,(c)",
+          "    in a,(c)",
+          ""
+        ],
+        "options": {
+          "entryPath": "in-c-register.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "in-c-register",
+        "ok": true,
+        "bytesHex": "ED40ED48ED50ED58ED60ED68ED78"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

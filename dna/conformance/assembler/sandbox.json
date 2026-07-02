@@ -1,0 +1,166 @@
+{
+  "id": "ASM-SANDBOX-001",
+  "tier": "contract",
+  "provenance": "contract",
+  "input": {
+    "kind": "assembler-api",
+    "files": [
+      {
+        "path": "secret.asm",
+        "lines": ["SECRET EQU 0x42", ""]
+      },
+      {
+        "path": "secret.bin",
+        "encoding": "hex",
+        "data": "DEADBEEF"
+      },
+      {
+        "path": "project/main-include.asm",
+        "lines": ["    ORG 0x8000", "    INCLUDE \"../secret.asm\"", "    db SECRET", ""]
+      },
+      {
+        "path": "project/main-incbin.asm",
+        "lines": ["    ORG 0x8000", "    INCBIN \"../secret.bin\"", ""]
+      },
+      {
+        "path": "project/main-insert.asm",
+        "lines": ["    ORG 0x8000", "    INSERT \"../secret.bin\"", ""]
+      },
+      {
+        "path": "project/main-binary.asm",
+        "lines": ["    ORG 0x8000", "    BINARY \"../secret.bin\"", ""]
+      },
+      {
+        "path": "project/local.asm",
+        "lines": ["LOCAL EQU 0x11", ""]
+      },
+      {
+        "path": "project/lib/shared.asm",
+        "lines": ["SHARED EQU 0x22", ""]
+      },
+      {
+        "path": "project/main-allowed.asm",
+        "lines": [
+          "    ORG 0x8000",
+          "    INCLUDE \"local.asm\"",
+          "    INCLUDE <shared.asm>",
+          "    db LOCAL, SHARED",
+          ""
+        ]
+      }
+    ],
+    "cases": [
+      {
+        "name": "include-outside-project-blocked",
+        "mode": "assembleFile",
+        "entry": "<tmp>/project/main-include.asm",
+        "options": {
+          "cwd": "<tmp>/project",
+          "sandbox": true
+        }
+      },
+      {
+        "name": "include-outside-project-default-compatible",
+        "mode": "assembleFile",
+        "entry": "<tmp>/project/main-include.asm",
+        "options": {
+          "cwd": "<tmp>/project"
+        }
+      },
+      {
+        "name": "incbin-outside-project-blocked",
+        "mode": "assembleFile",
+        "entry": "<tmp>/project/main-incbin.asm",
+        "options": {
+          "cwd": "<tmp>/project",
+          "sandbox": true
+        }
+      },
+      {
+        "name": "insert-outside-project-blocked",
+        "mode": "assembleFile",
+        "entry": "<tmp>/project/main-insert.asm",
+        "options": {
+          "cwd": "<tmp>/project",
+          "sandbox": true
+        }
+      },
+      {
+        "name": "binary-outside-project-blocked",
+        "mode": "assembleFile",
+        "entry": "<tmp>/project/main-binary.asm",
+        "options": {
+          "cwd": "<tmp>/project",
+          "sandbox": true
+        }
+      },
+      {
+        "name": "in-project-and-include-roots-allowed",
+        "mode": "assembleFile",
+        "entry": "<tmp>/project/main-allowed.asm",
+        "options": {
+          "cwd": "<tmp>/project",
+          "includePaths": ["<tmp>/project/lib"],
+          "sandbox": true
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "include-outside-project-blocked",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "INCLUDE path is outside the sandbox roots: ../secret.asm"
+          }
+        ]
+      },
+      {
+        "name": "include-outside-project-default-compatible",
+        "ok": true,
+        "bytesHex": "42"
+      },
+      {
+        "name": "incbin-outside-project-blocked",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "INCBIN path is outside the sandbox roots: ../secret.bin"
+          }
+        ]
+      },
+      {
+        "name": "insert-outside-project-blocked",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "INSERT path is outside the sandbox roots: ../secret.bin"
+          }
+        ]
+      },
+      {
+        "name": "binary-outside-project-blocked",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "BINARY path is outside the sandbox roots: ../secret.bin"
+          }
+        ]
+      },
+      {
+        "name": "in-project-and-include-roots-allowed",
+        "ok": true,
+        "bytesHex": "1122"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "json"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "ASM-EMIT-ED-ADC-SBC-HL-SS-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ed-adc-sbc-hl",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    adc hl,bc",
+          "    adc hl,de",
+          "    adc hl,hl",
+          "    adc hl,sp",
+          "    sbc hl,bc",
+          "    sbc hl,de",
+          "    sbc hl,hl",
+          "    sbc hl,sp",
+          ""
+        ],
+        "options": {
+          "entryPath": "ed-adc-sbc-hl.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ed-adc-sbc-hl",
+        "ok": true,
+        "bytesHex": "ED4AED5AED6AED7AED42ED52ED62ED72"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

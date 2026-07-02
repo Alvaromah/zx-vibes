@@ -1,0 +1,34 @@
+# ZX Spectrum palette — index 0..15 -> RGB triple [r, g, b]  (gallery render policy)
+#
+# Normative source for both screen content (screen-render.md SCREEN-PALETTE-001) and
+# the border (raster-border.md RASTER-PALETTE-001). The emulator decode produces the
+# index 0..15 (hardware truth, dna/domain/memory-map.md); this table maps index -> RGB
+# (render policy, decision:ADR-0022 — the level is a rendering choice, revisable).
+#
+# Layout: index = base colour (0..7) + 8*BRIGHT. Base-colour bits: b0 blue, b1 red,
+# b2 green. A lit channel is `levels.normal` (205) for indices 0..7 and `levels.bright`
+# (255) for indices 8..15; an unlit channel is 0. The non-bright 205 keeps the W8
+# raster border fixtures byte-identical; the bright 255 is full intensity.
+
+levels:
+  normal: 205
+  bright: 255
+
+# index, name, bright, rgb  (one entry per line for a stable, parseable table)
+colors:
+  - { index: 0,  name: black,   bright: false, rgb: [0, 0, 0] }
+  - { index: 1,  name: blue,    bright: false, rgb: [0, 0, 205] }
+  - { index: 2,  name: red,     bright: false, rgb: [205, 0, 0] }
+  - { index: 3,  name: magenta, bright: false, rgb: [205, 0, 205] }
+  - { index: 4,  name: green,   bright: false, rgb: [0, 205, 0] }
+  - { index: 5,  name: cyan,    bright: false, rgb: [0, 205, 205] }
+  - { index: 6,  name: yellow,  bright: false, rgb: [205, 205, 0] }
+  - { index: 7,  name: white,   bright: false, rgb: [205, 205, 205] }
+  - { index: 8,  name: black,   bright: true,  rgb: [0, 0, 0] }
+  - { index: 9,  name: blue,    bright: true,  rgb: [0, 0, 255] }
+  - { index: 10, name: red,     bright: true,  rgb: [255, 0, 0] }
+  - { index: 11, name: magenta, bright: true,  rgb: [255, 0, 255] }
+  - { index: 12, name: green,   bright: true,  rgb: [0, 255, 0] }
+  - { index: 13, name: cyan,    bright: true,  rgb: [0, 255, 255] }
+  - { index: 14, name: yellow,  bright: true,  rgb: [255, 255, 0] }
+  - { index: 15, name: white,   bright: true,  rgb: [255, 255, 255] }

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zx-vibes.local/dna/conformance/schema/fixture.schema.json",
+  "title": "zx-vibes conformance fixture",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "id",
+    "tier",
+    "provenance",
+    "input",
+    "expected",
+    "normalization"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable fixture id, unique within dna/conformance."
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["contract", "fidelity", "incidental"]
+    },
+    "provenance": {
+      "type": "string",
+      "anyOf": [
+        {
+          "enum": [
+            "hardware",
+            "z80-spec",
+            "zexall",
+            "zexdoc",
+            "fuse",
+            "contract",
+            "manual",
+            "UNKNOWN"
+          ]
+        },
+        {
+          "pattern": "^decision:[A-Za-z0-9._-]+$"
+        }
+      ]
+    },
+    "input": {
+      "description": "Fixture input payload. Shape is owned by the fixture family."
+    },
+    "expected": {
+      "description": "Expected observable result after normalization."
+    },
+    "normalization": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["profile"],
+      "properties": {
+        "profile": {
+          "type": "string",
+          "enum": [
+            "none",
+            "binary",
+            "json",
+            "cli-snapshot",
+            "screen-hash",
+            "custom"
+          ]
+        }
+      }
+    }
+  }
+}

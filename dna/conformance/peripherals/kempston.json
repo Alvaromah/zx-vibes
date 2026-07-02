@@ -1,0 +1,60 @@
+[
+  {
+    "id": "JOY-KEMPSTON-001",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "kempston-query",
+      "cases": [
+        { "name": "byte-idle", "query": "kempstonByte", "args": [{}] },
+        { "name": "byte-right", "query": "kempstonByte", "args": [{ "right": true }] },
+        { "name": "byte-left", "query": "kempstonByte", "args": [{ "left": true }] },
+        { "name": "byte-down", "query": "kempstonByte", "args": [{ "down": true }] },
+        { "name": "byte-up", "query": "kempstonByte", "args": [{ "up": true }] },
+        { "name": "byte-fire", "query": "kempstonByte", "args": [{ "fire": true }] },
+        { "name": "byte-up-right-diagonal", "query": "kempstonByte", "args": [{ "up": true, "right": true }] },
+        { "name": "byte-fire-up-right", "query": "kempstonByte", "args": [{ "fire": true, "up": true, "right": true }] },
+        { "name": "byte-down-left", "query": "kempstonByte", "args": [{ "down": true, "left": true }] },
+        { "name": "byte-left-and-right", "query": "kempstonByte", "args": [{ "left": true, "right": true }] },
+        { "name": "byte-all-pressed", "query": "kempstonByte", "args": [{ "right": true, "left": true, "down": true, "up": true, "fire": true }] },
+
+        { "name": "port-constant", "query": "kempstonPort", "args": [] },
+
+        { "name": "decode-1F", "query": "kempstonDecodes", "args": [31] },
+        { "name": "decode-011F-low-byte-alias", "query": "kempstonDecodes", "args": [287] },
+        { "name": "decode-DF1F-high-byte-dontcare", "query": "kempstonDecodes", "args": [57119] },
+        { "name": "decode-1E-even-neighbour", "query": "kempstonDecodes", "args": [30] },
+        { "name": "decode-1D-other-odd", "query": "kempstonDecodes", "args": [29] },
+        { "name": "decode-3F-bit5-high", "query": "kempstonDecodes", "args": [63] },
+        { "name": "decode-FF", "query": "kempstonDecodes", "args": [255] }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "byte-idle", "value": 0 },
+        { "name": "byte-right", "value": 1 },
+        { "name": "byte-left", "value": 2 },
+        { "name": "byte-down", "value": 4 },
+        { "name": "byte-up", "value": 8 },
+        { "name": "byte-fire", "value": 16 },
+        { "name": "byte-up-right-diagonal", "value": 9 },
+        { "name": "byte-fire-up-right", "value": 25 },
+        { "name": "byte-down-left", "value": 6 },
+        { "name": "byte-left-and-right", "value": 3 },
+        { "name": "byte-all-pressed", "value": 31 },
+
+        { "name": "port-constant", "value": 31 },
+
+        { "name": "decode-1F", "value": true },
+        { "name": "decode-011F-low-byte-alias", "value": true },
+        { "name": "decode-DF1F-high-byte-dontcare", "value": true },
+        { "name": "decode-1E-even-neighbour", "value": false },
+        { "name": "decode-1D-other-odd", "value": false },
+        { "name": "decode-3F-bit5-high", "value": false },
+        { "name": "decode-FF", "value": false }
+      ]
+    },
+    "normalization": { "profile": "json" },
+    "notes": "Kempston joystick read (JOY-KEMPSTON-PORT-001 / -READ-001, dna/domain/peripherals.md). Active-high 000FUDLR: idle 0x00, R=0x01 L=0x02 D=0x04 U=0x08 F=0x10, top three bits always 0 (all-pressed = 0x1F, not 0xFF). Independent controls (Left+Right = 0x03 allowed). Port decode = low byte 0x1F (high byte don't-care: 0x011F and 0xDF1F both decode; 0x1E/0x1D/0x3F/0xFF do not). Pinned hardware per ADR-0021 (F1); finer A5-only aliasing is out of scope. Ships in @zx-vibes/ula beside the floating-bus model — the Kempston is what carves 0x1F out of the floating odd-port set (ULA-FLOATBUS-PORT-001)."
+  }
+]

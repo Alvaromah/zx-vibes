@@ -1,0 +1,41 @@
+{
+  "id": "EXT-FUSE-Z80-TESTS-001",
+  "suite": "fuse-z80-tests",
+  "area": "emulator",
+  "tier": "fidelity",
+  "provenance": "fuse",
+  "source": {
+    "name": "Fuse Z80 tests",
+    "url": "https://git.code.sf.net/p/fuse-emulator/fuse",
+    "vcs": "git",
+    "commit": "d56e342f328dafa7026420d5b130ea864ecbe884",
+    "license": "GPL-2.0-or-later",
+    "licenseNotes": "Third-party external test suite metadata only; payloads are not vendored by this manifest.",
+    "artifacts": [
+      {
+        "path": "z80/tests/README",
+        "bytes": 2469,
+        "sha256": "093a3301e8a13c54ba008cc0e006f2b4b274b6c0e45ae4121b303cda2d989687",
+        "vendored": false
+      },
+      {
+        "path": "z80/tests/tests.in",
+        "bytes": 161511,
+        "sha256": "9f36e866f22e72ff1f8bf2100bf70ffbf58edd97b453500aab60acf1f403ebbb",
+        "vendored": false
+      },
+      {
+        "path": "z80/tests/tests.expected",
+        "bytes": 323000,
+        "sha256": "15a6946f4addcf97e137b5bdd1d5fdb08124ff91f1b169f36a8bf4afe4bab6e4",
+        "vendored": false
+      }
+    ]
+  },
+  "execution": {
+    "status": "executable",
+    "passFail": "reference-suite",
+    "report": "Run with timing/run-fuse-z80.mjs --resolve-payloads --reference \"node dna/conformance/timing/fuse-z80-reference-adapter.mjs\"; validates tests.in/tests.expected transcript alignment.",
+    "candidateCoverage": ["TIM-CONTENTION-001"]
+  }
+}

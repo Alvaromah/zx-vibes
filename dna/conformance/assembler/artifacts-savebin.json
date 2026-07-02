@@ -1,0 +1,264 @@
+{
+  "id": "ASM-ARTIFACT-001",
+  "tier": "contract",
+  "provenance": "contract",
+  "input": {
+    "kind": "assembler-api",
+    "files": [
+      {
+        "path": "savebin/main.asm",
+        "lines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x8000",
+          "start:",
+          "    db 1,2",
+          "    SAVEBIN \"early.bin\", start, 4",
+          "    db 3,4",
+          "end:",
+          "    SAVEBIN \"nested/all.bin\", start, end-start",
+          ""
+        ]
+      }
+    ],
+    "cases": [
+      {
+        "name": "sld-hello-symbols-and-source-lines",
+        "sourceLines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x8000",
+          "start:",
+          "    ld a, 2",
+          "    call 0x1601",
+          "    ld hl, msg",
+          "print_loop:",
+          "    ld a, (hl)",
+          "    or a",
+          "    jr z, done",
+          "    rst 0x10",
+          "    inc hl",
+          "    jr print_loop",
+          "done:",
+          "    jr done",
+          "msg:",
+          "    db \"HELLO ZX\", 0",
+          ""
+        ],
+        "options": {
+          "entryPath": "hello.asm"
+        }
+      },
+      {
+        "name": "savebin-artifacts-and-output-files",
+        "mode": "assembleFile",
+        "entry": "<tmp>/savebin/main.asm",
+        "writeOutputs": {
+          "entry": "<tmp>/savebin/main.asm",
+          "outDir": "<tmp>/savebin/build"
+        }
+      },
+      {
+        "name": "savebin-rejects-parent-path",
+        "sourceLines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x8000",
+          "start: db 1",
+          "    SAVEBIN \"../evil.bin\", start, 1",
+          ""
+        ],
+        "options": {
+          "entryPath": "savebin-parent-path.asm"
+        }
+      },
+      {
+        "name": "savebin-rejects-absolute-path",
+        "sourceLines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x8000",
+          "start: db 1",
+          "    SAVEBIN \"/tmp/evil.bin\", start, 1",
+          ""
+        ],
+        "options": {
+          "entryPath": "savebin-absolute-path.asm"
+        }
+      },
+      {
+        "name": "savebin-rejects-normalized-parent-path",
+        "sourceLines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x8000",
+          "start: db 1",
+          "    SAVEBIN \"nested/../../evil.bin\", start, 1",
+          ""
+        ],
+        "options": {
+          "entryPath": "savebin-normalized-parent-path.asm"
+        }
+      },
+      {
+        "name": "savebin-requires-device",
+        "sourceLines": ["    ORG 0x8000", "start: db 1", "    SAVEBIN \"part.bin\", start, 1", ""],
+        "options": {
+          "entryPath": "savebin-no-device.asm"
+        }
+      },
+      {
+        "name": "savebin-requires-two-or-three-arguments",
+        "sourceLines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x8000",
+          "    SAVEBIN \"part.bin\"",
+          ""
+        ],
+        "options": {
+          "entryPath": "savebin-too-few.asm"
+        }
+      },
+      {
+        "name": "savebin-requires-quoted-path",
+        "sourceLines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x8000",
+          "    SAVEBIN <part.bin>, 0x8000, 1",
+          ""
+        ],
+        "options": {
+          "entryPath": "savebin-bad-path.asm"
+        }
+      },
+      {
+        "name": "savebin-rejects-out-of-range-length",
+        "sourceLines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x8000",
+          "    SAVEBIN \"part.bin\", 0xFFFE, 3",
+          ""
+        ],
+        "options": {
+          "entryPath": "savebin-bad-range.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "sld-hello-symbols-and-source-lines",
+        "ok": true,
+        "bytesHex": "3E02CD01162112807EB72804D72318F818FE48454C4C4F205A5800",
+        "sldContains": [
+          "|SLD.data.version|1",
+          "pages.size:16384,pages.count:4,slots.count:4,slots.adr:0,16384,32768,49152",
+          "|32768|F|start",
+          "|32776|F|print_loop",
+          "|32768|T|"
+        ]
+      },
+      {
+        "name": "savebin-artifacts-and-output-files",
+        "ok": true,
+        "bytesHex": "01020304",
+        "artifacts": [
+          {
+            "kind": "bin",
+            "path": "early.bin",
+            "start": 32768,
+            "length": 4,
+            "bytesHex": "01020000"
+          },
+          {
+            "kind": "bin",
+            "path": "nested/all.bin",
+            "start": 32768,
+            "length": 4,
+            "bytesHex": "01020304"
+          }
+        ],
+        "outputArtifactCount": 2,
+        "outputFiles": [
+          {
+            "path": "early.bin",
+            "bytesHex": "01020000"
+          },
+          {
+            "path": "nested/all.bin",
+            "bytesHex": "01020304"
+          }
+        ]
+      },
+      {
+        "name": "savebin-rejects-parent-path",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "SAVEBIN path must stay within the output directory: ../evil.bin"
+          }
+        ]
+      },
+      {
+        "name": "savebin-rejects-absolute-path",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "SAVEBIN path must stay within the output directory: /tmp/evil.bin"
+          }
+        ]
+      },
+      {
+        "name": "savebin-rejects-normalized-parent-path",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "SAVEBIN path must stay within the output directory: nested/../../evil.bin"
+          }
+        ]
+      },
+      {
+        "name": "savebin-requires-device",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "SAVEBIN requires DEVICE emulation mode"
+          }
+        ]
+      },
+      {
+        "name": "savebin-requires-two-or-three-arguments",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "SAVEBIN expects 2 or 3 argument(s), got 1"
+          }
+        ]
+      },
+      {
+        "name": "savebin-requires-quoted-path",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "SAVEBIN expects a quoted file path"
+          }
+        ]
+      },
+      {
+        "name": "savebin-rejects-out-of-range-length",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "SAVEBIN length out of range: 3"
+          }
+        ]
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "json"
+  }
+}

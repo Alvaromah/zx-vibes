@@ -1,0 +1,80 @@
+{
+  "id": "ASM-EMIT-INDEX-HALF-LD-R-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "index-half-ld-r",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld b,ixh",
+          "    ld b,ixl",
+          "    ld c,ixh",
+          "    ld c,ixl",
+          "    ld d,ixh",
+          "    ld d,ixl",
+          "    ld e,ixh",
+          "    ld e,ixl",
+          "    ld ixh,b",
+          "    ld ixh,c",
+          "    ld ixh,d",
+          "    ld ixh,e",
+          "    ld ixh,ixh",
+          "    ld ixh,ixl",
+          "    ld ixh,a",
+          "    ld ixl,b",
+          "    ld ixl,c",
+          "    ld ixl,d",
+          "    ld ixl,e",
+          "    ld ixl,ixh",
+          "    ld ixl,ixl",
+          "    ld ixl,a",
+          "    ld a,ixh",
+          "    ld a,ixl",
+          "    ld b,iyh",
+          "    ld b,iyl",
+          "    ld c,iyh",
+          "    ld c,iyl",
+          "    ld d,iyh",
+          "    ld d,iyl",
+          "    ld e,iyh",
+          "    ld e,iyl",
+          "    ld iyh,b",
+          "    ld iyh,c",
+          "    ld iyh,d",
+          "    ld iyh,e",
+          "    ld iyh,iyh",
+          "    ld iyh,iyl",
+          "    ld iyh,a",
+          "    ld iyl,b",
+          "    ld iyl,c",
+          "    ld iyl,d",
+          "    ld iyl,e",
+          "    ld iyl,iyh",
+          "    ld iyl,iyl",
+          "    ld iyl,a",
+          "    ld a,iyh",
+          "    ld a,iyl",
+          ""
+        ],
+        "options": {
+          "entryPath": "index-half-ld-r.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "index-half-ld-r",
+        "ok": true,
+        "bytesHex": "DD44DD45DD4CDD4DDD54DD55DD5CDD5DDD60DD61DD62DD63DD64DD65DD67DD68DD69DD6ADD6BDD6CDD6DDD6FDD7CDD7DFD44FD45FD4CFD4DFD54FD55FD5CFD5DFD60FD61FD62FD63FD64FD65FD67FD68FD69FD6AFD6BFD6CFD6DFD6FFD7CFD7D"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

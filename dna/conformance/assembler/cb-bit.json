@@ -1,0 +1,96 @@
+{
+  "id": "ASM-EMIT-CB-BIT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "cb-bit",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    bit 0,b",
+          "    bit 0,c",
+          "    bit 0,d",
+          "    bit 0,e",
+          "    bit 0,h",
+          "    bit 0,l",
+          "    bit 0,(hl)",
+          "    bit 0,a",
+          "    bit 1,b",
+          "    bit 1,c",
+          "    bit 1,d",
+          "    bit 1,e",
+          "    bit 1,h",
+          "    bit 1,l",
+          "    bit 1,(hl)",
+          "    bit 1,a",
+          "    bit 2,b",
+          "    bit 2,c",
+          "    bit 2,d",
+          "    bit 2,e",
+          "    bit 2,h",
+          "    bit 2,l",
+          "    bit 2,(hl)",
+          "    bit 2,a",
+          "    bit 3,b",
+          "    bit 3,c",
+          "    bit 3,d",
+          "    bit 3,e",
+          "    bit 3,h",
+          "    bit 3,l",
+          "    bit 3,(hl)",
+          "    bit 3,a",
+          "    bit 4,b",
+          "    bit 4,c",
+          "    bit 4,d",
+          "    bit 4,e",
+          "    bit 4,h",
+          "    bit 4,l",
+          "    bit 4,(hl)",
+          "    bit 4,a",
+          "    bit 5,b",
+          "    bit 5,c",
+          "    bit 5,d",
+          "    bit 5,e",
+          "    bit 5,h",
+          "    bit 5,l",
+          "    bit 5,(hl)",
+          "    bit 5,a",
+          "    bit 6,b",
+          "    bit 6,c",
+          "    bit 6,d",
+          "    bit 6,e",
+          "    bit 6,h",
+          "    bit 6,l",
+          "    bit 6,(hl)",
+          "    bit 6,a",
+          "    bit 7,b",
+          "    bit 7,c",
+          "    bit 7,d",
+          "    bit 7,e",
+          "    bit 7,h",
+          "    bit 7,l",
+          "    bit 7,(hl)",
+          "    bit 7,a",
+          ""
+        ],
+        "options": {
+          "entryPath": "cb-bit.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "cb-bit",
+        "ok": true,
+        "bytesHex": "CB40CB41CB42CB43CB44CB45CB46CB47CB48CB49CB4ACB4BCB4CCB4DCB4ECB4FCB50CB51CB52CB53CB54CB55CB56CB57CB58CB59CB5ACB5BCB5CCB5DCB5ECB5FCB60CB61CB62CB63CB64CB65CB66CB67CB68CB69CB6ACB6BCB6CCB6DCB6ECB6FCB70CB71CB72CB73CB74CB75CB76CB77CB78CB79CB7ACB7BCB7CCB7DCB7ECB7F"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

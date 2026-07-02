@@ -1,0 +1,46 @@
+{
+  "id": "ASM-EMIT-INDEX-LD-R-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "index-ld-r-mem",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld b,(ix+5)",
+          "    ld c,(ix+5)",
+          "    ld d,(ix+5)",
+          "    ld e,(ix+5)",
+          "    ld h,(ix+5)",
+          "    ld l,(ix+5)",
+          "    ld a,(ix+5)",
+          "    ld b,(iy+5)",
+          "    ld c,(iy+5)",
+          "    ld d,(iy+5)",
+          "    ld e,(iy+5)",
+          "    ld h,(iy+5)",
+          "    ld l,(iy+5)",
+          "    ld a,(iy+5)",
+          ""
+        ],
+        "options": {
+          "entryPath": "index-ld-r-mem.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "index-ld-r-mem",
+        "ok": true,
+        "bytesHex": "DD4605DD4E05DD5605DD5E05DD6605DD6E05DD7E05FD4605FD4E05FD5605FD5E05FD6605FD6E05FD7E05"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

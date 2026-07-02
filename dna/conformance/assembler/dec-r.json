@@ -1,0 +1,39 @@
+{
+  "id": "ASM-EMIT-DEC-R-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "dec-r-registers",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    dec b",
+          "    dec c",
+          "    dec d",
+          "    dec e",
+          "    dec h",
+          "    dec l",
+          "    dec a",
+          ""
+        ],
+        "options": {
+          "entryPath": "dec-r-registers.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "dec-r-registers",
+        "ok": true,
+        "bytesHex": "050D151D252D3D"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "id": "ASM-EMIT-LD-SP-HL-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ld-sp-hl",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    ld sp,hl",
+          ""
+        ],
+        "options": {
+          "entryPath": "ld-sp-hl.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ld-sp-hl",
+        "ok": true,
+        "bytesHex": "F9"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "ASM-EMIT-DDCB-BIT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ddcb-bit",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    bit 0,(ix+5)",
+          "    bit 1,(ix+5)",
+          "    bit 2,(ix+5)",
+          "    bit 3,(ix+5)",
+          "    bit 4,(ix+5)",
+          "    bit 5,(ix+5)",
+          "    bit 6,(ix+5)",
+          "    bit 7,(ix+5)",
+          ""
+        ],
+        "options": {
+          "entryPath": "ddcb-bit.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ddcb-bit",
+        "ok": true,
+        "bytesHex": "DDCB0546DDCB054EDDCB0556DDCB055EDDCB0566DDCB056EDDCB0576DDCB057E"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

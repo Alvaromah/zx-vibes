@@ -1,0 +1,63 @@
+{
+  "id": "CPU-FUSE-BUDGET-BASE-001",
+  "tier": "fidelity",
+  "provenance": "fuse",
+  "input": {
+    "kind": "cpu-run",
+    "note": "FUSE Z80 multi-instruction (run-to-budget) cases, base group: DJNZ/block-op loops and prefix NONI timing. Each case runs whole opcodes until its input budget T-states; expected tStates is the final accumulated count.",
+    "cases": [
+      {
+        "name": "10",
+        "registers": {
+          "b": "08"
+        },
+        "memory": {
+          "0000": "0010FD0C"
+        },
+        "budget": 132
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "10",
+        "registers": {
+          "a": "00",
+          "f": "00",
+          "b": "00",
+          "c": "01",
+          "d": "00",
+          "e": "00",
+          "h": "00",
+          "l": "00",
+          "a_": "00",
+          "f_": "00",
+          "b_": "00",
+          "c_": "00",
+          "d_": "00",
+          "e_": "00",
+          "h_": "00",
+          "l_": "00",
+          "ixh": "00",
+          "ixl": "00",
+          "iyh": "00",
+          "iyl": "00",
+          "sp": "0000",
+          "pc": "0004",
+          "memptr": "00",
+          "i": "00",
+          "r": "11",
+          "iff1": "00",
+          "iff2": "00",
+          "im": "00"
+        },
+        "memory": {},
+        "tStates": 135
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "custom"
+  }
+}

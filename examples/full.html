@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ZX Spectrum — Full demo</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; background: #14141a; color: #d7d7de;
+         font: 15px/1.5 system-ui, sans-serif; display: grid; place-items: start center; }
+  main { width: 100%; max-width: 720px; padding: 28px 18px 60px; box-sizing: border-box; text-align: center; }
+  h1 { font-size: 19px; font-weight: 600; margin: 0 0 4px; }
+  .sub { margin: 0 0 16px; color: #9a9aa6; }
+  canvas { width: 640px; max-width: 100%; height: auto; aspect-ratio: 4 / 3;
+           image-rendering: pixelated; background: #000; border-radius: 6px;
+           box-shadow: 0 8px 40px #0008; margin: 0 auto 14px; display: block; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 0 0 18px; }
+  button { font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+           border: 1px solid #333340; background: #22222c; color: #e6e6ee; transition: border-color .15s, background .15s; }
+  button:hover:not(:disabled) { border-color: #7db3ff; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: #2b4a6f; border-color: #3a6ea5; }
+
+  .panels { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 620px) { .panels { grid-template-columns: 1fr; } }
+  .panel { background: #1a1a22; border: 1px solid #2c2c38; border-radius: 12px; padding: 16px; text-align: left; }
+  .panel h2 { font-size: 15px; margin: 0 0 10px; }
+  .panel .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .note { color: #75757f; font-size: 12px; margin: 8px 0 0; }
+  code { background: #262630; border-radius: 4px; padding: 1px 6px; }
+  a { color: #7db3ff; }
+
+  /* Tape transport */
+  .tape-status { font: 12px/1.4 ui-monospace, monospace; color: #9a9aa6; margin: 4px 0 6px; }
+  .bar { height: 8px; border-radius: 5px; background: #0d0d12; border: 1px solid #2c2c38; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg,#3a6ea5,#7db3ff); transition: width .1s linear; }
+
+  /* Joystick */
+  .dpad { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px);
+          gap: 6px; justify-content: center; margin: 4px auto 0; user-select: none; touch-action: none; }
+  .jbtn { border-radius: 8px; background: #2a2a34; border: 1px solid #3a3a46; color: #e6e6ee;
+          font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .jbtn.active { background: #7db3ff; color: #10131a; border-color: #a9ccff; }
+  .jbtn.fire { grid-column: 2; grid-row: 2; background: #3a2430; }
+  .jbtn.fire.active { background: #ff7db3; color: #10131a; }
+  .j-up { grid-column: 2; grid-row: 1; } .j-left { grid-column: 1; grid-row: 2; }
+  .j-right { grid-column: 3; grid-row: 2; } .j-down { grid-column: 2; grid-row: 3; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ZX Spectrum 48K — Full</h1>
+  <p class="sub"><code>LOAD ""</code> a <code>.tap</code>/<code>.tzx</code> for real — pilot tone, border stripes, audible loading — or fast-load it, or drop in a <code>.z80</code> snapshot. Sound + Kempston joystick.</p>
+
+  <canvas id="screen" width="320" height="240"></canvas>
+
+  <div class="controls">
+    <button id="reset">⟳ Reset</button>
+    <button id="sound">🔊 Sound: on</button>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <h2>📼 Tape</h2>
+      <div class="row">
+        <button id="loadSample" class="primary">▶ Load</button>
+        <button id="fast">⏩ Fast load</button>
+        <button id="openFile">📂 Open…</button>
+        <button id="eject">⏏ Eject</button>
+      </div>
+      <input id="file" type="file" accept=".tap,.tzx,.z80" hidden />
+      <div class="tape-status" id="tapeStatus">Tape ready: “zx vibes” (the sample).</div>
+      <div class="bar"><i id="tapeBar"></i></div>
+      <p class="note"><b>Load</b> types <code>LOAD ""</code> and plays in real time — you’ll <b>hear it load</b>. <b>Fast load</b> skips the wait.
+        <b>Open…</b> takes a <code>.tap</code>/<code>.tzx</code> (loads like the sample) or a <code>.z80</code> snapshot (restored instantly). Files stay local — nothing is uploaded.</p>
+    </div>
+
+    <div class="panel">
+      <h2>🕹 Kempston joystick</h2>
+      <div class="dpad" id="dpad">
+        <button class="jbtn j-up"    data-dir="up">▲</button>
+        <button class="jbtn j-left"  data-dir="left">◀</button>
+        <button class="jbtn fire"    data-dir="fire">●</button>
+        <button class="jbtn j-right" data-dir="right">▶</button>
+        <button class="jbtn j-down"  data-dir="down">▼</button>
+      </div>
+      <p class="note">Reads on port <code>0x1F</code>. Use the pad, or your <b>arrow keys</b> + <b>Space</b> (fire). <a href="index.html">← all demos</a></p>
+    </div>
+  </div>
+
+  <script src="zxspectrum.js"></script>
+  <script>
+    const zx = ZXSpectrum.create();
+    zx.attach(document.getElementById('screen'));
+    zx.start();
+    let soundOn = true, audioKicked = false;
+    function kickAudio() { if (!audioKicked && soundOn) { audioKicked = true; zx.setSound(true); } }
+
+    // ---- controls ------------------------------------------------------------
+    const soundBtn = document.getElementById('sound');
+    document.getElementById('reset').onclick = () => { zx.reset(); zx.start(); setTapeStatus('No tape inserted.', 0); };
+    soundBtn.onclick = () => { soundOn = !soundOn; zx.setSound(soundOn); soundBtn.textContent = soundOn ? '🔊 Sound: on' : '🔇 Sound: off'; };
+
+    // ---- tape ----------------------------------------------------------------
+    const SAMPLE_B64 = 'EwAAAHp4dmliZXMgICCPAAoAjwBDkQD/AAoKAOcgMQ4AAAEAAA0AFAoA2iAxDgAAAQAADQAeCgDZIDYOAAAGAAANACgCAPsNADIgAPUgrCA4DgAACAAALDExDgAACwAAOyJaWCBWSUJFUyINADwoAPUgrCAxMA4AAAoAACw4DgAACAAAOyJsb2FkZWQgZnJvbSB0YXBlIg0ARgsA7CA3MA4AAEYAAA1j';
+    function b64ToBytes(b64) {
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    const tapeStatusEl = document.getElementById('tapeStatus');
+    const tapeBarEl = document.getElementById('tapeBar');
+    function setTapeStatus(text, progress) { tapeStatusEl.textContent = text; tapeBarEl.style.width = (progress * 100) + '%'; }
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let busy = false;
+    async function typeSteps(steps) {
+      for (const keys of steps) {
+        zx.pressed.clear(); for (const k of keys) zx.pressed.add(k);
+        await sleep(90);
+        zx.pressed.clear();
+        await sleep(150);
+      }
+    }
+    // Reset, boot to the BASIC prompt, type LOAD "", then insert + play — exactly the
+    // sequence the headless load test verifies against the real ROM.
+    async function loadAndRun(bytes, name) {
+      if (busy) return;
+      busy = true; setButtons(false);
+      try {
+        kickAudio();
+        zx.reset(); zx.start();
+        setTapeStatus('Booting…', 0);
+        await sleep(2000);                                 // wait for the © prompt
+        setTapeStatus('Typing LOAD ""…', 0);
+        // The ROM's key debounce swallows the very first keystroke after a reboot, so lead
+        // with a harmless CAPS SHIFT tap (types nothing) to absorb it before LOAD "".
+        await typeSteps([['CAPS']]);
+        await typeSteps([['J'], ['SYM', 'P'], ['SYM', 'P'], ['ENTER']]);
+        zx.insertTape(bytes, { name });
+        zx.playTape();
+        setTapeStatus('Loading "' + name + '"…', 0);
+      } finally {
+        busy = false; setButtons(true);                    // never leave the buttons stuck
+      }
+    }
+    function setButtons(on) {
+      for (const id of ['loadSample', 'fast', 'openFile', 'eject', 'reset']) document.getElementById(id).disabled = !on;
+    }
+
+    // The tape currently in the deck — Load / Fast load both act on it. Defaults to the
+    // built-in sample; opening a .tap/.tzx replaces it.
+    let currentTape = { bytes: b64ToBytes(SAMPLE_B64), name: 'zx vibes' };
+
+    // Fast (flash) load — no real-time wait. fastLoadTape is async: it fast-forwards in
+    // chunks and yields between them, so the screen and the progress ticker (below) keep
+    // updating while it runs, even for a full game tape.
+    async function fastLoad(bytes, name) {
+      if (busy) return;
+      busy = true; setButtons(false);
+      try {
+        kickAudio();
+        setTapeStatus('Fast loading "' + name + '"…', 0);
+        await zx.fastLoadTape(bytes, { name });
+        setTapeStatus('Loaded "' + name + '" — running.', 1);
+      } finally {
+        busy = false; setButtons(true);                    // never leave the buttons stuck
+      }
+    }
+
+    document.getElementById('loadSample').onclick = () => loadAndRun(currentTape.bytes, currentTape.name);
+    document.getElementById('fast').onclick = () => fastLoad(currentTape.bytes, currentTape.name);
+    const fileInput = document.getElementById('file');
+    document.getElementById('openFile').onclick = () => fileInput.click();
+    fileInput.onchange = async () => {
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      const buf = new Uint8Array(await f.arrayBuffer());
+      const name = f.name.replace(/\.[^.]+$/, '').slice(0, 10) || 'tape';
+      fileInput.value = '';
+      if (/\.z80$/i.test(f.name)) {
+        // A .z80 snapshot restores the whole machine instantly — no LOAD "" needed.
+        kickAudio();
+        zx.loadSnapshot(buf); zx.start();
+        setTapeStatus('Snapshot "' + name + '" restored — running.', 1);
+      } else {
+        currentTape = { bytes: buf, name };
+        loadAndRun(buf, name);                     // real-time (you hear it load)
+      }
+    };
+    document.getElementById('eject').onclick = () => { zx.ejectTape(); setTapeStatus('Tape ejected.', 0); };
+
+    // ---- Kempston joystick ---------------------------------------------------
+    const joy = { up: false, down: false, left: false, right: false, fire: false };
+    const dpad = document.getElementById('dpad');
+    const jbtns = new Map();
+    for (const btn of dpad.querySelectorAll('.jbtn')) jbtns.set(btn.dataset.dir, btn);
+    function applyJoy() {
+      zx.setJoystick(joy);
+      for (const [dir, btn] of jbtns) btn.classList.toggle('active', joy[dir]);
+    }
+    function setDir(dir, on) { if (joy[dir] !== on) { joy[dir] = on; applyJoy(); } }
+    for (const [dir, btn] of jbtns) {
+      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); kickAudio(); setDir(dir, true); });
+      btn.addEventListener('pointerup', (e) => { e.preventDefault(); setDir(dir, false); });
+      btn.addEventListener('pointerleave', () => setDir(dir, false));
+      btn.addEventListener('pointercancel', () => setDir(dir, false));
+    }
+    // Arrow keys + Space drive the joystick. The arrows are hijacked in the capture phase
+    // (stopImmediatePropagation) so the ROM doesn't ALSO see them as cursor keys / BREAK.
+    // Space is different: it's a common game key on the emulator keyboard too, so we set
+    // Kempston fire but let the event flow through to the machine's keyboard as well —
+    // that way Space works both as fire (Kempston) and as SPACE (keyboard).
+    const KEY_DIR = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Space: 'fire' };
+    addEventListener('keydown', (e) => {
+      const dir = KEY_DIR[e.code];
+      if (!dir) return;
+      kickAudio(); setDir(dir, true);
+      if (e.code !== 'Space') { e.preventDefault(); e.stopImmediatePropagation(); }
+    }, true);
+    addEventListener('keyup', (e) => {
+      const dir = KEY_DIR[e.code];
+      if (!dir) return;
+      setDir(dir, false);
+      if (e.code !== 'Space') { e.preventDefault(); e.stopImmediatePropagation(); }
+    }, true);
+
+    // ---- tape progress ticker ------------------------------------------------
+    function tick() {
+      if (zx.isTapePlaying()) setTapeStatus('Loading… ' + Math.round(zx.tapeProgress() * 100) + '%', zx.tapeProgress());
+      else if (tapeBarEl.style.width !== '0%' && tapeStatusEl.textContent.startsWith('Loading')) setTapeStatus('Loaded — running.', 1);
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  </script>
+</main>
+</body>
+</html>

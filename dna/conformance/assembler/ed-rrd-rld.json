@@ -1,0 +1,34 @@
+{
+  "id": "ASM-EMIT-ED-RRD-RLD-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "ed-rrd-rld",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    rrd",
+          "    rld",
+          ""
+        ],
+        "options": {
+          "entryPath": "ed-rrd-rld.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "ed-rrd-rld",
+        "ok": true,
+        "bytesHex": "ED67ED6F"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

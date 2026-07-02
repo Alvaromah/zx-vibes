@@ -1,0 +1,29 @@
+{
+  "id": "ASM-EMIT-DI-EI-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "di-ei-opcodes",
+        "sourceLines": ["    ORG 0x8000", "    di", "    ei", ""],
+        "options": {
+          "entryPath": "di-ei.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "di-ei-opcodes",
+        "ok": true,
+        "bytesHex": "F3FB"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

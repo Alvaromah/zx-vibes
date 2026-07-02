@@ -1,0 +1,39 @@
+{
+  "id": "ASM-EMIT-INC-R-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "inc-r-registers",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    inc b",
+          "    inc c",
+          "    inc d",
+          "    inc e",
+          "    inc h",
+          "    inc l",
+          "    inc a",
+          ""
+        ],
+        "options": {
+          "entryPath": "inc-r-registers.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "inc-r-registers",
+        "ok": true,
+        "bytesHex": "040C141C242C3C"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "ASM-EMIT-POP-QQ-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "assembler-api",
+    "cases": [
+      {
+        "name": "pop-register-pair",
+        "sourceLines": [
+          "    ORG 0x8000",
+          "    pop bc",
+          "    pop de",
+          "    pop hl",
+          "    pop af",
+          ""
+        ],
+        "options": {
+          "entryPath": "pop-register-pair.asm"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "name": "pop-register-pair",
+        "ok": true,
+        "bytesHex": "C1D1E1F1"
+      }
+    ]
+  },
+  "normalization": {
+    "profile": "binary"
+  }
+}
