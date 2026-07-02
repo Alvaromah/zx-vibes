@@ -342,10 +342,11 @@ Current package manifest versions:
 | Package | Version | Public surface |
 | --- | ---: | --- |
 | `zx-vibes` | `0.2.1` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
-| `create-zx-vibes` | `0.2.2` | `create-zx-vibes` bin used by `pnpm create zx-vibes`. |
-| `@zx-vibes/toolkit` | `0.3.1` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
+| `@zx-vibes/toolkit` | `0.1.0` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
 | `@zx-vibes/asm` | `0.2.0` | `zxasm` bin plus `spectral-asm` compatibility alias; assembler/disassembler API. |
-| `@zx-vibes/emulator` | `0.2.0` | Browser bundle, ROM assets, examples, and JavaScript emulator exports. |
+| `@zx-vibes/cpu` | `0.1.0` | Z80 CPU core exercised by the `dna/conformance` suites. |
+| `@zx-vibes/ula` | `0.1.0` | ULA video/timing core exercised by the `dna/conformance` suites. |
+| `@zx-vibes/machine` | `0.1.0` | 48K machine integration (CPU + ULA + tape/IO) used by the toolkit. |
 
 `zxs --version` reports the toolkit version because the CLI is implemented by
 `@zx-vibes/toolkit`. `zxasm --version` reports the assembler package version.
