@@ -60,6 +60,5 @@ metadata before npm packing.
 
 ## License
 
-MIT. The delegated toolkit depends on `@zx-vibes/emulator`, which includes a ZX
-Spectrum 48K ROM under the separate notice in the emulator package's
-`rom/README.md`.
+MIT. The delegated toolkit (`@zx-vibes/toolkit`) ships a ZX Spectrum 48K ROM
+under the separate notice in that package's `assets/ROM-NOTICE.md`.

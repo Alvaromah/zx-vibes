@@ -19,17 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-Additional component notice:
-
-ZX Spectrum ROM (packages/toolkit/assets/48k.rom,
-dna/conformance/rom/spectrum-48k.rom, and the copy embedded in
-examples/zxspectrum.js)
-
-The ZX Spectrum ROM included in this distribution is copyrighted material.
-Current copyright is held by Sky UK Limited, acquired from Amstrad plc.
-Amstrad gave permission for redistribution of their copyrighted material for
-emulator use while retaining copyright. See
-packages/toolkit/assets/ROM-NOTICE.md for the full notice and conditions;
-the same terms are recorded in examples/NOTICE and
-dna/conformance/rom/README.md.
