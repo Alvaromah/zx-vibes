@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- CLI entry point; stdout/stderr are its output surface */
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { assembleFile, disassemble, writeAssemblyOutputs } from './index.js';

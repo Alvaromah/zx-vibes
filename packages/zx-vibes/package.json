@@ -13,6 +13,14 @@
   "bugs": {
     "url": "https://github.com/Alvaromah/zx-vibes/issues"
   },
+  "keywords": [
+    "zx-spectrum",
+    "z80",
+    "assembler",
+    "emulator",
+    "cli",
+    "mcp"
+  ],
   "publishConfig": {
     "access": "public"
   },

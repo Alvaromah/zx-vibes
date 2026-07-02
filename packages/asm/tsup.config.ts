@@ -7,7 +7,7 @@ export default defineConfig({
   },
   format: ['esm'],
   target: 'node20',
-  dts: { entry: { index: 'src/index.ts' } },
+  dts: { entry: { index: 'src/index.ts', cli: 'src/cli.ts' } },
   sourcemap: true,
   clean: true,
   splitting: false,
