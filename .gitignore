@@ -11,11 +11,6 @@ tmp/
 temp/
 .feedback/
 
-# Generated docs site output and VitePress local cache
-/docs/manual/.vitepress/cache/
-/docs/manual/.vitepress/dist/
-/gallery/manual/
-
 # Local agent instructions and operational harness
 /AGENTS.md
 /.harness/

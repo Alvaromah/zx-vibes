@@ -5,13 +5,14 @@ the `@zx-vibes` assembler and emulator cores, for ZX Spectrum **48K** projects.
 
 Current package version in this repository: `0.1.0`.
 
-> **Regeneration status — Slice 1 of 12 (skeleton + primitives).**
-> This package is being regenerated from its DNA product specs
+> **Regeneration status — core surface complete (through Slice 11a).**
+> This package is regenerated from its DNA product specs
 > (`dna/product/cli.md`, `errors.md`, `config-schema.md`, `toolkit-runtime.md`).
-> Slice 1 ships the package skeleton and the three foundational primitives; the
-> build/run/verify/observe/preview/scaffold/MCP services arrive in later slices.
+> Every core verb is implemented; no deferred stubs remain in the command
+> registry. The rich starter templates (`create-zx-vibes`, W5) and the
+> generated knowledge pack for `setup` are the main deferred slices.
 
-## What's implemented in this slice
+## What's implemented
 
 - **Output envelope + exit codes** (`src/output/envelope.ts`) — the `{ ok, stage, … }`
   success/error envelope, the `0=OK / 1=USER_ERROR / 2=HANG / 3=ENV_ERROR` exit-code
@@ -19,12 +20,22 @@ Current package version in this repository: `0.1.0`.
 - **Config service** (`src/config/config.ts`) — loads `zx.config.json` and resolves
   each value by **CLI flag > env > config > default** (`org` `0x8000`, `assembler`
   `builtin`, `outDir` `build`; `spectral` → `builtin`).
-- **Stateless session** (`src/runtime/session.ts`) — a fresh-by-default clean-ROM
-  boot over `@zx-vibes/machine`, with the persistent (`--state`) and alternate
-  machine-source seams designed but deferred.
-- **CLI skeleton** (`bin/zxs.js` → `src/cli.ts`) — a Commander dispatch with a
-  command registry, `--help`/`--version`, and one real command (`version`) proving
-  the envelope end-to-end. Every other v2 command is a recognized deferred stub.
+- **Sessions** (`src/runtime/session.ts`) — a fresh-by-default clean-ROM boot
+  over `@zx-vibes/machine`, plus the opt-in persistent `.zxstate` session
+  (`--state`) shared with the MCP server.
+- **The full CLI** (`bin/zxs.js` → `src/cli.ts`, registry in `src/registry.ts`) —
+  `build`, `run`, `test`, `verify`, `screen`, `regs`, `mem`, `disasm`, `step`,
+  `trace`, `symbols`, `coverage`, `key`, `type`, `state`, `break`, `watch`,
+  `preview` (project, `--blank`, or `.z80`/`.tap`/`.tzx`/`.bin` files, with
+  `--watch` live reload and detached lifecycle), `new`, `init`, `clean`,
+  `doctor`, `setup`, `gfx`, and `version`.
+- **MCP server** (`bin/zxs-mcp.js` → `src/mcp.ts`) — structured build, run,
+  screen, inspect, debug, keyboard, and state tools over the same runtime.
+- **Reverse-engineering add-on** (`src/reveng/`) — `snapshot`, `scan`, `xref`,
+  and extended `gfx` subcommands, mounted when `ZXS_REVENG` is enabled.
+- **Scaffold** (`src/scaffold/scaffold.ts`) — `zxs new`/`init` emit a minimal
+  verify-passing project; the rich `game`/`platformer` starter templates belong
+  to the future `create-zx-vibes` slice (W5 boundary).
 
 ## The `.zxstate` session format
 
@@ -68,9 +79,9 @@ snapshot codec (`@zx-vibes/machine` `writeZ80`/`readZ80`):
   (not stored); it is re-mapped on load — the standard snapshot-load semantics.
 - `state export --z80 <file>` is a separate path: CLI-PROD-STATE-001 mandates a `.z80`
   **version 1** snapshot, which the toolkit writes itself (the core `writeZ80` emits only
-  v3). `--tap`/`--scr` export the same machine, but their emitters land in **Slice 8** —
-  until then they **fail loud** via the deferred `FormatsEmitter` seam (the same one
-  `build --tap` uses), never silently absent.
+  v3). `--tap`/`--scr` export the same machine through the real formats emitters:
+  `--tap` wraps the session RAM as a loadable CODE tape and `--scr` writes the
+  6912-byte screen image.
 - **Breakpoints / watchpoints** also live in a standalone **live store**,
   `.zxs/debug.json`, so `break`/`watch` additions survive across stateless `zxs`
   invocations and feed `run --until-break`/`--until-watch` (the one watchpoint model).
@@ -83,7 +94,7 @@ snapshot codec (`@zx-vibes/machine` `writeZ80`/`readZ80`):
 ## Bins
 
 - `zxs` / `zx-vibes` — the CLI (identical).
-- `zxs-mcp` — the MCP stdio server (stub until the MCP slice; exits cleanly).
+- `zxs-mcp` — the MCP stdio server.
 
 ## Scripts
 

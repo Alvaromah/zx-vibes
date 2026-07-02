@@ -7,78 +7,68 @@
 ZX Spectrum vibe-coding toolkit for coding agents and humans.
 
 `zx-vibes` packages the feedback loop needed to create, build, run, inspect,
-debug, and publish small ZX Spectrum 48K projects from one modern toolchain. It
-combines a TypeScript Z80 assembler/disassembler, a headless and browser-capable
-emulator, the `zxs` CLI, an MCP server for agent integrations, starter projects,
-reference docs, and a public gallery.
+debug, and verify small ZX Spectrum 48K projects from one modern toolchain. It
+combines a TypeScript Z80 assembler/disassembler, JavaScript CPU/ULA/machine
+emulator cores, the `zxs` CLI, an MCP server for agent integrations, and an
+executable conformance suite (`dna/`) that pins the whole behavior.
 
-- Public gallery: <https://alvaromah.github.io/zx-vibes/>
-- npm packages: `zx-vibes`, `create-zx-vibes`, `@zx-vibes/toolkit`,
-  `@zx-vibes/asm`, and `@zx-vibes/emulator`
+- npm packages: `zx-vibes`, `@zx-vibes/toolkit`, `@zx-vibes/asm`,
+  `@zx-vibes/cpu`, `@zx-vibes/ula`, and `@zx-vibes/machine`
 - Runtime: Node.js 20 or newer
 - Package manager: pnpm recommended
 
+> **Registry note:** this repository is a slice-by-slice regeneration of
+> zx-vibes. Until its first release is published, the packages on npm still
+> contain the previous implementation (including `create-zx-vibes` and
+> `@zx-vibes/emulator`, which are not part of this tree).
+
 ## What You Get
 
-- `pnpm create zx-vibes` to scaffold a working Spectrum project.
-- `zxs build`, `zxs run`, `zxs verify`, and `zxs preview` for the local loop.
-- `zxs boot` and `zxs play` for browser playback of a clean 48K machine,
-  snapshots, and tape files.
-- Snapshot, memory, graphics, disassembly, scan, and xref commands for
-  inspection and reverse-engineering workflows.
-- `zxs-mcp` for Codex, Claude, and other MCP-capable coding agents.
+- `zxs new` to scaffold a minimal, verify-passing Spectrum project.
+- `zxs build`, `zxs run`, `zxs test`, and `zxs verify` for the local loop.
+- `zxs screen`, `zxs regs`, `zxs mem`, `zxs disasm`, `zxs step`, `zxs trace`,
+  `zxs break`, `zxs watch`, `zxs symbols`, `zxs coverage`, and `zxs gfx` for
+  inspection and debugging.
+- `zxs preview` for browser playback of the current project, a clean 48K
+  machine (`--blank`), or `.z80`/`.tap`/`.tzx`/`.bin` files.
+- `zxs state` sessions (`.zxstate`) shared between the CLI and the MCP server,
+  with `.z80`, `.tap`, and `.scr` export.
+- `zxs-mcp`, an MCP server for Codex, Claude, and other MCP-capable coding
+  agents, configured by `zxs setup --agent codex|claude`.
 - A default embedded assembler from `@zx-vibes/asm`, exposed directly as
-  `zxasm`.
-- Optional `sjasmplus` support for advanced assembler workflows.
-- A ZX Spectrum 48K emulator package for headless tests and browser players.
-- Reference notes and project-local agent skills for assembler syntax, memory,
-  screen layout, keyboard input, ROM routines, colour attributes, timing, sound,
-  testing assertions, reverse engineering, and common Spectrum bugs.
+  `zxasm`, with optional `sjasmplus` support.
+- Reverse-engineering add-on commands (`zxs snapshot`, `zxs scan`, `zxs xref`)
+  behind the `ZXS_REVENG` environment flag.
+- Standalone emulator cores (`@zx-vibes/cpu`, `@zx-vibes/ula`,
+  `@zx-vibes/machine`) exercised by an extensive conformance harness.
 
-## Quick Start From npm
+## Quick Start
 
-Create a project from the published npm package:
+Install the umbrella package and scaffold a project:
 
 ```bash
-pnpm create zx-vibes my-game --template game
+npm install -g zx-vibes
+zxs new my-game
 cd my-game
-npm run doctor
-npm run build
-npm run verify
-npm run preview
+zxs doctor
+zxs build
+zxs verify
+zxs preview --watch
 ```
 
-Use the `platformer` starter when you want a slightly more game-shaped baseline:
+The generated project is intentionally minimal and passes `zxs verify` out of
+the box:
 
-```bash
-pnpm create zx-vibes my-platformer --template platformer
-cd my-platformer
-npm run verify
-```
-
-For a complete install-to-verified-project manual, including Codex, Claude
-Code, optional MCP setup, and the manual CLI loop, see
-[`docs/manual/`](docs/manual/index.md). The published manual lives under the
-Pages site at <https://alvaromah.github.io/zx-vibes/manual/>.
-
-The generated project includes:
-
-- `src/main.asm` as the assembler entry point.
-- `lib/` helpers for screen and keyboard routines.
-- `tests/smoke.test.json` for declarative verification.
+- `src/main.asm` as the assembler entry point (a HALT-synced 48K loop at
+  `ORG 0x8000`).
+- `tests/smoke.asm` and `tests/smoke.test.json` for declarative verification.
 - `zx.config.json` for build configuration.
-- `AGENTS.md` and `CLAUDE.md` with the same agent playbook, plus local
-  `docs/agents/skills/` and `docs/reference/` material for agent and human
-  guidance.
-- `.mcp.json` for Claude-compatible MCP clients and
-  `docs/agents/codex-mcp.toml` for Codex.
-- npm scripts for `doctor`, `build`, `run`, `screen`, `test`, `verify`,
-  `preview`, and advanced `zxs` passthrough commands.
-- a `zx-vibes` dev dependency floor of `^0.2.1`, which resolves to the current
-  compatible release on normal installs.
+- `AGENTS.md` and `CLAUDE.md` with the agent playbook.
 
-`pnpm create zx-vibes` and `zxs new` both install dependencies by default. Use
-`--no-install` for offline work or when testing an unpublished local checkout.
+The rich `game`/`platformer` starter projects under `starters/` belong to the
+future `create-zx-vibes` generator slice and have no consumer in this
+repository yet; `zxs new --template` currently records the template choice as
+config metadata only.
 
 ## Working With an Agent
 
@@ -93,57 +83,31 @@ Build it, run it, inspect the screen, and iterate until verify passes.
 The intended loop is:
 
 1. Edit Z80 assembly.
-2. Run `npm run build`.
-3. Run `npm run run`.
-4. Inspect the screen with `npm run screen`.
+2. Run `zxs build`.
+3. Run `zxs run`.
+4. Inspect the screen with `zxs screen`.
 5. If sound is part of the task, assert `audio.beeperEdges > 0` in run JSON or
    add a declarative `{ "type": "beeperEdges", "min": 1 }` test.
-6. Run `npm run verify`.
+6. Run `zxs verify`.
 
-Agents can use the same commands directly, or connect through the MCP server for
-structured build, run, screen, inspect, debug, keyboard, and state tools. The
-CLI is also useful during investigation work because most inspection commands
-can read a session, `.sna`, `.z80`, or raw `--bin` source without mutating the
-project state.
-
-If you want the classic "program installed in my shell" workflow, install the
-umbrella package globally once:
-
-```bash
-npm install -g zx-vibes
-zxs doctor
-zxs verify
-```
-
-For advanced one-off commands without a global install, generated projects also
-provide `npm run zxs -- <command>`, for example `npm run zxs -- regs`.
+Agents can use the same commands directly (every command supports `--json`),
+or connect through the MCP server for structured build, run, screen, inspect,
+debug, keyboard, and state tools. Most inspection commands can read a session,
+`.z80`, or raw `--bin` source without mutating project state.
 
 ## CLI Basics
 
-Install globally when you want `zxs` and `zxasm` to behave like normal shell
-programs:
-
 ```bash
-npm install -g zx-vibes
-zxs --help
-zxasm --help
-```
-
-Common commands:
-
-```bash
-zxs new demo --template game
+zxs new demo
 zxs doctor
 zxs build
 zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png
 zxs screen --text --png screen.png
 zxs test tests
-zxs test tests --list-assertions
 zxs verify
 zxs preview --port 5173 --watch
-zxs boot
-zxs play game.z80
-zxs bench --frames 2000
+zxs preview --blank
+zxs preview game.z80
 ```
 
 `zxs preview` serves a browser player with a visible build hash. Add
@@ -155,14 +119,13 @@ to keep running outside the current command. Detached server records include a
 local ownership token, so `--stop` only stops the tracked zx-vibes preview
 server.
 
-`zxs boot` opens a clean ZX Spectrum 48K boot screen in the same browser player.
-`zxs play <file>` opens `.z80`, `.sna`, `.tap`, and `.tzx` files without
+`zxs preview --blank` opens a clean ZX Spectrum 48K boot screen.
+`zxs preview <file>` opens `.z80`, `.tap`, `.tzx`, and `.bin` files without
 creating a project first. Tape playback preserves `.tap` and `.tzx` filenames
-so the emulator can select the correct parser. The emulator supports `.z80` v1
-snapshots plus 48K-compatible `.z80` v2/v3 snapshots; 128K paging is not
-supported.
+so the emulator can select the correct parser. `.sna` files are not supported
+yet and fail with a clear error.
 
-Debug and inspection commands are also available:
+Debug and inspection commands:
 
 ```bash
 zxs regs
@@ -175,51 +138,35 @@ zxs disasm PC --count 12 --json
 zxs trace --frames 5
 zxs state save session.zxstate
 zxs state export --z80 session.z80
-zxs snapshot info game.z80
-zxs snapshot ram game.z80 --out game.ram
-zxs snapshot mem game.z80 0x4000 --len 32
-zxs gfx screen --z80 game.z80 --out screen.png
-zxs gfx attrs --z80 game.z80 --out attrs.png
-zxs gfx find --z80 game.z80
-zxs scan --z80 game.z80 --opcode "ED B0"
-zxs xref 0x5c00 --z80 game.z80
+zxs gfx screen --out screen.png
+zxs gfx attrs --out attrs.png
+```
+
+Reverse-engineering add-on commands are gated behind an environment flag:
+
+```bash
+ZXS_REVENG=on zxs snapshot info game.z80
+ZXS_REVENG=on zxs scan --z80 game.z80 --opcode "ED B0"
+ZXS_REVENG=on zxs xref 0x5c00 --z80 game.z80
+ZXS_REVENG=on zxs gfx find --z80 game.z80
 ```
 
 ## MCP Server
 
 `zx-vibes` exposes `zxs-mcp`, an MCP server for coding agents. Generate local
-configuration snippets with:
+configuration with:
 
 ```bash
-zxs setup --agent codex
 zxs setup --agent claude
+zxs setup --agent codex
 ```
 
-For Codex, the config shape is:
-
-```toml
-[mcp_servers.zx_vibes]
-command = "pnpm"
-args = ["exec", "zxs-mcp"]
-startup_timeout_sec = 30
-tool_timeout_sec = 300
-```
-
-For Claude-compatible clients:
-
-```json
-{
-  "mcpServers": {
-    "zx_vibes": {
-      "command": "pnpm",
-      "args": ["exec", "zxs-mcp"]
-    }
-  }
-}
-```
-
-Generated projects already include `.mcp.json` and
-`docs/agents/codex-mcp.toml` with this local `pnpm exec zxs-mcp` shape.
+`--agent claude` writes/merges a project `.mcp.json` (registering the
+`zx-vibes` MCP server over `zxs-mcp`) plus a project skill under
+`.claude/skills/zx-vibes/`. `--agent codex` writes `.codex/config.toml`
+(project-local, or `~/.codex/config.toml` with `--write-global`) plus
+`AGENTS.md`. The full knowledge pack (reference docs, skills, recipes) is a
+later slice and is reported by `setup` under `deferred`.
 
 ## Assembler Backends
 
@@ -245,9 +192,6 @@ ZXS_ASSEMBLER=sjasmplus zxs build
 zxs build --assembler sjasmplus
 ```
 
-The starter projects are designed to work with the embedded assembler by
-default.
-
 ## Using This Repository
 
 Clone the monorepo when you want to work on the toolkit itself:
@@ -263,6 +207,7 @@ Useful root commands:
 
 ```bash
 pnpm run check:drift
+pnpm run conformance:check
 pnpm run build
 pnpm run typecheck
 pnpm run lint
@@ -271,11 +216,11 @@ pnpm run pack
 pnpm run verify
 ```
 
-`pnpm run verify` runs generated-asset drift checks first, then build,
-typecheck, lint, and tests. Drift checks compare package version surfaces, root
-starters with toolkit templates, root docs with copied package docs,
-create-package assets with root source assets, and gallery browser bundles with
-the current emulator bundle.
+`pnpm run verify` runs drift checks and the full `dna/` conformance suite
+first, then build, typecheck, lint, and tests. Drift checks compare package
+version surfaces, the emulator-env template, and the generated Z80 opcode
+table. Starter-template and gallery-bundle drift checks are descoped until the
+`create-zx-vibes` and gallery slices are regenerated.
 
 ### Local Clone Workflows
 
@@ -291,25 +236,16 @@ pnpm run build
 
 mkdir -p /tmp/zx-vibes-local
 cd /tmp/zx-vibes-local
-node /path/to/zx-vibes/packages/toolkit/dist/cli/index.js new my-game --template platformer --no-install
+node /path/to/zx-vibes/packages/toolkit/bin/zxs.js new my-game
 cd my-game
-node /path/to/zx-vibes/packages/toolkit/dist/cli/index.js verify
-```
-
-Published `zxs new` installs `zx-vibes` by default. Use `--no-install` when
-testing an unpublished local checkout as above. Once dependencies are installed,
-use the normal project-local commands:
-
-```bash
-npm run verify
-npm run preview
+node /path/to/zx-vibes/packages/toolkit/bin/zxs.js verify
 ```
 
 `pnpm run pack` writes package tarballs to `.packs/`. Installing only
 `.packs/zx-vibes-*.tgz` is not an all-local monorepo install: packed
 `workspace:*` dependencies are rewritten to exact published versions, so
-`@zx-vibes/toolkit`, `@zx-vibes/asm`, and `@zx-vibes/emulator` resolve like
-regular registry dependencies. Use the built CLI workflow above for local
+`@zx-vibes/toolkit`, `@zx-vibes/asm`, and the emulator core packages resolve
+like regular registry dependencies. Use the built CLI workflow above for local
 clone testing, or publish all package tarballs to a local registry when you
 need to test unpublished package metadata together.
 
@@ -318,22 +254,34 @@ Target a single package when iterating:
 ```bash
 pnpm --filter @zx-vibes/toolkit test
 pnpm --filter @zx-vibes/asm test
-pnpm --filter @zx-vibes/emulator test
-pnpm --filter create-zx-vibes run check:assets
+pnpm --filter @zx-vibes/machine test
 ```
 
 ## Monorepo Layout
 
 ```text
-docs/                     Manual, shared reference docs, and MCP config snippets
-gallery/                  Built GitHub Pages gallery output
-packages/asm/             @zx-vibes/asm assembler/disassembler
-packages/create-zx-vibes/ create-zx-vibes project generator
-packages/emulator/        @zx-vibes/emulator Spectrum emulator
-packages/toolkit/         @zx-vibes/toolkit CLI, MCP server, recipes, gallery
-packages/zx-vibes/        zx-vibes umbrella package and bin shims
-starters/                 Source starter projects copied by the generator
+dna/                Source-of-truth specs + executable conformance suite
+packages/asm/       @zx-vibes/asm assembler/disassembler (zxasm)
+packages/cpu/       @zx-vibes/cpu Z80 CPU core
+packages/ula/       @zx-vibes/ula ULA video/timing core
+packages/machine/   @zx-vibes/machine 48K machine integration
+packages/toolkit/   @zx-vibes/toolkit zxs CLI, MCP server, preview player
+packages/zx-vibes/  zx-vibes umbrella package and bin shims
+examples/           Browser demos of the machine core (prebuilt bundle)
+starters/           Starter projects reserved for the future generator slice
+tapes/              Sample .tap/.tzx/.z80 images for manual testing
+scripts/            Drift checks and generators for the root gates
 ```
+
+## The DNA and Conformance Suite
+
+`dna/` is the project genome: self-contained normative specs for the Z80, ULA,
+Spectrum machine, file formats (`domain/`), and the project-invented product
+surface — CLI, MCP tools, `.zxstate`, config schema, assertions, exit codes
+(`product/`) — plus an executable decider (`conformance/`). An implementation
+is correct iff it passes `pnpm run conformance:check`. Every fixture carries
+tier and provenance metadata; external suites (FUSE, ZEX) run through
+license-aware adapters. See [`dna/README.md`](dna/README.md).
 
 ## Published Packages
 
@@ -351,45 +299,26 @@ Current package manifest versions:
 `zxs --version` reports the toolkit version because the CLI is implemented by
 `@zx-vibes/toolkit`. `zxasm --version` reports the assembler package version.
 
-## Gallery and Docs
-
-The public gallery is deployed with GitHub Pages at
-<https://alvaromah.github.io/zx-vibes/>. It showcases generated Spectrum games
-with playable browser snapshots, screenshots, metadata, and transcripts.
-
-The published manual is available at
-<https://alvaromah.github.io/zx-vibes/manual/>. Markdown source lives in
-`docs/manual/`, and the Pages workflow builds it with VitePress into
-`gallery/manual/` before uploading the `gallery/` artifact.
-
-Root `gallery/` is the Pages deployment source. `packages/toolkit/gallery/`
-contains package-side gallery assets, and both gallery browser bundles are
-checked against `packages/emulator/dist/zxgeneration.esm.js` by
-`pnpm run check:gallery-bundles`.
-
-Reference docs live in `docs/reference/`; project-local agent skills live in
-`docs/agents/skills/`. Manual, reference, and agent docs are copied into the
-create-package docs, while reference and agent docs are also copied into
-generated projects and toolkit package docs. `pnpm run check:drift` verifies
-those copied docs stay in sync and that starter `zx-vibes` dependency floors
-track the umbrella package version.
+Each starter project under `starters/` pins a `zx-vibes` dev dependency floor
+of `^0.2.1`, kept in sync with the umbrella package version by
+`pnpm run check:versions`.
 
 ## Release, CI, and Security
 
 CI runs on Ubuntu, macOS, and Windows across Node 20 and 22. The required path
 is `check:drift`, `conformance:check`, build, a clean `git diff`, typecheck,
-lint, and tests. The `main` branch is protected with those CI matrix jobs as
-strict required checks, and force pushes/deletion are disabled.
+lint, and tests.
 
 Releases use Changesets. The release workflow validates on Node 20 and 22, then
 only publishes when manually dispatched with `publish=true`; the publish job
 installs, builds, runs `pnpm run pack`, verifies npm auth, and then runs
-`pnpm changeset publish`.
+`pnpm changeset publish`. Before the first publish from this repository,
+version numbers must sit above the already-published lines on npm, and the
+published-but-absent `create-zx-vibes` and `@zx-vibes/emulator` lines need an
+explicit deprecate-or-regenerate decision.
 
-Security posture as of 2026-06-16: root pnpm overrides pin patched transitive
-dependency floors for `form-data@4.0.6`, `js-yaml@4.2.0`, and
-`read-yaml-file@2.1.0`; GitHub Dependabot reports no open alerts; and
-`pnpm audit --audit-level moderate` reports no known vulnerabilities.
+Root pnpm overrides pin patched transitive dependency floors for
+`form-data@4.0.6`, `js-yaml@4.2.0`, and `read-yaml-file@2.1.0`.
 
 ## Contributing
 
@@ -403,8 +332,7 @@ pnpm run pack
 ```
 
 Keep starter projects compatible with the embedded assembler unless a change is
-explicitly about optional `sjasmplus` support. If you change starter assets,
-make sure the generator package assets stay in sync.
+explicitly about optional `sjasmplus` support.
 
 ## License
 
@@ -413,5 +341,7 @@ The zx-vibes source code is released under the MIT License. See
 
 The repository includes a ZX Spectrum 48K ROM for emulator use. That ROM is
 copyrighted material distributed under the permission described in
-[`packages/emulator/rom/README.md`](packages/emulator/rom/README.md). The ROM
+[`packages/toolkit/assets/ROM-NOTICE.md`](packages/toolkit/assets/ROM-NOTICE.md);
+the same terms are recorded in [`examples/NOTICE`](examples/NOTICE) and
+[`dna/conformance/rom/README.md`](dna/conformance/rom/README.md). The ROM
 notice is separate from the MIT license that covers the zx-vibes source code.

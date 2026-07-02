@@ -2,7 +2,7 @@
   "name": "zx-vibes-monorepo",
   "version": "0.1.0",
   "private": true,
-  "description": "ZX Spectrum vibe-coding monorepo: emulator, assembler, toolkit, starters, MCP, and create package.",
+  "description": "ZX Spectrum vibe-coding monorepo: assembler, emulator cores, zxs toolkit, MCP server, and conformance DNA.",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.34.3",
