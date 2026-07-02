@@ -1,5 +1,15 @@
 # @zx-vibes/asm
 
+## 0.3.0
+
+### Minor Changes
+
+- First release from the regenerated repository. The assembler/disassembler is
+  regenerated slice-by-slice from the project DNA (`dna/`) and verified by the
+  executable conformance suite (assembler CLI/API/corpus fixtures and
+  round-trip checks). It replaces the previous implementation published as
+  `0.2.0`; earlier entries below describe that lineage.
+
 ## 0.2.0
 
 ### Minor Changes

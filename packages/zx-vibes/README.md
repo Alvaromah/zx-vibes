@@ -2,7 +2,7 @@
 
 Umbrella package for the zx-vibes ZX Spectrum 48K toolchain.
 
-Current package version in this repository: `0.2.1`.
+Current package version in this repository: `0.3.0`.
 
 Install this package in generated or hand-written projects when you want the
 standard user-facing command set without depending on implementation packages

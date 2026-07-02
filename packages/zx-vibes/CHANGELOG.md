@@ -1,5 +1,22 @@
 # zx-vibes
 
+## 0.3.0
+
+### Minor Changes
+
+- First release from the regenerated repository. The umbrella package now
+  delegates to the regenerated `@zx-vibes/toolkit` and `@zx-vibes/asm`
+  (`@zx-vibes/emulator` is gone; the emulator lives in the
+  `@zx-vibes/cpu`/`@zx-vibes/ula`/`@zx-vibes/machine` cores). It replaces the
+  previous implementation published as `0.2.1`; earlier entries below describe
+  that lineage.
+
+### Patch Changes
+
+- Updated dependencies
+  - @zx-vibes/toolkit@0.4.0
+  - @zx-vibes/asm@0.3.0
+
 ## 0.2.1
 
 ### Patch Changes

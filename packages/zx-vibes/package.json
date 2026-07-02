@@ -1,6 +1,6 @@
 {
   "name": "zx-vibes",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "User-facing ZX Spectrum vibe-coding package with zxs, zxs-mcp, and zxasm bins.",
   "license": "MIT",
   "author": "Alvaro Mateos",

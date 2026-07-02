@@ -289,9 +289,9 @@ Current package manifest versions:
 
 | Package | Version | Public surface |
 | --- | ---: | --- |
-| `zx-vibes` | `0.2.1` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
-| `@zx-vibes/toolkit` | `0.1.0` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
-| `@zx-vibes/asm` | `0.2.0` | `zxasm` bin plus `spectral-asm` compatibility alias; assembler/disassembler API. |
+| `zx-vibes` | `0.3.0` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
+| `@zx-vibes/toolkit` | `0.4.0` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
+| `@zx-vibes/asm` | `0.3.0` | `zxasm` bin plus `spectral-asm` compatibility alias; assembler/disassembler API. |
 | `@zx-vibes/cpu` | `0.1.0` | Z80 CPU core exercised by the `dna/conformance` suites. |
 | `@zx-vibes/ula` | `0.1.0` | ULA video/timing core exercised by the `dna/conformance` suites. |
 | `@zx-vibes/machine` | `0.1.0` | 48K machine integration (CPU + ULA + tape/IO) used by the toolkit. |
@@ -300,7 +300,7 @@ Current package manifest versions:
 `@zx-vibes/toolkit`. `zxasm --version` reports the assembler package version.
 
 Each starter project under `starters/` pins a `zx-vibes` dev dependency floor
-of `^0.2.1`, kept in sync with the umbrella package version by
+of `^0.3.0`, kept in sync with the umbrella package version by
 `pnpm run check:versions`.
 
 ## Release, CI, and Security
@@ -312,10 +312,12 @@ lint, and tests.
 Releases use Changesets. The release workflow validates on Node 20 and 22, then
 only publishes when manually dispatched with `publish=true`; the publish job
 installs, builds, runs `pnpm run pack`, verifies npm auth, and then runs
-`pnpm changeset publish`. Before the first publish from this repository,
-version numbers must sit above the already-published lines on npm, and the
-published-but-absent `create-zx-vibes` and `@zx-vibes/emulator` lines need an
-explicit deprecate-or-regenerate decision.
+`pnpm changeset publish`. Version numbers in this repository sit above the
+already-published lines on npm (`@zx-vibes/toolkit` 0.4.0 > 0.3.1,
+`zx-vibes` 0.3.0 > 0.2.1, `@zx-vibes/asm` 0.3.0 > 0.2.0) so the first publish
+supersedes them cleanly. The published-but-absent `create-zx-vibes` and
+`@zx-vibes/emulator` lines still need an explicit deprecate-or-regenerate
+decision at publish time.
 
 Root pnpm overrides pin patched transitive dependency floors for
 `form-data@4.0.6`, `js-yaml@4.2.0`, and `read-yaml-file@2.1.0`.

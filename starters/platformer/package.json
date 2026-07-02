@@ -14,6 +14,6 @@
     "zxs": "zxs"
   },
   "devDependencies": {
-    "zx-vibes": "^0.2.1"
+    "zx-vibes": "^0.3.0"
   }
 }
