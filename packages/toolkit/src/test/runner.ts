@@ -163,9 +163,14 @@ export function runSpec(specFile: string, cwd: string): SpecResult {
   }
 
   try {
-    // Assemble the build entry in-memory (REC-PROD-RUN-001, "temp output").
+    // Assemble the build entry in-memory (REC-PROD-RUN-001, "temp output"). The
+    // `build` path resolves relative to the spec, but the sandbox roots at the
+    // project root (the `zxs test` cwd), per ASM-PROD-CLI-ASSEMBLE-004 — NOT at
+    // the spec dir. A spec in `tests/` building `../src/main.asm` that INCLUDEs
+    // `../lib/*.asm` (the natural project layout) must reach its siblings under
+    // the project root; rooting at `tests/` would reject those `..` includes.
     const buildPath = resolve(specDir, parsed.build);
-    const asm = assembleFile(buildPath, { cwd: specDir, sandbox: true });
+    const asm = assembleFile(buildPath, { cwd, sandbox: true });
     if (!asm.ok) {
       // REC-PROD-RULE-BUILDFAIL-001: build failure → spec fails, no assertions run.
       return {

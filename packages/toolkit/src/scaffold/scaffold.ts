@@ -72,8 +72,9 @@ export const ENTRY_ASM = [
 /**
  * The green smoke suite: one self-contained spec proving the toolchain end-to-end —
  * the program runs to `status:"ok"`, the loop is HALT-synced, and the border is the
- * expected colour. Self-contained in `tests/` (sandbox confinement rejects `..`), so
- * it stays green regardless of the project's own sources.
+ * expected colour. Its `smoke.asm` lives beside the spec in `tests/`, so the proof
+ * stays green regardless of the project's own sources (the sandbox roots at the
+ * project root, so a spec may also build `../src/…`, but this one deliberately does not).
  */
 export const SMOKE_TEST_JSON = `${JSON.stringify(
   {
