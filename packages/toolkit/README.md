@@ -9,8 +9,8 @@ Current package version in this repository: `0.4.0`.
 > This package is regenerated from its DNA product specs
 > (`dna/product/cli.md`, `errors.md`, `config-schema.md`, `toolkit-runtime.md`).
 > Every core verb is implemented; no deferred stubs remain in the command
-> registry. The rich starter templates (`create-zx-vibes`, W5) and the
-> generated knowledge pack for `setup` are the main deferred slices.
+> registry. The `create-zx-vibes` standalone generator and the generated
+> knowledge pack for `setup` are the main deferred slices.
 
 ## What's implemented
 
@@ -33,9 +33,10 @@ Current package version in this repository: `0.4.0`.
   screen, inspect, debug, keyboard, and state tools over the same runtime.
 - **Reverse-engineering add-on** (`src/reveng/`) — `snapshot`, `scan`, `xref`,
   and extended `gfx` subcommands, mounted when `ZXS_REVENG` is enabled.
-- **Scaffold** (`src/scaffold/scaffold.ts`) — `zxs new`/`init` emit a minimal
-  verify-passing project; the rich `game`/`platformer` starter templates belong
-  to the future `create-zx-vibes` slice (W5 boundary).
+- **Scaffold** (`src/scaffold/scaffold.ts`, content in `src/scaffold/templates.ts`) —
+  `zxs new [--template game|platformer]` emits a real, playable game (a moving,
+  keyboard-driven sprite + shared `lib/` + a smoke suite that asserts the actual
+  game); `init` onboards an existing repo with only the toolkit contract.
 
 ## The `.zxstate` session format
 

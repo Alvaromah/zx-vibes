@@ -24,7 +24,8 @@ executable conformance suite (`dna/`) that pins the whole behavior.
 
 ## What You Get
 
-- `zxs new` to scaffold a minimal, verify-passing Spectrum project.
+- `zxs new` to scaffold a playable, verify-passing Spectrum game
+  (`--template game|platformer`).
 - `zxs build`, `zxs run`, `zxs test`, and `zxs verify` for the local loop.
 - `zxs screen`, `zxs regs`, `zxs mem`, `zxs disasm`, `zxs step`, `zxs trace`,
   `zxs break`, `zxs watch`, `zxs symbols`, `zxs coverage`, and `zxs gfx` for
@@ -56,19 +57,24 @@ zxs verify
 zxs preview --watch
 ```
 
-The generated project is intentionally minimal and passes `zxs verify` out of
+The generated project is a small, playable game and passes `zxs verify` out of
 the box:
 
-- `src/main.asm` as the assembler entry point (a HALT-synced 48K loop at
-  `ORG 0x8000`).
-- `tests/smoke.asm` and `tests/smoke.test.json` for declarative verification.
+- `src/main.asm` — the game entry point at `ORG 0x8000` (default `game`: a
+  QAOP-driven ship; `--template platformer`: O/P to move, SPACE to jump).
+- `lib/screen.asm` and `lib/keys.asm` — the shared screen + input primitives it
+  `INCLUDE`s.
+- `tests/smoke.test.json` — a smoke suite that builds and asserts the *actual*
+  game, so editing `src/main.asm` and re-running `zxs verify` is a real
+  regression check.
 - `zx.config.json` for build configuration.
 - `AGENTS.md` and `CLAUDE.md` with the agent playbook.
 
-The rich `game`/`platformer` starter projects under `starters/` belong to the
-future `create-zx-vibes` generator slice and have no consumer in this
-repository yet; `zxs new --template` currently records the template choice as
-config metadata only.
+The richer installable projects under `starters/` (each adds a `package.json`
+and `Makefile`) are the same programs wrapped as npm projects; `zxs new` embeds
+their source directly. See [`docs/recipes.md`](docs/recipes.md) for task-shaped
+agent recipes: create a game, inspect the screen, assert beeper output, debug
+hangs, and IM1-vs-IM2 guidance.
 
 ## Working With an Agent
 
@@ -94,6 +100,10 @@ Agents can use the same commands directly (every command supports `--json`),
 or connect through the MCP server for structured build, run, screen, inspect,
 debug, keyboard, and state tools. Most inspection commands can read a session,
 `.z80`, or raw `--bin` source without mutating project state.
+
+For task-shaped recipes — create a game, inspect the screen, assert beeper
+output, debug hangs, and when to switch from IM1 to IM2 — see
+[`docs/recipes.md`](docs/recipes.md).
 
 ## CLI Basics
 
@@ -218,27 +228,43 @@ pnpm run verify
 
 `pnpm run verify` runs drift checks and the full `dna/` conformance suite
 first, then build, typecheck, lint, and tests. Drift checks compare package
-version surfaces, the emulator-env template, and the generated Z80 opcode
-table. Starter-template and gallery-bundle drift checks are descoped until the
-`create-zx-vibes` and gallery slices are regenerated.
+version surfaces, the emulator-env template, the generated Z80 opcode table, and
+the scaffold templates against `starters/` (`pnpm run check:templates`; edit a
+starter, then `pnpm run gen:scaffold-templates`). Gallery-bundle drift checks are
+descoped until the gallery slice is regenerated.
 
 ### Local Clone Workflows
 
 `pnpm exec zxs ...` is a project-local command. It expects to run inside a
 directory with a `package.json`, so from an empty parent directory pnpm exits
 before `zxs` starts. When testing a clone before publishing changes, build the
-monorepo and invoke the built CLI directly:
+monorepo first:
 
 ```bash
 cd /path/to/zx-vibes
 pnpm install
 pnpm run build
+```
 
-mkdir -p /tmp/zx-vibes-local
-cd /tmp/zx-vibes-local
-node /path/to/zx-vibes/packages/toolkit/bin/zxs.js new my-game
+From the repo root, the `zxs` alias script runs the built CLI without the long
+path — handy for a quick smoke:
+
+```bash
+pnpm zxs --help
+pnpm zxs new my-game    # scaffolds ./my-game under the repo (delete it after)
+```
+
+To scaffold and drive a project in a scratch directory anywhere, define a shell
+alias to the built CLI, then work as if `zxs` were installed globally:
+
+```bash
+alias zxs="node /path/to/zx-vibes/packages/toolkit/bin/zxs.js"
+
+mkdir -p /tmp/zx-vibes-local && cd /tmp/zx-vibes-local
+zxs new my-game
 cd my-game
-node /path/to/zx-vibes/packages/toolkit/bin/zxs.js verify
+zxs verify
+zxs preview --watch
 ```
 
 `pnpm run pack` writes package tarballs to `.packs/`. Installing only
@@ -268,7 +294,8 @@ packages/machine/   @zx-vibes/machine 48K machine integration
 packages/toolkit/   @zx-vibes/toolkit zxs CLI, MCP server, preview player
 packages/zx-vibes/  zx-vibes umbrella package and bin shims
 examples/           Browser demos of the machine core (prebuilt bundle)
-starters/           Starter projects reserved for the future generator slice
+docs/               Task-shaped agent recipes (recipes.md)
+starters/           Installable starter projects; their source seeds `zxs new`
 scripts/            Drift checks and generators for the root gates
 ```
 

@@ -12,13 +12,16 @@
   "scripts": {
     "check:emulator-env-template": "node scripts/check-emulator-env-template.mjs",
     "gen:opcode-table": "node scripts/gen-opcode-table.mjs",
+    "gen:scaffold-templates": "node scripts/gen-scaffold-templates.mjs",
     "check:opcode-table": "node scripts/check-opcode-table-drift.mjs",
+    "check:templates": "node scripts/check-templates-drift.mjs",
     "check:opcode-table-self-test": "node scripts/check-opcode-table-drift-self-test.mjs",
     "new:emulator-env": "node scripts/new-emulator-env.mjs",
     "check:versions": "node scripts/check-version-consistency.js",
     "sync:versions": "node scripts/check-version-consistency.js --write",
+    "zxs": "node packages/toolkit/bin/zxs.js",
     "version:packages": "changeset version && pnpm run sync:versions",
-    "check:drift": "pnpm run check:versions && pnpm --filter @zx-vibes/toolkit run check:docs && pnpm run check:emulator-env-template && pnpm run check:opcode-table-self-test && pnpm run check:opcode-table",
+    "check:drift": "pnpm run check:versions && pnpm --filter @zx-vibes/toolkit run check:docs && pnpm run check:emulator-env-template && pnpm run check:opcode-table-self-test && pnpm run check:opcode-table && pnpm run check:templates",
     "build": "pnpm -r --sort run build",
     "typecheck": "pnpm -r --sort run typecheck",
     "test": "pnpm -r --sort run test",
@@ -117,16 +120,5 @@
     "js-yaml": "4.2.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.61.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "esbuild": "0.28.1",
-      "form-data": "4.0.6",
-      "js-yaml": "4.2.0",
-      "read-yaml-file": "2.1.0"
-    },
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }

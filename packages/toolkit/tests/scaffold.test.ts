@@ -49,8 +49,8 @@ async function cliInDir(cwd: string, argv: string[], streams: OutputStreams): Pr
 // new
 // ===========================================================================
 
-describe('runNew — scaffolds a verify-passing project (CLI-PROD-NEW-001)', () => {
-  it('writes the minimal project and reports the new envelope', () => {
+describe('runNew — scaffolds a verify-passing, playable project (CLI-PROD-NEW-001)', () => {
+  it('writes a real game project (src + shared lib) and reports the new envelope', () => {
     const env = runNew({ name: 'demo', cwd: dir });
 
     expect(env.ok).toBe(true);
@@ -60,19 +60,29 @@ describe('runNew — scaffolds a verify-passing project (CLI-PROD-NEW-001)', () 
     expect(env.template).toBe('game');
     expect(env.files).toContain('zx.config.json');
     expect(env.files).toContain('src/main.asm');
+    expect(env.files).toContain('lib/screen.asm');
+    expect(env.files).toContain('lib/keys.asm');
     expect(env.files).toContain('tests/smoke.test.json');
     expect(env.files).toContain('AGENTS.md');
     expect(env.files).toContain('CLAUDE.md');
 
     const proj = join(dir, 'demo');
-    expect(existsSync(join(proj, 'zx.config.json'))).toBe(true);
     expect(existsSync(join(proj, 'src', 'main.asm'))).toBe(true);
+    expect(existsSync(join(proj, 'lib', 'screen.asm'))).toBe(true);
+    // The entry is the real QAOP-ship game with `__NAME__` substituted for the project name.
+    const main = readFileSync(join(proj, 'src', 'main.asm'), 'utf8');
+    expect(main).toContain('read_qaop');
+    expect(main).toContain('demo');
+    expect(main).not.toContain('__NAME__');
+    // The smoke suite builds and asserts the ACTUAL entry, not a self-contained stub.
+    const smoke = JSON.parse(readFileSync(join(proj, 'tests', 'smoke.test.json'), 'utf8'));
+    expect(smoke.build).toBe('../src/main.asm');
     // The generated config is valid per config-schema (entry + builtin assembler).
     const config = JSON.parse(readFileSync(join(proj, 'zx.config.json'), 'utf8'));
     expect(config).toMatchObject({ entry: 'src/main.asm', assembler: 'builtin', template: 'game' });
   });
 
-  it('the generated project BUILDS and VERIFIES green (assemble + run + smoke tests)', () => {
+  it('the generated GAME project BUILDS and VERIFIES green (assemble + run + smoke tests)', () => {
     runNew({ name: 'demo', cwd: dir });
     const proj = join(dir, 'demo');
 
@@ -88,11 +98,22 @@ describe('runNew — scaffolds a verify-passing project (CLI-PROD-NEW-001)', () 
     expect(v.tests?.failed).toBe(0);
   });
 
-  it('honors --template by recording it as config metadata (content stays minimal)', () => {
+  it('--template platformer emits distinct content that ALSO verifies green', () => {
     const env = runNew({ name: 'plat', cwd: dir, template: 'platformer' });
     expect(env.template).toBe('platformer');
-    const config = JSON.parse(readFileSync(join(dir, 'plat', 'zx.config.json'), 'utf8'));
+    const proj = join(dir, 'plat');
+
+    const config = JSON.parse(readFileSync(join(proj, 'zx.config.json'), 'utf8'));
     expect(config.template).toBe('platformer');
+    // Genuinely different program from the default game (jump mechanic, not a QAOP ship).
+    const main = readFileSync(join(proj, 'src', 'main.asm'), 'utf8');
+    expect(main).toContain('jump_or_gravity');
+    expect(main).not.toContain('sprite_xor_64x64');
+
+    const v = runVerify({ cwd: proj });
+    expect(v.ok).toBe(true);
+    expect(v.run?.status).toBe('ok');
+    expect(v.tests?.failed).toBe(0);
   });
 });
 
@@ -118,6 +139,18 @@ describe('runNew — failure cases (CLI-PROD-OUT-NEW-001 → exit 1)', () => {
   it('accepts a name with hyphen / underscore / dot', () => {
     expect(runNew({ name: 'my-game_v1.2', cwd: dir }).ok).toBe(true);
     expect(existsSync(join(dir, 'my-game_v1.2', 'zx.config.json'))).toBe(true);
+  });
+
+  it('rejects an unknown --template (USER_ERROR) and creates nothing', () => {
+    try {
+      runNew({ name: 'demo', cwd: dir, template: 'roguelike' });
+      expect.unreachable('should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CliError);
+      expect((error as CliError).exitCode).toBe(ExitCode.USER_ERROR);
+      expect((error as CliError).stage).toBe('new');
+    }
+    expect(existsSync(join(dir, 'demo'))).toBe(false);
   });
 });
 
