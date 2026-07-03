@@ -2,7 +2,15 @@ packages:
   - "packages/*"
   - "examples/*"
 
+# Dependency settings live here (not in package.json#pnpm) so pnpm 10+ does not
+# warn about the deprecated manifest field.
 onlyBuiltDependencies:
   - esbuild
 allowBuilds:
   esbuild: true
+
+overrides:
+  esbuild: "0.28.1"
+  form-data: "4.0.6"
+  js-yaml: "4.2.0"
+  read-yaml-file: "2.1.0"
