@@ -416,7 +416,13 @@ async function boot() {
   }
 
   function tick(now) {
-    acc += now - last;
+    // Clamp the delta and drop any backlog the step cap can't drain. A backgrounded
+    // tab throttles/stops rAF, so on return `now` jumps seconds past `last`; carrying
+    // that whole gap in `acc` would run the machine at rAF speed (~8 frames/tick) until
+    // it drained — the visible "everything goes super fast for a moment" fast-forward.
+    // Bounding the delta and resetting `acc` when we fall behind resumes in real time
+    // instead of replaying the missed wall-clock. Mirrors the example runners' loops.
+    acc += Math.min(now - last, 100);
     last = now;
     let steps = 0;
     while (acc >= FRAME_MS && steps < 8) {
@@ -426,7 +432,7 @@ async function boot() {
       acc -= FRAME_MS;
       steps += 1;
     }
-    if (steps === 0) { /* keep cadence without over-running */ }
+    if (steps >= 8) acc = 0; // fell behind — drop the backlog rather than spiral
     renderInto(image, machine.memory, frameCounter);
     ctx.putImageData(image, 0, 0);
     const wrap = document.getElementById('frame');
