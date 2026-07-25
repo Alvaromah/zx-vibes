@@ -32,12 +32,27 @@ const PC_SPAN_TIGHT = 8; // frame-boundary PC confined to ≤ this many bytes �
 
 /** Per-frame progress statistics the probable verdicts are decided from. */
 export interface HangStats {
-  fingerprint: number; // running RAM+register checksum of the last frame
+  fingerprint: number; // running RAM+register+I/O checksum of the last frame
   staticFrames: number; // consecutive frames with an unchanged fingerprint
   pcMin: number; // min frame-boundary PC over the static window
   pcMax: number; // max frame-boundary PC over the static window
-  romFrames: number; // consecutive frames ending with PC in ROM
+  romFrames: number; // consecutive frames RESIDENT in ROM (no RAM PC all frame)
   started: boolean;
+}
+
+/**
+ * The observable-I/O progress signals folded into the liveness fingerprint. The RAM
+ * stride can miss a program whose only per-frame work lands between sampled bytes
+ * (e.g. a title loop bumping one counter), but such a program almost always also
+ * TOUCHES the ULA — cycling the border, clicking the beeper — and those signals are
+ * exact, not sampled: any border change or new port-`0xFE` write/edge in a frame
+ * perturbs the fingerprint and counts as progress. A genuinely frozen machine emits
+ * none of them. Structurally satisfied by `HostIo` (io-device.ts).
+ */
+export interface IoProgress {
+  borderColor(): number;
+  beeperEdges: number;
+  portFEWrites: number;
 }
 
 /** A fresh progress-statistics accumulator. */
@@ -45,11 +60,12 @@ export function newHangStats(): HangStats {
   return { fingerprint: 0, staticFrames: 0, pcMin: 0xffff, pcMax: 0, romFrames: 0, started: false };
 }
 
-// A cheap rolling checksum over RAM (0x4000–0xFFFF) + the core registers. Any change
-// — an animating screen, an ISR bumping a counter, score updates — counts as
-// progress, so the static-fingerprint heuristic only fires when the machine is
-// genuinely frozen (no interrupts mutating state, no work being done).
-function fingerprint(machine: Machine): number {
+// A cheap rolling checksum over RAM (0x4000–0xFFFF) + the core registers + the
+// observable I/O counters. Any change — an animating screen, an ISR bumping a
+// counter, score updates, a cycling border, a beeper click — counts as progress,
+// so the static-fingerprint heuristic only fires when the machine is genuinely
+// frozen (no interrupts mutating state, no work being done, no ULA output).
+function fingerprint(machine: Machine, io?: IoProgress): number {
   const mem = machine.memory;
   let sum = 0x811c9dc5;
   // Stride the 49152-byte RAM so the per-frame cost stays small but any localized
@@ -63,27 +79,59 @@ function fingerprint(machine: Machine): number {
     sum ^= reg[name] ?? 0;
     sum = Math.imul(sum, 0x01000193);
   }
+  // The I/O signals are exact (not strided): border colour + the cumulative beeper-edge
+  // and port-0xFE write counts. A program alive only through the ULA still fingerprints
+  // as progress; a frozen one leaves all three constant.
+  if (io) {
+    for (const value of [io.borderColor(), io.beeperEdges, io.portFEWrites]) {
+      sum ^= value >>> 0;
+      sum = Math.imul(sum, 0x01000193);
+    }
+  }
   return sum >>> 0;
 }
 
-/**
- * Fold one frame-boundary observation into the progress statistics.
- *
- * `haltResumed` = this frame's once-per-frame interrupt resumed the CPU from a
- * HALT wait. That is the healthy HALT-synced game-loop cadence (an idle loop
- * waiting on input, the ISR still bumping FRAMES/KSTATE), so it counts as
- * progress even when the strided fingerprint misses the sysvar writes. Without
- * this, a boundary-pinned frame loop samples an idle `EI / HALT / JR` loop in
- * the identical waiting state every frame and the static-fingerprint heuristic
- * would misread the healthiest program shape as a tight-loop hang. A genuine
- * busy loop (`DI` or never halting) never resumes from HALT, so tight-loop
- * detection for it is unaffected (thresholds stay Incidental,
- * ERR-PROD-HANG-HEUR-001).
- */
-export function updateHangStats(stats: HangStats, machine: Machine, haltResumed = false): void {
+/** Optional per-frame observations beyond the machine itself. */
+export interface HangFrameObservation {
+  /**
+   * This frame's once-per-frame interrupt resumed the CPU from a HALT wait. That is
+   * the healthy HALT-synced game-loop cadence (an idle loop waiting on input, the ISR
+   * still bumping FRAMES/KSTATE), so it counts as progress even when the strided
+   * fingerprint misses the sysvar writes. Without this, a boundary-pinned frame loop
+   * samples an idle `EI / HALT / JR` loop in the identical waiting state every frame
+   * and the static-fingerprint heuristic would misread the healthiest program shape
+   * as a tight-loop hang. A genuine busy loop (`DI` or never halting) never resumes
+   * from HALT, so tight-loop detection for it is unaffected (thresholds stay
+   * Incidental, ERR-PROD-HANG-HEUR-001).
+   */
+  haltResumed?: boolean;
+  /** The run's observable-I/O device, folded into the liveness fingerprint. */
+  io?: IoProgress;
+  /**
+   * Whether any instruction boundary this frame had PC in RAM (≥ 0x4000). Feeds the
+   * ROM-RESIDENCE statistic: `pc-in-rom` must mean "execution left the program into
+   * ROM and never came back", not "the frame-edge sample happened to land inside the
+   * ROM's IM 1 keyboard scan". A busy IM 1 game spends the frame edge wherever its
+   * work loop is, but its ISR frames still EXECUTE RAM instructions — so a frame that
+   * touched RAM resets the count. A program genuinely stuck in ROM (`JP` into a ROM
+   * loop) never touches RAM again and still accumulates. When not observed (older
+   * callers), the frame-edge PC alone decides, as before.
+   */
+  sawRamPc?: boolean;
+}
+
+/** Fold one frame-boundary observation into the progress statistics. */
+export function updateHangStats(
+  stats: HangStats,
+  machine: Machine,
+  observation: HangFrameObservation | boolean = {},
+): void {
+  // Back-compat: the pre-observation signature was (stats, machine, haltResumed).
+  const obs: HangFrameObservation =
+    typeof observation === 'boolean' ? { haltResumed: observation } : observation;
   const pc = (machine.registers.pc as number) & 0xffff;
-  const fp = fingerprint(machine);
-  if (!haltResumed && stats.started && fp === stats.fingerprint) {
+  const fp = fingerprint(machine, obs.io);
+  if (!obs.haltResumed && stats.started && fp === stats.fingerprint) {
     stats.staticFrames += 1;
     stats.pcMin = Math.min(stats.pcMin, pc);
     stats.pcMax = Math.max(stats.pcMax, pc);
@@ -94,7 +142,10 @@ export function updateHangStats(stats: HangStats, machine: Machine, haltResumed 
   }
   stats.fingerprint = fp;
   stats.started = true;
-  stats.romFrames = pc < RAM_BASE ? stats.romFrames + 1 : 0;
+  // ROM residence: the frame counts only when it ended in ROM AND (when observed)
+  // never executed a RAM instruction — see HangFrameObservation.sawRamPc.
+  const romResident = pc < RAM_BASE && obs.sawRamPc !== true;
+  stats.romFrames = romResident ? stats.romFrames + 1 : 0;
 }
 
 /**

@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { PNG } from 'pngjs';
 import { assemble } from '@zx-vibes/asm';
 import { writeZ80 } from '@zx-vibes/machine';
 import { runCli } from '../src/cli.js';
@@ -9,6 +10,7 @@ import { CliError, ExitCode, type OutputStreams } from '../src/output/envelope.j
 import { loadBinMachine } from '../src/runtime/session.js';
 import { tapImageBytes } from '../src/build/formats.js';
 import { runProgram, DEFAULT_FRAMES } from '../src/runtime/run.js';
+import { newHangStats, probableHang, updateHangStats } from '../src/runtime/hang.js';
 import { samplesForDuration, renderBeeperPcm } from '../src/runtime/wav.js';
 import { runFrameObserved } from '../src/runtime/run-loop.js';
 import { parseAddress, parseRange } from '../src/util/address.js';
@@ -277,6 +279,94 @@ describe('runProgram — scheduled keyboard input (CLI-PROD-RUN-004 / KBD-MATRIX
   });
 });
 
+// --- hang-stats liveness signals (ERR-PROD-HANG-HEUR-001 heuristics) --------
+
+// EI/IM1 wait loop that HALTs every frame and cycles the border from a RAM counter —
+// the canonical "press a key" attract screen. Healthy, must never read as a hang.
+const BORDER_WAIT = [
+  'ORG 0x8000',
+  '  im 1',
+  '  ei',
+  'loop:',
+  '  halt',
+  '  ld a, (0x9001)',
+  '  inc a',
+  '  ld (0x9001), a',
+  '  and 7',
+  '  out (0xFE), a',
+  '  jr loop',
+  '',
+].join('\n');
+
+describe('hang stats — I/O + ROM-residence liveness (ERR-PROD-HANG-HEUR-001)', () => {
+  it('folds observable I/O into the fingerprint: ULA-only progress is progress', () => {
+    const { file, org } = asmBin('progress', PROGRESS);
+    const machine = loadBinMachine(file, org); // never run: RAM/registers stay frozen
+
+    // Without I/O signals a frozen machine accumulates static frames -> tight-loop.
+    const frozen = newHangStats();
+    for (let f = 0; f < 60; f += 1) updateHangStats(frozen, machine);
+    expect(probableHang(machine, org, frozen)?.kind).toBe('tight-loop');
+
+    // With a beeper edge landing each frame, the same frozen RAM reads as ALIVE.
+    const alive = newHangStats();
+    let edges = 0;
+    for (let f = 0; f < 60; f += 1) {
+      edges += 1;
+      updateHangStats(alive, machine, {
+        io: { borderColor: () => 0, beeperEdges: edges, portFEWrites: edges },
+      });
+    }
+    expect(alive.staticFrames).toBe(0);
+    expect(probableHang(machine, org, alive)).toBeUndefined();
+  });
+
+  it('pc-in-rom means RESIDENT in ROM: a frame that executed RAM code resets the count', () => {
+    const { file, org } = asmBin('progress', PROGRESS);
+    const machine = loadBinMachine(file, org);
+    machine.registers.pc = 0x0299; // the frame-edge sample lands in the ROM keyboard scan
+
+    // I/O progress each frame isolates the ROM-residence statistic from tight-loop.
+    const io = (edges: number) => ({ borderColor: () => 0, beeperEdges: edges, portFEWrites: 0 });
+
+    // A busy IM 1 game: the edge samples ROM, but every frame also executed RAM code.
+    const busyIm1 = newHangStats();
+    for (let f = 0; f < 60; f += 1) updateHangStats(busyIm1, machine, { io: io(f), sawRamPc: true });
+    expect(busyIm1.romFrames).toBe(0);
+    expect(probableHang(machine, org, busyIm1)).toBeUndefined();
+
+    // Genuinely stuck in ROM: no RAM instruction all frame, every frame.
+    const stuck = newHangStats();
+    for (let f = 0; f < 60; f += 1) updateHangStats(stuck, machine, { io: io(f), sawRamPc: false });
+    expect(stuck.romFrames).toBe(60);
+    expect(probableHang(machine, org, stuck)?.kind).toBe('pc-in-rom');
+  });
+
+  it('a HALT-synced border-cycling wait loop survives 600 frames (the attract-screen shape)', () => {
+    const { file, org } = asmBin('borderwait', BORDER_WAIT);
+    const result = runProgram(loadBinMachine(file, org), org, { frames: 600 });
+    expect(result.status).toBe('ok');
+    expect(result.hang).toBeUndefined();
+    expect(result.haltSynced).toBe(true);
+  });
+});
+
+describe('zxs run — --no-detect-hangs (CLI-PROD-RUN-006)', () => {
+  it('disables the watchdog: a tight loop runs out its budget with status ok', async () => {
+    const { file } = asmBin('tight', TIGHT);
+    const cap = capture();
+    const code = await runCli(
+      ['run', '--bin', file, '--org', '0x8000', '--frames', '60', '--no-detect-hangs', '--json'],
+      { streams: cap.streams },
+    );
+    expect(code).toBe(ExitCode.OK);
+    const env = JSON.parse(cap.out().trim());
+    expect(env.ok).toBe(true);
+    expect(env.status).toBe('ok');
+    expect(env.exit.reason).toBe('frame-budget');
+  });
+});
+
 // --- determinism guard: runFrameObserved == Machine.runFrame ----------------
 
 describe('run-loop — runFrameObserved mirrors Machine.runFrame (MACHINE-FRAME-LOOP-001)', () => {
@@ -468,6 +558,32 @@ describe('zxs run — --screenshot capture (D3, CLI-PROD-RUN-004 / -RULE-SCREENS
     const bytes = readFileSync(png);
     expect(bytes.length).toBeGreaterThan(8);
     expect([...bytes.subarray(0, 8)]).toEqual(PNG_MAGIC);
+  });
+
+  it('--scale upsizes the screenshot through the one scaler (CLI-PROD-RUN-004)', async () => {
+    const { file } = asmBin('progress', PROGRESS);
+    const png = join(dir, 'out', 'big.png');
+    const cap = capture();
+    const code = await runCli(
+      ['run', '--bin', file, '--org', '0x8000', '--frames', '10', '--screenshot', png, '--scale', '3', '--json'],
+      { streams: cap.streams },
+    );
+    expect(code).toBe(ExitCode.OK);
+    const decoded = PNG.sync.read(readFileSync(png));
+    expect(decoded.width).toBe(256 * 3);
+    expect(decoded.height).toBe(192 * 3);
+  });
+
+  it('rejects an out-of-range --scale as a USER_ERROR', async () => {
+    const { file } = asmBin('progress', PROGRESS);
+    const cap = capture();
+    const code = await runCli(
+      ['run', '--bin', file, '--org', '0x8000', '--screenshot', join(dir, 's.png'), '--scale', '9', '--json'],
+      { streams: cap.streams },
+    );
+    expect(code).toBe(ExitCode.USER_ERROR);
+    const env = JSON.parse(cap.out().trim());
+    expect(env.error.message).toMatch(/--scale/);
   });
 });
 
