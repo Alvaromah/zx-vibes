@@ -1,0 +1,12 @@
+{
+  "build": "demo.asm",
+  "frames": 60,
+  "assert": [
+    { "type": "status", "equals": "ok" },
+    { "type": "haltSynced", "equals": true },
+    { "type": "memEquals", "addr": "0x9001", "hex": "13" },
+    { "type": "memEquals", "addr": "0x9000", "hex": "2A" },
+    { "type": "attrNonBlank", "min": 2 },
+    { "type": "borderColor", "equals": 2 }
+  ]
+}

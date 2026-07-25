@@ -41,7 +41,7 @@ async function cliInDir(cwd: string, argv: string[], streams: OutputStreams): Pr
 }
 
 describe('runSetup --agent claude (CLI-PROD-SETUP-001 / KP-PROD-PKG-001)', () => {
-  it('installs the MCP snippet + the native skill, flags the full pack as deferred', () => {
+  it('installs the MCP snippet + the native skill + the knowledge pack (KP-PROD-PKG-001)', () => {
     const env = runSetup({ agent: 'claude', cwd: dir });
     expect(env.ok).toBe(true);
     expect(env.stage).toBe('setup');
@@ -49,20 +49,32 @@ describe('runSetup --agent claude (CLI-PROD-SETUP-001 / KP-PROD-PKG-001)', () =>
     expect(env.mcpServer).toBe('zx-vibes');
     expect(env.installed).toContain('.mcp.json');
     expect(env.installed).toContain('.claude/skills/zx-vibes/SKILL.md');
+    // The pack rides inside the skill dir: reference + skills hub + a recipe triple.
+    expect(env.installed).toContain('.claude/skills/zx-vibes/skills/INDEX.md');
+    expect(env.installed).toContain('.claude/skills/zx-vibes/reference/memory-map.md');
+    expect(env.installed).toContain('.claude/skills/zx-vibes/recipes/tile-collision/test.json');
     expect(env.skipped).toEqual([]);
-    // The full pack (reference/skills/recipes/examples) is flagged, not silently absent.
-    expect(env.deferred.length).toBeGreaterThan(0);
-    expect(env.deferred.join('\n')).toMatch(/reference\//);
+    // Only the examples remain deferred — loud, not silently absent (C5).
+    expect(env.deferred).toHaveLength(1);
+    expect(env.deferred[0]).toMatch(/examples\//);
 
     // The MCP registration is the thin `zxs-mcp` stdio server under name `zx-vibes`.
     const mcp = JSON.parse(readFileSync(join(dir, '.mcp.json'), 'utf8'));
     expect(mcp.mcpServers['zx-vibes']).toEqual({ command: 'zxs-mcp' });
 
-    // The native skill carries the playbook (the minimal available knowledge).
+    // The native skill carries the playbook + the pack index.
     const skill = readFileSync(join(dir, '.claude', 'skills', 'zx-vibes', 'SKILL.md'), 'utf8');
     expect(skill).toMatch(/^---/); // YAML front-matter
     expect(skill).toMatch(/name: zx-vibes/);
     expect(skill).toMatch(/never report success without running and looking/i);
+    expect(skill).toMatch(/skills\/INDEX\.md/);
+
+    // A generated reference doc landed with its provenance banner intact.
+    const ref = readFileSync(
+      join(dir, '.claude', 'skills', 'zx-vibes', 'reference', 'memory-map.md'),
+      'utf8',
+    );
+    expect(ref).toMatch(/GENERATED from dna\/domain\/memory-map\.md/);
   });
 
   it('is idempotent: a second run skips everything it already wrote', () => {
@@ -110,17 +122,23 @@ describe('runSetup --agent claude (CLI-PROD-SETUP-001 / KP-PROD-PKG-001)', () =>
 });
 
 describe('runSetup --agent codex (CLI-PROD-SETUP-001)', () => {
-  it('installs the Codex config (MCP server) + the playbook into the project', () => {
+  it('installs the Codex config (MCP server) + the playbook + the pack into the project', () => {
     const env = runSetup({ agent: 'codex', cwd: dir });
     expect(env.ok).toBe(true);
     expect(env.agent).toBe('codex');
     expect(env.global).toBe(false);
     expect(env.installed).toContain('.codex/config.toml');
     expect(env.installed).toContain('AGENTS.md');
+    expect(env.installed).toContain('.codex/zx-vibes/skills/INDEX.md');
+    expect(env.installed).toContain('.codex/zx-vibes/reference/memory-map.md');
 
     const toml = readFileSync(join(dir, '.codex', 'config.toml'), 'utf8');
     expect(toml).toMatch(/\[mcp_servers\.zx-vibes\]/);
     expect(toml).toMatch(/command = "zxs-mcp"/);
+
+    // The project playbook points at the installed pack.
+    const agents = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
+    expect(agents).toMatch(/\.codex\/zx-vibes\//);
   });
 
   it('--write-global writes the Codex GLOBAL config under the (injected) home dir', () => {
