@@ -5,15 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Manual escape hatch for the Changesets "Version Packages" PR. That PR is
-  # opened by changesets/action with the repo GITHUB_TOKEN, and GitHub does not
-  # start workflow runs for events raised by that token — so its six required
-  # contexts never report and the PR stays permanently BLOCKED. Dispatching this
-  # workflow against `changeset-release/main` posts the same check runs for that
-  # head SHA, which satisfies branch protection without an --admin bypass.
-  #
-  # The permanent fix is to give changesets/action a PAT instead of the default
-  # GITHUB_TOKEN, which requires creating that secret.
+  # Manual runs against an arbitrary ref. NOTE: dispatching this does NOT unblock
+  # the Changesets "Version Packages" PR — a workflow_dispatch run attaches its
+  # check runs to the COMMIT but not to the pull request, so the PR's
+  # statusCheckRollup stays empty and branch protection still sees nothing.
+  # Measured on PR #33: six green contexts on the head SHA, rollup NULL, BLOCKED.
+  # See the release runbook below for what actually works.
   workflow_dispatch:
 
 concurrency:
@@ -53,8 +50,29 @@ jobs:
   #
   # Not in the required-contexts list yet — add "changeset" to branch protection
   # once you are happy with its signal.
+  #
+  # Skipped on changeset-release/**: that PR is the release itself. It CONSUMES
+  # the changesets and writes the version bump, so `changeset status --since`
+  # correctly reports "packages changed, no changesets" — a guaranteed false
+  # positive on every single release (observed on PR #33).
+  #
+  # RELEASE RUNBOOK — the "Version Packages" PR opens with no checks at all,
+  # because changesets/action creates it with the repo GITHUB_TOKEN and GitHub
+  # will not run workflows for that token's events. Its pull_request run is
+  # created but parked at `action_required`. To release:
+  #
+  #   gh api -X POST repos/<owner>/<repo>/actions/runs/<run_id>/approve
+  #
+  # That starts the parked run; its checks attach to the PR properly and the
+  # required contexts go green. Do NOT use workflow_dispatch for this (see the
+  # note on the trigger above) and do NOT merge with --admin, which would skip
+  # validating the package.json/README/starter manifests the bump rewrites.
+  #
+  # The permanent fix is giving changesets/action a PAT instead of GITHUB_TOKEN.
   changeset:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' &&
+      !startsWith(github.head_ref, 'changeset-release/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
