@@ -1,11 +1,14 @@
 // Bundled CORE preview player — the D4 in-browser runner (cli.md CLI-PROD-PREVIEW-001,
 // toolkit-runtime.md RT-PROD-PREVIEW-001). It runs the RECONSTRUCTED @zx-vibes/machine
 // (NOT the legacy @zx-vibes/emulator) in the browser: it boots a clean 48K ROM machine,
-// loads the program the preview server serves, executes ~50 emulated frames/second, and
+// loads the program the preview server serves, targets the exact 48K frame cadence
+// on a visibility-independent clock, renders separately, and
 //   - renders the 256x192 framebuffer to a <canvas> using the EXACT screen-render.md
 //     (SCREEN-FRAMEBUFFER-001) decode + palette.yaml (SCREEN-PALETTE-001) colour table, and
 //   - maps the host keyboard onto the 48K matrix per keyboard-input.md (KBD-MATRIX-001 /
-//     KBD-BROWSERMAP-001 / KBD-LATCH-001).
+//     KBD-BROWSERMAP-001 / KBD-LATCH-001), and
+//   - renders port-0xFE bit-4 edges through a continuous Web Audio stream after a
+//     browser user gesture.
 //
 // This file is authored in browser JS and bundled by tsup (tsup.player.config.ts,
 // platform:browser, noExternal @zx-vibes/*) into assets/preview/player.js, so the
@@ -32,6 +35,14 @@ import {
   pixelColorIndex,
   flashPhase,
 } from '@zx-vibes/ula';
+import {
+  createPreviewBeeperState,
+  renderPreviewBeeperChunk,
+} from '../src/preview/beeper-model.ts';
+import {
+  advancePreviewFrameClock,
+  createPreviewFrameClock,
+} from '../src/preview/frame-clock.ts';
 
 // ---------------------------------------------------------------------------
 // Palette — palette.yaml / screen-render.md SCREEN-PALETTE-001 (the exact shared
@@ -152,7 +163,155 @@ class HostKeyboard {
   write(port, value) {
     if ((port & 0x01) !== 0) return;
     this.border = value & 0x07;
-    this.earLevel = (value >> 4) & 1;
+    const level = (value >> 4) & 1;
+    if (level !== this.earLevel) {
+      this.earLevel = level;
+      // Bit 4 is the speaker (host-io-port-fe.md HOST-IO-PORTFE-BEEPER-001). Report the
+      // transition with the frame clock so the beeper can place it in time; without a
+      // timestamp the pitch would depend on how many OUTs happen to land per frame.
+      if (this.onSpeaker) this.onSpeaker(level);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Beeper — port 0xFE bit 4 to Web Audio (beeper-output.md).
+//
+// The CLI already turns the same signal into a WAV (`run --wav`); this is the browser
+// half. Every level change is stamped with the frame clock, and at the end of each
+// emulated frame the resulting step function is integrated into one sample per output
+// sample — area-averaged, not point-sampled, because a 4 kHz square wave point-sampled
+// at 48 kHz aliases audibly.
+//
+// Sample delivery is an AudioWorklet fed by postMessage. No SharedArrayBuffer, so the
+// preview server needs no COOP/COEP headers.
+// ---------------------------------------------------------------------------
+const CPU_HZ = 3_500_000;
+const BEEPER_GAIN = 0.22;   // a 1-bit square wave at full scale is harsh
+
+const BEEPER_WORKLET = `
+class ZxsBeeper extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.queue = [];
+    this.read = 0;
+    this.held = 0;               // last sample emitted: an underrun holds it, never clicks
+    this.port.onmessage = (e) => {
+      if (e.data === 'flush') { this.queue.length = 0; this.read = 0; return; }
+      this.queue.push(e.data);
+      // Bound the latency. The run loop can emit up to 8 frames in one clock pulse, so a
+      // slow tab would otherwise build a queue that plays seconds behind the picture.
+      let total = -this.read;
+      for (const q of this.queue) total += q.length;
+      while (this.queue.length > 1 && total > sampleRate * 0.1) {
+        total -= this.queue[0].length - this.read;
+        this.queue.shift();
+        this.read = 0;
+      }
+    };
+  }
+  process(inputs, outputs) {
+    const out = outputs[0][0];
+    for (let i = 0; i < out.length; i++) {
+      const head = this.queue[0];
+      if (head === undefined) {
+        // Underrun. Slew the held level to zero instead of parking on it: a 1-bit
+        // speaker at rest is full-scale DC, and holding that is both a click on the
+        // way in and a constant offset for as long as the starvation lasts.
+        this.held *= 0.999;
+        out[i] = this.held;
+        continue;
+      }
+      this.held = head[this.read++];
+      out[i] = this.held;
+      if (this.read >= head.length) { this.queue.shift(); this.read = 0; }
+    }
+    return true;
+  }
+}
+registerProcessor('zxs-beeper', ZxsBeeper);
+`;
+
+class Beeper {
+  constructor() {
+    this.ctx = null;
+    this.node = null;
+    this.gain = null;
+    this.edges = [];        // chronological { t, level } edges for the current frame
+    this.hardwareLevel = 0;
+    this.pcmState = createPreviewBeeperState();
+    this.muted = false;
+    this.ready = false;
+    this.failed = null;
+  }
+
+  /** Must be called from a user gesture: audio contexts start suspended otherwise. */
+  async enable() {
+    if (this.ctx) { await this.ctx.resume(); return this.ready; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { this.failed = 'no Web Audio in this browser'; return false; }
+    try {
+      this.failed = null;
+      this.ctx = new AC({ latencyHint: 'interactive' });
+      const url = URL.createObjectURL(new Blob([BEEPER_WORKLET], { type: 'text/javascript' }));
+      await this.ctx.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+      this.node = new AudioWorkletNode(this.ctx, 'zxs-beeper', { numberOfInputs: 0 });
+      // A 1-bit speaker resting at one level is a DC offset, which clicks on start and
+      // stop; block it rather than shipping DC to the output device.
+      const dcBlock = this.ctx.createBiquadFilter();
+      dcBlock.type = 'highpass';
+      dcBlock.frequency.value = 30;
+      this.gain = this.ctx.createGain();
+      this.gain.gain.value = BEEPER_GAIN;
+      this.node.connect(dcBlock).connect(this.gain).connect(this.ctx.destination);
+      await this.ctx.resume();
+      // Audio may be enabled after emulation has already run. Start a fresh global
+      // PCM grid at the hardware level in effect at the user gesture.
+      this.pcmState = createPreviewBeeperState(this.hardwareLevel);
+      this.edges.length = 0;
+      this.ready = true;
+      return true;
+    } catch (err) {
+      this.failed = (err && err.message) || String(err);
+      if (this.ctx) void this.ctx.close().catch(() => undefined);
+      this.ctx = null;
+      this.node = null;
+      this.gain = null;
+      return false;
+    }
+  }
+
+  /** A speaker transition at frame-relative T-state `t`. */
+  edge(t, level) {
+    this.hardwareLevel = level;
+    if (!this.ready) return;
+    this.edges.push({ t, level });
+  }
+
+  /** Turn one frame of edges into samples and hand them to the worklet. */
+  endFrame() {
+    if (!this.ready) { this.edges.length = 0; return; }
+    const rendered = renderPreviewBeeperChunk(
+      this.pcmState,
+      this.edges,
+      FRAME_T_STATES,
+      { sampleRate: this.ctx.sampleRate, cpuHz: CPU_HZ },
+    );
+    this.pcmState = rendered.state;
+    this.edges = rendered.carryEdges;
+    if (rendered.samples.length > 0) this.node.port.postMessage(rendered.samples);
+  }
+
+  /** Mute at the gain stage and keep the stream flowing — starving the worklet instead
+   *  would leave it holding its last sample, which is DC, not silence. */
+  setMuted(m) {
+    this.muted = m;
+    if (!this.gain) return;
+    const now = this.ctx.currentTime;
+    this.gain.gain.cancelScheduledValues(now);
+    this.gain.gain.setValueAtTime(this.gain.gain.value, now);
+    this.gain.gain.linearRampToValueAtTime(m ? 0 : BEEPER_GAIN, now + 0.02);
   }
 }
 
@@ -197,6 +356,67 @@ function stepFrame(m, trap) {
     if (wasEi) m.eiDelay = 1;
   }
   m.frames += 1;
+}
+
+// A Worker pulse keeps emulation advancing while rAF is suspended in a hidden
+// tab. Rendering remains on rAF and can pause independently.
+const FRAME_MS = (FRAME_T_STATES / CPU_HZ) * 1000;
+const CLOCK_PULSE_MS = Math.max(4, FRAME_MS / 2);
+const MAX_CATCH_UP_FRAMES = 8;
+const EMULATION_CLOCK_WORKER = `
+let timer = null;
+self.onmessage = (event) => {
+  if (event.data === 'stop') {
+    if (timer !== null) clearInterval(timer);
+    timer = null;
+    return;
+  }
+  if (timer !== null) return;
+  self.postMessage(0);
+  timer = setInterval(() => self.postMessage(0), ${CLOCK_PULSE_MS});
+};
+`;
+
+/** Start a visibility-independent pulse source, with a timer fallback for old browsers. */
+function startEmulationClock(onPulse) {
+  let fallback = null;
+  const startFallback = () => {
+    if (fallback !== null) return;
+    fallback = setInterval(() => onPulse(performance.now()), CLOCK_PULSE_MS);
+  };
+
+  if (typeof Worker === 'undefined') {
+    startFallback();
+    return () => { if (fallback !== null) clearInterval(fallback); };
+  }
+
+  let worker;
+  let workerUrl;
+  try {
+    workerUrl = URL.createObjectURL(
+      new Blob([EMULATION_CLOCK_WORKER], { type: 'text/javascript' }),
+    );
+    worker = new Worker(workerUrl);
+    worker.onmessage = () => onPulse(performance.now());
+    worker.onerror = () => {
+      worker.terminate();
+      URL.revokeObjectURL(workerUrl);
+      startFallback();
+    };
+    worker.postMessage('start');
+  } catch {
+    if (workerUrl) URL.revokeObjectURL(workerUrl);
+    startFallback();
+  }
+
+  return () => {
+    if (worker) {
+      worker.postMessage('stop');
+      worker.terminate();
+    }
+    if (workerUrl) URL.revokeObjectURL(workerUrl);
+    if (fallback !== null) clearInterval(fallback);
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -363,6 +583,38 @@ async function boot() {
 
   machine.io = keyboard;
 
+  // ---- beeper ---------------------------------------------------------------
+  const beeper = new Beeper();
+  let emulatedFrameStartTStates = machine.tStatesTotal;
+  keyboard.onSpeaker = (level) =>
+    beeper.edge(machine.tStatesTotal - emulatedFrameStartTStates, level);
+
+  const soundBtn = document.createElement('button');
+  soundBtn.type = 'button';
+  soundBtn.style.cssText =
+    'font:inherit;color:inherit;background:#222;border:1px solid #444;border-radius:3px;' +
+    'padding:1px 7px;margin-left:8px;cursor:pointer';
+  const paintSound = () => {
+    if (beeper.failed) { soundBtn.textContent = '🔇 no audio: ' + beeper.failed; return; }
+    if (!beeper.ready) { soundBtn.textContent = '🔈 click for sound'; return; }
+    soundBtn.textContent = beeper.muted ? '🔇 sound off' : '🔊 sound on';
+  };
+  paintSound();
+  soundBtn.addEventListener('click', async () => {
+    // The click is the gesture an autoplay-suspended context needs; after that the
+    // button just toggles mute.
+    if (!beeper.ready) await beeper.enable();
+    else beeper.setMuted(!beeper.muted);
+    paintSound();
+  });
+  if (status && status.parentElement) status.parentElement.appendChild(soundBtn);
+  // Playing straight away needs a gesture too, so take the first keypress as one.
+  window.addEventListener('keydown', async function armAudio() {
+    window.removeEventListener('keydown', armAudio);
+    await beeper.enable();
+    paintSound();
+  }, { once: true });
+
   // The LD-BYTES trap for the ROM-autoload path.
   const schedule = loadTypeSchedule();
   let autoFrame = 0;
@@ -391,13 +643,10 @@ async function boot() {
       }
     : null;
 
-  // ---- the ~50 Hz run + render loop ----------------------------------------
+  // ---- the 50.08 Hz emulation clock + independently throttled renderer -----
   const canvas = document.getElementById('screen');
   const ctx = canvas.getContext('2d');
   const image = ctx.createImageData(FRAME_WIDTH, FRAME_HEIGHT);
-  const FRAME_MS = 20; // 50 emulated frames per second
-  let acc = 0;
-  let last = performance.now();
   let frameCounter = 0;
 
   function applyAutotype() {
@@ -415,24 +664,28 @@ async function boot() {
     autoFrame += 1;
   }
 
-  function tick(now) {
-    // Clamp the delta and drop any backlog the step cap can't drain. A backgrounded
-    // tab throttles/stops rAF, so on return `now` jumps seconds past `last`; carrying
-    // that whole gap in `acc` would run the machine at rAF speed (~8 frames/tick) until
-    // it drained — the visible "everything goes super fast for a moment" fast-forward.
-    // Bounding the delta and resetting `acc` when we fall behind resumes in real time
-    // instead of replaying the missed wall-clock. Mirrors the example runners' loops.
-    acc += Math.min(now - last, 100);
-    last = now;
-    let steps = 0;
-    while (acc >= FRAME_MS && steps < 8) {
+  let clockState = createPreviewFrameClock(performance.now());
+  function advanceEmulation(now) {
+    const advanced = advancePreviewFrameClock(clockState, now, {
+      frameDurationMs: FRAME_MS,
+      maxCatchUpFrames: MAX_CATCH_UP_FRAMES,
+    });
+    clockState = advanced.state;
+    for (let step = 0; step < advanced.frames; step += 1) {
       applyAutotype();
+      emulatedFrameStartTStates = machine.tStatesTotal;
       stepFrame(machine, trap);
+      beeper.endFrame();   // one frame of speaker edges -> one buffer of samples
       frameCounter += 1;
-      acc -= FRAME_MS;
-      steps += 1;
     }
-    if (steps >= 8) acc = 0; // fell behind — drop the backlog rather than spiral
+  }
+  const stopEmulationClock = startEmulationClock(advanceEmulation);
+  window.addEventListener('pagehide', (event) => {
+    // A page kept in the back/forward cache can resume; let its Worker survive.
+    if (!event.persisted) stopEmulationClock();
+  }, { once: true });
+
+  function render() {
     renderInto(image, machine.memory, frameCounter);
     ctx.putImageData(image, 0, 0);
     const wrap = document.getElementById('frame');
@@ -440,9 +693,9 @@ async function boot() {
       const b = PALETTE_RGB[keyboard.border & 0x07];
       wrap.style.background = 'rgb(' + b[0] + ',' + b[1] + ',' + b[2] + ')';
     }
-    requestAnimationFrame(tick);
+    requestAnimationFrame(render);
   }
-  requestAnimationFrame(tick);
+  requestAnimationFrame(render);
 
   // ---- host keyboard wiring (real interactive input) -----------------------
   window.addEventListener('keydown', (e) => {

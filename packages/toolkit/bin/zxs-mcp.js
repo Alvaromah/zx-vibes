@@ -5,9 +5,21 @@
 // over stdio. The transport keeps the process alive on stdin and exits cleanly when
 // the client disconnects; a failure to start surfaces on stderr (errors.md
 // ERR-PROD-NOSILENT-001), never on stdout (which is the protocol channel).
-import { runMcp } from '../dist/mcp.js';
+async function loadMcp() {
+  try {
+    return await import('../dist/mcp.js');
+  } catch (error) {
+    const reason = error?.message ?? String(error);
+    throw new Error(
+      'zxs-mcp runtime is incomplete: could not load dist/mcp.js. ' +
+        'Rebuild this checkout or reinstall @zx-vibes/toolkit. ' +
+        `Original error: ${reason}`,
+      { cause: error },
+    );
+  }
+}
 
-runMcp().catch((error) => {
+loadMcp().then(({ runMcp }) => runMcp()).catch((error) => {
   console.error(error?.stack ?? String(error));
   process.exit(1);
 });

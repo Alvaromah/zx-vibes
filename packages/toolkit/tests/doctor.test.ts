@@ -3,11 +3,23 @@
 // checks pass in a healthy env → exit 0; ANY check fails → exit 3 (ENV_ERROR), with
 // the failing check surfaced in `checks[]` (never silently swallowed).
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { runDoctor, MIN_NODE_MAJOR } from '../src/doctor/doctor.js';
+import {
+  checkZxsPath,
+  runDoctor,
+  MIN_NODE_MAJOR,
+} from '../src/doctor/doctor.js';
 import { runCli } from '../src/cli.js';
 import { ExitCode, type OutputStreams } from '../src/output/envelope.js';
 import { ROM_SIZE } from '../src/runtime/rom.js';
@@ -37,13 +49,100 @@ describe('runDoctor — healthy environment (CLI-PROD-DOCTOR-001 → exit 0)', (
     expect(env.stage).toBe('doctor');
     expect(Array.isArray(env.checks)).toBe(true);
     expect(env.checks.every((c) => c.ok)).toBe(true);
-    // The default (builtin) config checks node + asm + rom (no sjasmplus by default).
+    // The default config checks node + asm + ROM + zxs PATH (no sjasmplus).
     const names = env.checks.map((c) => c.name).sort();
-    expect(names).toEqual(['asm', 'node', 'rom']);
+    expect(names).toEqual(['asm', 'node', 'rom', 'zxs-path']);
     for (const c of env.checks) {
       expect(typeof c.name).toBe('string');
       expect(typeof c.detail).toBe('string');
     }
+  });
+});
+
+function fakeNpmZxsInstall(name: string, complete = true): string[] {
+  const prefix = join(dir, name);
+  const root = join(prefix, 'node_modules', '@zx-vibes', 'toolkit');
+  mkdirSync(join(root, 'bin'), { recursive: true });
+  if (complete) mkdirSync(join(root, 'dist'), { recursive: true });
+  writeFileSync(
+    join(root, 'package.json'),
+    JSON.stringify({ name: '@zx-vibes/toolkit', version: '0.0.0-test' }),
+  );
+  writeFileSync(join(root, 'bin', 'zxs.js'), '#!/usr/bin/env node\n');
+  if (complete) writeFileSync(join(root, 'dist', 'cli.js'), 'export {};\n');
+
+  const target = 'node_modules/@zx-vibes/toolkit/bin/zxs.js';
+  const commands = [
+    join(prefix, 'zxs'),
+    join(prefix, 'zxs.cmd'),
+    join(prefix, 'zxs.ps1'),
+  ];
+  writeFileSync(commands[0]!, `"$basedir/${target}"\n`);
+  writeFileSync(commands[1]!, `"%dp0%\\${target.replaceAll('/', '\\')}"\n`);
+  writeFileSync(commands[2]!, `"$basedir/${target}"\n`);
+  return commands;
+}
+
+function fakeNpxZxsInstall(name: string): string[] {
+  const install = join(dir, name, 'node_modules');
+  const root = join(install, '@zx-vibes', 'toolkit');
+  const binDir = join(install, '.bin');
+  mkdirSync(join(root, 'bin'), { recursive: true });
+  mkdirSync(join(root, 'dist'), { recursive: true });
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(
+    join(root, 'package.json'),
+    JSON.stringify({ name: '@zx-vibes/toolkit', version: '0.0.0-test' }),
+  );
+  writeFileSync(join(root, 'bin', 'zxs.js'), '#!/usr/bin/env node\n');
+  writeFileSync(join(root, 'dist', 'cli.js'), 'export {};\n');
+  const commands = [join(binDir, 'zxs'), join(binDir, 'zxs.cmd')];
+  for (const command of commands) {
+    writeFileSync(command, '"$basedir/../@zx-vibes/toolkit/bin/zxs.js"\n');
+  }
+  return commands;
+}
+
+describe('doctor zxs PATH resolution', () => {
+  it('groups npm extensionless/.cmd/.ps1 wrappers from one install', () => {
+    const check = checkZxsPath(fakeNpmZxsInstall('global-a'));
+    expect(check.ok).toBe(true);
+    expect(check.detail).toMatch(/3 command shims/);
+  });
+
+  it('resolves project/npx node_modules/.bin wrappers to their package root', () => {
+    const check = checkZxsPath(fakeNpxZxsInstall('npx-layout'));
+    expect(check.ok).toBe(true);
+    expect(check.detail).toMatch(/2 command shims/);
+    expect(check.detail).toMatch(/@zx-vibes[\\/]toolkit/);
+  });
+
+  it('fails on two distinct package roots and reports first-wins resolution', () => {
+    const check = checkZxsPath([
+      ...fakeNpmZxsInstall('global-a'),
+      ...fakeNpmZxsInstall('npx-cache'),
+    ]);
+    expect(check.ok).toBe(false);
+    expect(check.detail).toMatch(/2 distinct zxs installations/);
+    expect(check.detail).toMatch(/first wins/);
+  });
+
+  it('fails when a resolved install is missing dist/cli.js', () => {
+    const check = checkZxsPath(fakeNpmZxsInstall('broken', false));
+    expect(check.ok).toBe(false);
+    expect(check.detail).toMatch(/missing dist\/cli\.js/);
+  });
+
+  it('the bin shim explains how to recover when dist/cli.js is absent', () => {
+    const fakeBin = join(dir, 'zxs.mjs');
+    const realBin = fileURLToPath(new URL('../bin/zxs.js', import.meta.url));
+    writeFileSync(fakeBin, readFileSync(realBin, 'utf8'));
+    const child = spawnSync(process.execPath, [fakeBin, 'doctor'], {
+      encoding: 'utf8',
+    });
+    expect(child.status).toBe(1);
+    expect(child.stderr).toMatch(/runtime is incomplete/);
+    expect(child.stderr).toMatch(/Rebuild this checkout or reinstall/);
   });
 });
 

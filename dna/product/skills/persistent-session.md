@@ -31,7 +31,7 @@ Memory writes to plain RAM addresses take effect immediately; the next frames
 run the game's own logic against the injected state. This is the fastest way to
 test "door opens when the last gem is taken" without scripting the whole route.
 
-## Three rules that save an afternoon
+## Four rules that save an afternoon
 
 1. **`run --state` RESUMES.** The envelope's `boot.source` says `"state"` when a
    session was resumed. Re-running the same command continues from where the
@@ -42,6 +42,14 @@ test "door opens when the last gem is taken" without scripting the whole route.
    bare clean-ROM boot with nothing loaded, if you really want empty RAM.
 3. **Observation should not mutate.** Add `--read-only` (or `--no-save`) to
    `mem read`/`regs` calls against a session you plan to keep replaying.
+4. **Input frames restart on every run.** In
+   `zxs run --frames 140 --keys "60:SPACE*4" --state ...`, frame `60` means 60
+   frames after this invocation resumed, not frame 60 of the session's lifetime.
+
+Once an injected scenario should become part of the acceptance gate, move it
+into a declarative spec: `setup` writes the RAM values and `waitFor` anchors
+frame-zero input to a readiness variable. Persistent sessions remain the
+interactive exploration tool; the spec becomes the reproducible proof.
 
 ## Snapshots out
 

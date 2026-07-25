@@ -11,13 +11,26 @@
 //
 // Checks (ERR-PROD-ENV-001): Node >= 20; the embedded `@zx-vibes/asm` importable
 // (while it is the configured backend, i.e. the default `builtin`); the bundled
-// 48K ROM present and exactly 16384 bytes; and `sjasmplus` on PATH — but ONLY
-// when it is the configured escape-hatch backend (CLI-PROD-DOCTOR-001 / ADR-0027
-// D3), never by default. No failure is swallowed (ERR-PROD-NOSILENT-001).
+// 48K ROM present and exactly 16384 bytes; unambiguous/complete `zxs` resolution
+// on PATH; and `sjasmplus` on PATH — but ONLY when it is the configured escape-
+// hatch backend (CLI-PROD-DOCTOR-001 / ADR-0027 D3), never by default. No failure
+// is swallowed (ERR-PROD-NOSILENT-001).
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import {
+  accessSync,
+  constants as fsConstants,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
+import {
+  delimiter,
+  dirname,
+  join,
+  resolve,
+} from 'node:path';
 import { assembleFile } from '@zx-vibes/asm';
 import type { Command } from 'commander';
 import {
@@ -73,6 +86,8 @@ export interface DoctorOptions {
   checkAsm?: (() => boolean) | undefined;
   /** Override the `sjasmplus` availability probe (tests control the escape-hatch branch). */
   checkSjasmplus?: (() => boolean) | undefined;
+  /** Override the discovered `zxs` PATH shims/executables (tests avoid host PATH coupling). */
+  zxsPathCandidates?: string[] | undefined;
 }
 
 /** Parse the major version out of a `"20.11.0"`-style string (NaN-safe → 0). */
@@ -96,6 +111,195 @@ function defaultSjasmplusAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+const TOOLKIT_PACKAGE = '@zx-vibes/toolkit';
+
+/** Locate every command file named `zxs` that the current PATH can resolve. */
+export function findZxsPathCandidates(
+  pathValue = process.env.PATH ?? '',
+  pathExtValue = process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD',
+  platform = process.platform,
+): string[] {
+  const windows = platform === 'win32';
+  const extensions = windows
+    ? [
+        '',
+        ...pathExtValue
+          .split(';')
+          .map((extension) => extension.trim().toLowerCase())
+          .filter(Boolean),
+        '.ps1',
+      ]
+    : [''];
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+
+  for (const rawEntry of pathValue.split(delimiter)) {
+    const entry = rawEntry.trim().replace(/^"(.*)"$/, '$1');
+    if (entry.length === 0) continue;
+    for (const extension of extensions) {
+      const candidate = join(entry, `zxs${extension}`);
+      const key = windows ? candidate.toLowerCase() : candidate;
+      if (seen.has(key) || !existsSync(candidate)) continue;
+      try {
+        if (!statSync(candidate).isFile()) continue;
+        if (!windows) accessSync(candidate, fsConstants.X_OK);
+      } catch {
+        continue;
+      }
+      seen.add(key);
+      candidates.push(resolve(candidate));
+    }
+  }
+  return candidates;
+}
+
+interface ZxsPathInstallation {
+  root: string;
+  commands: string[];
+  cliPresent: boolean | null;
+}
+
+function safeRealpath(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+/** Walk upward to the owning `@zx-vibes/toolkit` package, if any. */
+function findToolkitRoot(start: string): string | undefined {
+  let current = start;
+  try {
+    if (statSync(current).isFile()) current = dirname(current);
+  } catch {
+    return undefined;
+  }
+  for (;;) {
+    const packageJson = join(current, 'package.json');
+    if (existsSync(packageJson)) {
+      try {
+        const parsed = JSON.parse(readFileSync(packageJson, 'utf8')) as {
+          name?: unknown;
+        };
+        if (parsed.name === TOOLKIT_PACKAGE) return safeRealpath(current);
+      } catch {
+        // Keep walking: an unrelated malformed package must not hide the real owner.
+      }
+    }
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+/**
+ * Resolve npm's extensionless/`.cmd`/`.ps1` shim family to one canonical package
+ * root. All three wrappers from one Windows install therefore count once.
+ */
+function owningToolkitRoot(command: string): string | undefined {
+  const direct = findToolkitRoot(safeRealpath(command));
+  if (direct !== undefined) return direct;
+
+  let body = '';
+  try {
+    body = readFileSync(command, 'utf8').replaceAll('\\', '/');
+  } catch {
+    return undefined;
+  }
+  if (!body.includes('@zx-vibes/toolkit/bin/zxs.js')) return undefined;
+
+  // Global npm wrappers target `$basedir/node_modules/@zx-vibes/toolkit`;
+  // project/npx `.bin` wrappers target `$basedir/../@zx-vibes/toolkit`.
+  const commandDir = dirname(command);
+  const possibleRoots = [
+    join(commandDir, 'node_modules', '@zx-vibes', 'toolkit'),
+    join(commandDir, '..', '@zx-vibes', 'toolkit'),
+    join(commandDir, '@zx-vibes', 'toolkit'),
+  ];
+  for (const possibleRoot of possibleRoots) {
+    const root = findToolkitRoot(possibleRoot);
+    if (root !== undefined) return root;
+  }
+
+  // Preserve an expected root even for a broken target so the missing dist check
+  // fails loudly instead of downgrading it to an unknown shim directory.
+  const expected = body.includes('node_modules/@zx-vibes/toolkit')
+    ? possibleRoots[0]!
+    : possibleRoots[1]!;
+  return safeRealpath(expected);
+}
+
+/** Check for ambiguous or incomplete `zxs` installations on PATH. */
+export function checkZxsPath(candidates: readonly string[]): DoctorCheck {
+  const groups = new Map<string, ZxsPathInstallation>();
+  for (const candidate of candidates) {
+    const command = resolve(candidate);
+    const root = owningToolkitRoot(command);
+    const fallbackRoot = safeRealpath(dirname(command));
+    const displayRoot = root ?? fallbackRoot;
+    const key =
+      process.platform === 'win32'
+        ? displayRoot.toLowerCase()
+        : displayRoot;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.commands.push(command);
+      continue;
+    }
+    groups.set(key, {
+      root: displayRoot,
+      commands: [command],
+      cliPresent: root === undefined ? null : existsSync(join(root, 'dist', 'cli.js')),
+    });
+  }
+
+  const installations = [...groups.values()];
+  if (installations.length === 0) {
+    return {
+      name: 'zxs-path',
+      ok: true,
+      detail: 'No zxs command found on PATH (this invocation may be direct)',
+    };
+  }
+
+  const incomplete = installations.filter(
+    (installation) => installation.cliPresent === false,
+  );
+  if (incomplete.length > 0) {
+    return {
+      name: 'zxs-path',
+      ok: false,
+      detail:
+        'Incomplete zxs installation (missing dist/cli.js): ' +
+        incomplete.map((installation) => installation.root).join('; ') +
+        '. Rebuild the checkout or reinstall @zx-vibes/toolkit.',
+    };
+  }
+
+  if (installations.length > 1) {
+    const first = installations[0]!;
+    return {
+      name: 'zxs-path',
+      ok: false,
+      detail:
+        `${installations.length} distinct zxs installations resolve on PATH; ` +
+        `the first wins (${first.commands[0]} -> ${first.root}). Roots: ` +
+        installations.map((installation) => installation.root).join('; ') +
+        '. Remove stale global/npm/npx PATH entries.',
+    };
+  }
+
+  const installation = installations[0]!;
+  return {
+    name: 'zxs-path',
+    ok: true,
+    detail:
+      `One zxs installation on PATH (${installation.commands.length} command shim` +
+      `${installation.commands.length === 1 ? '' : 's'}): ${installation.root}`,
+  };
 }
 
 /** The 48K-ROM presence/size check (ERR-PROD-ENV-001: present and exactly 16384 bytes). */
@@ -168,7 +372,15 @@ export function runDoctor(options: DoctorOptions = {}): DoctorEnvelope {
   // 3) The bundled 48K ROM is present and exactly 16384 bytes (ERR-PROD-ENV-001).
   checks.push(checkRom(options.romPath));
 
-  // 4) `sjasmplus` on PATH — ONLY when it is the configured escape-hatch backend
+  // Detect ambiguous or incomplete zxs installations. Windows npm generates
+  // three shims for one install; checkZxsPath groups them by canonical root.
+  checks.push(
+    checkZxsPath(
+      options.zxsPathCandidates ?? findZxsPathCandidates(),
+    ),
+  );
+
+  // 5) `sjasmplus` on PATH — ONLY when it is the configured escape-hatch backend
   //    (CLI-PROD-DOCTOR-001: not checked by default).
   if (assembler === 'sjasmplus') {
     const sjasmOk = (options.checkSjasmplus ?? defaultSjasmplusAvailable)();
@@ -204,7 +416,7 @@ export function doctorCommand(_context: CommandContext): DoctorEnvelope {
 /** Declare the `doctor` command's flags (CLI-PROD-DOCTOR-001). */
 export function configureDoctorCommand(command: Command): void {
   command
-    .description('Check the toolchain (Node, @zx-vibes/asm, the 48K ROM); exit 3 if any check fails')
+    .description('Check Node, runtime assets, and zxs PATH resolution; exit 3 on failure')
     .option('--json', 'emit a single machine-readable JSON envelope');
 }
 

@@ -37,7 +37,7 @@ project terms cite the product or a decision. One entry, one meaning.
 - [id: GL-ZXS-001] **`zxs`** — the toolkit CLI; `zxs-mcp` is its MCP server; `zx-vibes` is the umbrella package/alias bin. [provenance: contract]
 - [id: GL-SESSION-001] **Session** — the persistent emulator machine successive commands observe and mutate (`session.report()` shape). [provenance: contract]
 - [id: GL-RECIPE-001] **Recipe** — a reusable `recipe.asm` building block plus a `demo.asm` and a `test.json`; the test spec is its executable proof. [provenance: contract]
-- [id: GL-ASSERTION-001] **Assertion** — a declarative check in a `*.test.json` spec (one of 13 types: `status`, `memEquals`, `beeperEdges`, …) evaluated against the post-run machine. [provenance: contract]
+- [id: GL-ASSERTION-001] **Assertion** — a declarative check in a `*.test.json` spec (one of 17 types: `status`, `frameBudget`, `memEquals`, `beeperEdges`, …) evaluated against the measured run or an `at` checkpoint. [provenance: contract]
 - [id: GL-SPECTRAL-001] **spectral** — the embedded `@zx-vibes/asm` assembler backend (default); `sjasmplus` is the external alternative. [provenance: contract]
 
 ## Provenance

@@ -93,6 +93,8 @@ describe('preview server — serves the bundled player + program (RT-PROD-PREVIE
     expect(js.length).toBeGreaterThan(1000);
     // The bundle inlines the reconstructed machine (a core symbol), never the legacy emulator.
     expect(js).not.toContain('@zx-vibes/emulator');
+    expect(js).toContain('AudioWorkletNode');
+    expect(js).toContain('new Worker');
   });
 
   it('serves the 48K ROM the player boots (16384 bytes)', async () => {

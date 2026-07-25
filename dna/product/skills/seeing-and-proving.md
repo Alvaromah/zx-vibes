@@ -22,8 +22,21 @@ zxs verify --json                               # the acceptance gate
   Spectrum's interleaved line order — the decode is in
   [memory-map.md](../reference/memory-map.md), and the palette/FLASH rules in
   [screen-render.md](../reference/screen-render.md). When a screenshot looks
-  wrong, `zxs mem read` the display file and compare against the decode before
-  blaming your renderer.
+wrong, `zxs mem read` the display file and compare against the decode before
+blaming your renderer.
+
+For ASCII-authored sprite/tile rows, make geometry executable in the source:
+put labels around each fixed-width block and use assembler `ASSERT` expressions
+for its byte length (or define rows with fixed-size data). `DEFM` is also used
+for ordinary variable-length text, so a universal row-width validator would
+reject valid source; the asset's own width is the missing piece of intent.
+
+```asm
+sprite_row:
+    DEFM "....####........"
+sprite_row_end:
+    ASSERT sprite_row_end - sprite_row == 16, "sprite row must be 16 bytes"
+```
 
 ## When is a screenshot taken?
 
@@ -33,7 +46,9 @@ boundary finds the CPU idling in HALT with the frame fully drawn, so captures ar
 clean and — because the emulator is deterministic — the same run always yields
 byte-identical PNGs. If a capture shows a half-drawn sprite, your draw code is
 still running at the frame edge (you are out of frame budget), or you stopped on
-a breakpoint mid-draw; confirm against screen memory before chasing a render bug.
+a breakpoint mid-draw. Check `frameBudget.overrunFrames` and
+`worstFrame.busyTStates` before chasing a render bug; `haltSynced: true` alone is
+only a majority cadence signal and can coexist with intermittent missed frames.
 
 ## Visual regression
 
@@ -54,6 +69,8 @@ most proof-per-line:
 - `pixelAt` / `cellsNonBlank` / `attrNonBlank` — bitmap-level facts.
 - `memEquals` / `memInRange` / `memDelta` — game-variable facts (addresses from
   your own `EQU` map; `zxs symbols get <label>` resolves them).
+- `frameBudget` — require no missed frame deadlines; put
+  `{ "type": "frameBudget", "maxOverrunFrames": 0 }` in every real-time smoke test.
 - `at` — temporal checkpoints: assert mid-run state at a named frame, e.g. the
   apex of a jump.
 - `beeperEdges` — sound actually reached port `0xFE` bit 4
@@ -62,3 +79,9 @@ most proof-per-line:
 A good spec asserts one mechanic with 2–4 of these, driven by `keys`
 (`"frame:KEY*hold"` — the same schedule `zxs run --keys` takes,
 [keyboard-input.md](../reference/keyboard-input.md)).
+
+When reaching the mechanic requires a long title/level-load sequence, inject the
+scenario with `setup: [{ "mem": { "selected_level": "03" } }]` and anchor the
+measured run with `waitFor: { "type": "memEquals", "addr": "game_ready",
+"hex": "01" }`. Scheduled input, `at` frames, delta baselines, and observable
+counters all restart at readiness.

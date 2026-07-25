@@ -33,12 +33,16 @@ zxs regs                              # where is SP? IM? IFF1?
 zxs disasm PC --count 12              # what code is the PC actually in?
 zxs break add <label|file.asm:line>   # then: zxs run --until-break
 zxs step 10                           # single-step from a stop
-zxs trace --frames 5                  # instruction log + hot spots
+zxs trace --frames 5 --profile        # actual T-states by routine + HALT idle
 zxs coverage                          # which routines were ever reached?
 ```
 
-`haltSynced: true` in the run report is the healthiest signal there is: the
-once-per-frame interrupt is resuming your HALT — a 50 Hz loop doing its job.
+`haltSynced: true` means the once-per-frame interrupt resumed `HALT` for a
+majority of the run. It does **not** prove every deadline was met: inspect
+`frameBudget.overrunFrames` (and assert it is zero) to catch intermittent
+25/50-Hz degradation. Profiling attribution uses the nearest preceding SLD
+function label and is explicitly heuristic; `<unmapped>` covers code without a
+matching label.
 
 ## Escapes
 

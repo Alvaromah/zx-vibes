@@ -1,6 +1,6 @@
 // Assertion-engine self-tests (REC-PROD-AC-VOCAB-001): a PASS and a FAIL case for
-// each of the 16 assertion types, driving `evaluateAssertion` against constructed
-// snapshots, plus the `--list-assertions` reference (exactly 16, ASSERT-PROD-LIST-001).
+// each of the 17 assertion types, driving `evaluateAssertion` against constructed
+// snapshots, plus the `--list-assertions` reference (exactly 17, ASSERT-PROD-LIST-001).
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -68,6 +68,14 @@ function ctx(over: Partial<RunContext> = {}): RunContext {
     start: over.start ?? snap(),
     status: over.status ?? 'ok',
     haltSynced: over.haltSynced ?? false,
+    frameBudget: over.frameBudget ?? {
+      frameTStates: 69888,
+      measuredFrames: 120,
+      interruptFrames: 120,
+      overrunFrames: 0,
+      idleTStates: { min: 100, average: 1000 },
+      worstFrame: { frame: 1, busyTStates: 69788, idleTStates: 100, overrun: false },
+    },
     framesRun: over.framesRun ?? 120,
     checkpoints: over.checkpoints ?? new Map(),
     symbols: over.symbols ?? new Map(),
@@ -110,6 +118,27 @@ describe('haltSynced (ASSERT-PROD-HALT-001) — source: HALT/interrupt cadence',
   it('passes / fails', () => {
     expect(ev({ type: 'haltSynced', equals: true }, snap(), ctx({ haltSynced: true }))).toBeNull();
     expect(ev({ type: 'haltSynced', equals: true }, snap(), ctx({ haltSynced: false }))).toMatch(/haltSynced/);
+  });
+});
+
+describe('frameBudget (ASSERT-PROD-FRAME-BUDGET-001) — source: interrupt/HALT deadlines', () => {
+  it('passes a measured clean run and fails overruns or an unmeasured run', () => {
+    expect(ev({ type: 'frameBudget' }, snap())).toBeNull();
+    expect(ev(
+      { type: 'frameBudget', maxOverrunFrames: 0 },
+      snap(),
+      ctx({ frameBudget: { ...ctx().frameBudget, overrunFrames: 2 } }),
+    )).toMatch(/2 overrun frame/);
+    expect(ev(
+      { type: 'frameBudget' },
+      snap(),
+      ctx({ frameBudget: { ...ctx().frameBudget, measuredFrames: 0 } }),
+    )).toMatch(/no HALT-synchronized frame deadlines/);
+    expect(ev(
+      { type: 'frameBudget', requireMeasured: false },
+      snap(),
+      ctx({ frameBudget: { ...ctx().frameBudget, measuredFrames: 0 } }),
+    )).toBeNull();
   });
 });
 
@@ -299,13 +328,13 @@ describe('screenDiff (ASSERT-PROD-SCREENDIFF-001) — source: framebuffer vs gol
 // --- the assertion reference (ASSERT-PROD-LIST-001) -------------------------
 
 describe('--list-assertions (ASSERT-PROD-LIST-001 / REC-PROD-AC-VOCAB-001)', () => {
-  it('the reference lists exactly the 16 types (coloredCells dropped)', () => {
+  it('the reference lists exactly the 17 types (coloredCells dropped)', () => {
     const types = ASSERTION_REFERENCE.map((d) => d.type);
-    expect(types).toHaveLength(16);
-    expect(new Set(types).size).toBe(16);
+    expect(types).toHaveLength(17);
+    expect(new Set(types).size).toBe(17);
     expect(types).toEqual(
       expect.arrayContaining([
-        'status', 'haltSynced', 'screenIncludes', 'cellsNonBlank', 'attrNonBlank',
+        'status', 'haltSynced', 'frameBudget', 'screenIncludes', 'cellsNonBlank', 'attrNonBlank',
         'screenChanged', 'memEquals', 'regEquals', 'pixelAt', 'borderColor',
         'beeperEdges', 'portFEWrites', 'at', 'memInRange', 'memDelta', 'screenDiff',
       ]),
@@ -313,7 +342,7 @@ describe('--list-assertions (ASSERT-PROD-LIST-001 / REC-PROD-AC-VOCAB-001)', () 
     expect(types).not.toContain('coloredCells');
   });
 
-  it('zxs test --list-assertions --json prints exactly 16 reference entries', async () => {
+  it('zxs test --list-assertions --json prints exactly 17 reference entries', async () => {
     const out: string[] = [];
     const streams: OutputStreams = { out: (t) => out.push(t), err: () => {} };
     const code = await runCli(['test', '--list-assertions', '--json'], { streams });
@@ -321,7 +350,7 @@ describe('--list-assertions (ASSERT-PROD-LIST-001 / REC-PROD-AC-VOCAB-001)', () 
     const env = JSON.parse(out.join('').trim());
     expect(env.ok).toBe(true);
     expect(env.stage).toBe('test');
-    expect(env.assertions).toHaveLength(16);
+    expect(env.assertions).toHaveLength(17);
     for (const entry of env.assertions) {
       expect(entry).toHaveProperty('type');
       expect(entry).toHaveProperty('fields');

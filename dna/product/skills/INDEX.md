@@ -9,7 +9,7 @@ under `recipes/` you can copy from. One rule governs everything:
 
 | Skill | Reach for it when |
 | --- | --- |
-| [seeing-and-proving.md](seeing-and-proving.md) | you need to SEE the screen, capture it, diff it, or assert on it from a test |
+| [seeing-and-proving.md](seeing-and-proving.md) | you need to see/diff output, enforce frame timing, validate fixed-width art, or anchor an injected test scenario |
 | [persistent-session.md](persistent-session.md) | you need to read/poke game variables mid-run, or replay a scenario deterministically |
 | [debug-hangs.md](debug-hangs.md) | `zxs run` reports a hang (`di-halt`, `tight-loop`, `pc-in-rom`, …) and you need to tell a real crash from a false alarm |
 | [interrupts-im1-im2.md](interrupts-im1-im2.md) | choosing the frame heartbeat: ROM IM 1 vs your own IM 2 handler |

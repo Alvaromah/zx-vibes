@@ -33,7 +33,8 @@ Incidental. Mined once from the oracle (`packages/asm/src/assembler.ts`,
 
 ## Environment errors (`doctor`)
 
-- [id: ERR-PROD-ENV-001] `doctor` returns ENV_ERROR (exit 3) when any check fails: Node < 20; `sjasmplus` not found while it is the configured backend; `@zx-vibes/asm` not importable while configured; or the 48K ROM missing or not exactly 16384 bytes. All pass → exit 0. [provenance: contract]
+- [id: ERR-PROD-ENV-001] `doctor` returns ENV_ERROR (exit 3) when any check fails: Node < 20; `sjasmplus` not found while it is the configured backend; `@zx-vibes/asm` not importable while configured; the 48K ROM missing or not exactly 16384 bytes; multiple distinct `zxs` package roots resolvable on PATH; or a resolved `zxs` package missing `dist/cli.js`. npm's extensionless/`.cmd`/`.ps1` wrappers for one canonical root are one installation, not three. All pass → exit 0. [provenance: contract]
+- [id: ERR-PROD-ENV-BOOTSTRAP-001] The `zxs` and `zxs-mcp` bin shims load their built runtime dynamically. If `dist/cli.js` or `dist/mcp.js` is absent, the process fails loudly with an incomplete-install message that directs the user to rebuild the checkout or reinstall the package, instead of exposing only a raw module-resolution stack. [provenance: contract]
 
 ## Recovery
 

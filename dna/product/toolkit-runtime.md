@@ -28,6 +28,7 @@ is in `cli.md`, the project-config schema in `config-schema.md`.
 - [id: RT-PROD-RUN-004] The run loop applies a scheduled-key plan **and** a scheduled Kempston-`joy` plan (ADR-0027; port `0x1F` `000FUDLR`, peripherals.md) relative to the run's start frame and reports the realized schedule. [provenance: contract]
 - [id: RT-PROD-RUN-005] The run loop analyzes audio activity and reports `audio.beeperEdges` as an integer count (≥ 0) of port-`0xFE` bit-4 transitions, alongside port-write counts and tone analysis. [provenance: contract]
 - [id: RT-PROD-RUN-006] `--until-break` raises the effective frame budget (≥ 3000 frames) so a stop condition has time to fire within one run. [provenance: contract]
+- [id: RT-PROD-RUN-FRAME-BUDGET-001] Every run reports deadline telemetry: `frameBudget.frameTStates` (`69888`), HALT-synchronized `measuredFrames`, accepted `interruptFrames`, `overrunFrames` (subsequent completed frame boundaries reached before the CPU returned to `HALT`), aggregate HALT-idle T-states, and the busiest `worstFrame`. Measurement begins when an interrupt first resumes `HALT`, so boot work is excluded; measuring each later boundary makes even the invocation's final slow frame visible while an occasional overrun remains visible when the majority-based `haltSynced` heuristic is true. [provenance: contract]
 
 ## Verify pipeline
 
@@ -42,17 +43,21 @@ is in `cli.md`, the project-config schema in `config-schema.md`.
 - [id: RT-PROD-PREVIEW-003] A detached preview server records `{ pid, port, url, token, owner }` in `.zxs/preview-server.json`; the `owner` marks it as a zx-vibes preview server and the `token` is a per-server UUID. [provenance: contract]
 - [id: RT-PROD-PREVIEW-004] `preview --stop` stops a recorded server only after verifying it owns the recorded token (via the server's control endpoint); a missing/foreign token is a user error (exit 1). [provenance: contract]
 - [id: RT-PROD-PREVIEW-005] `preview --watch` polls source for changes (~500 ms) and pushes build/reload events to connected clients over a server-sent-events stream. [provenance: contract]
+- [id: RT-PROD-PREVIEW-006] The browser player renders port-`0xFE` bit-4 edges through Web Audio after a user gesture. Its PCM sample grid and filter state are continuous across frames, use the exact 3.5 MHz/69,888-T-state cadence, and do not accumulate rounded samples-per-frame drift. [provenance: contract]
+- [id: RT-PROD-PREVIEW-007] Emulation timing is independent of canvas rendering: a Worker-backed pulse advances the machine at the exact 48K frame duration while `requestAnimationFrame` only paints. Hidden-tab rAF suspension therefore does not stop emulation; overdue catch-up is bounded and excess backlog is discarded rather than replayed as fast-forward. [provenance: contract]
 
 ## Test runner
 
 - [id: RT-PROD-TEST-001] The test runner loads declarative specs (`test.json` / `*.test.json`), runs each against a fresh/seeded machine, and reports `{ total, passed, failed, results[] }`. [provenance: contract]
-- [id: RT-PROD-TEST-002] The v2 assertion vocabulary (16 types — full schema in `recipes-and-assertions.md`) is: `status`, `haltSynced`, `screenChanged`, `cellsNonBlank`, `attrNonBlank`, `screenIncludes`, `memEquals`, `regEquals`, `pixelAt`, `borderColor`, `beeperEdges`, `portFEWrites`, plus `at`, `memInRange`, `memDelta`, `screenDiff`. The legacy `coloredCells` alias is dropped (ADR-0027). [provenance: decision:ADR-0027]
+- [id: RT-PROD-TEST-002] The assertion vocabulary (17 types — full schema in `recipes-and-assertions.md`) is: `status`, `haltSynced`, `frameBudget`, `screenChanged`, `cellsNonBlank`, `attrNonBlank`, `screenIncludes`, `memEquals`, `regEquals`, `pixelAt`, `borderColor`, `beeperEdges`, `portFEWrites`, plus `at`, `memInRange`, `memDelta`, `screenDiff`. The legacy `coloredCells` alias is dropped (ADR-0027). [provenance: decision:ADR-0027]
 - [id: RT-PROD-TEST-003] Numeric assertions take `{min?, max?}` bounds; equality assertions take `{equals}` or a typed value; the suite passes iff every spec passes. [provenance: contract]
 - [id: RT-PROD-TEST-004] To serve the temporal/delta assertions, the runner captures — in one run — the start-of-run referenced memory and a per-checkpoint snapshot at each `at`-frame, so `at`/`memDelta` evaluate without re-running (ADR-0027). [provenance: decision:ADR-0027]
+- [id: RT-PROD-TEST-005] Specs can inject scenario RAM through declarative `setup` actions and wait for a `memEquals` readiness condition before the measured run. Warm-up uses no scheduled scenario input; readiness resets counters, baselines, checkpoints, and relative input frames while preserving live machine/I/O state. [provenance: contract]
 
 ## Observe & formats services (v2)
 
 - [id: RT-PROD-OBSERVE-001] The observe services expose, over the same machine source-selection, the cheap-eyes + debug cluster — screen (`text` OCR / `png` / `base64` data-URI), regs, mem read/dump, disasm, step, trace, break/watch — plus the v2 additions: `symbols` (dump the SLD label→addr map as JSON), `coverage` (which code was reached over a run), and `screenDiff` (post-run framebuffer vs a golden PNG). There is **one** screenshot encoder shared by `screen`, `run --screenshot`, and `gfx` (ADR-0027). [provenance: decision:ADR-0027]
+- [id: RT-PROD-OBSERVE-002] `trace --profile` supplements execution-count hot spots with actual contended instruction T-states and per-frame percentages, separates repeated-HALT idle and interrupt-acknowledge shares, and groups active cost by the nearest preceding SLD function label. Label ownership is explicitly reported as heuristic; code without matching SLD data is `<unmapped>`. [provenance: contract]
 - [id: RT-PROD-FORMATS-001] The formats service builds loadable `.tap`/`.scr`/`.z80` artifacts from a built binary or the live machine via the `@zx-vibes/machine` codecs (`file-formats.md`); `preview <file>` serves any of these in the bundled core player. [provenance: decision:ADR-0027]
 
 ## Inputs

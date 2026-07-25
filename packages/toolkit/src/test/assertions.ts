@@ -1,5 +1,5 @@
 // Declarative assertion engine — recipes-and-assertions.md (REC-PROD-AC-VOCAB-001:
-// exactly the 16 assertion types) + toolkit-runtime.md RT-PROD-TEST-002/003.
+// exactly the 17 assertion types) + toolkit-runtime.md RT-PROD-TEST-002/003.
 //
 // Each assertion reads observable machine state from a captured {@link Snapshot} and
 // returns a human-readable failure string (or `null` on pass, REC-PROD-REPORT-001).
@@ -25,6 +25,7 @@ import {
 // The one PNG decoder (CLI-PROD-RULE-SCREENSHOT-001) — shared with `screen --diff`.
 import { decodePng } from '../observe/screenshot.js';
 import { parseAddress } from '../util/address.js';
+import type { RunFrameBudget } from '../runtime/run.js';
 
 /** A raw assertion object from a spec's `assert[]` — `{ type, ...params }`. */
 export type RawAssertion = { type: string } & Record<string, unknown>;
@@ -64,6 +65,8 @@ export interface RunContext {
   status: AssertStatus;
   /** HALT/interrupt-cadence alignment (`haltSynced`). */
   haltSynced: boolean;
+  /** Per-frame deadline and HALT-idle telemetry (`frameBudget`). */
+  frameBudget: RunFrameBudget;
   /** Frames actually run (for the "at-frame past run length" failure). */
   framesRun: number;
   /** Per-checkpoint snapshots keyed by `at`-frame (1..framesRun). */
@@ -203,6 +206,21 @@ export function evaluateAssertion(a: RawAssertion, target: Snapshot, ctx: RunCon
       const equals = boolField(a, 'equals');
       return ctx.haltSynced === equals ? null : `haltSynced: expected ${equals}, got ${ctx.haltSynced}`;
     }
+    case 'frameBudget': {
+      const requireMeasured = a.requireMeasured === undefined
+        ? true
+        : boolField(a, 'requireMeasured');
+      if (requireMeasured && ctx.frameBudget.measuredFrames === 0) {
+        return 'frameBudget: no HALT-synchronized frame deadlines were measured';
+      }
+      const maxOverrunFrames = numField(a, 'maxOverrunFrames') ?? 0;
+      if (!Number.isInteger(maxOverrunFrames) || maxOverrunFrames < 0) {
+        throw userError('frameBudget.maxOverrunFrames must be a non-negative integer', 'test');
+      }
+      return ctx.frameBudget.overrunFrames <= maxOverrunFrames
+        ? null
+        : `frameBudget: ${ctx.frameBudget.overrunFrames} overrun frame(s) exceeds max ${maxOverrunFrames}`;
+    }
     case 'screenIncludes': {
       const text = strField(a, 'text');
       return screenIncludesText(target.screen, text)
@@ -333,13 +351,14 @@ export interface AssertionDoc {
 }
 
 /**
- * The canonical 16-assertion reference (REC-PROD-AC-VOCAB-001): the 12 core types plus
+ * The canonical 17-assertion reference (REC-PROD-AC-VOCAB-001): the 13 core types plus
  * the four v2 additions (`at`, `memInRange`, `memDelta`, `screenDiff`). The dropped
  * legacy `coloredCells` alias is intentionally absent. Printed by `test --list-assertions`.
  */
 export const ASSERTION_REFERENCE: readonly AssertionDoc[] = [
   { type: 'status', fields: ['equals'], description: 'Final run outcome — "ok" or "hang".' },
   { type: 'haltSynced', fields: ['equals'], description: 'Whether the main loop aligned to the HALT/interrupt cadence (needs detectHangs).' },
+  { type: 'frameBudget', fields: ['maxOverrunFrames?', 'requireMeasured?'], description: 'HALT-synchronized frame deadlines reached before the CPU returned to HALT (default max 0).' },
   { type: 'screenIncludes', fields: ['text'], description: 'ROM-font OCR of the screen contains the text on some row.' },
   { type: 'cellsNonBlank', fields: ['min?', 'max?'], description: 'Count of 8×8 cells with ≥1 bitmap pixel set, within [min,max].' },
   { type: 'attrNonBlank', fields: ['min?', 'max?'], description: 'Count of attribute cells differing from the default 0x38, within [min,max].' },
@@ -356,5 +375,5 @@ export const ASSERTION_REFERENCE: readonly AssertionDoc[] = [
   { type: 'screenDiff', fields: ['baseline', 'maxDiff?'], description: 'Post-run framebuffer vs a golden PNG; differing-pixel count ≤ maxDiff (default 0).' },
 ];
 
-/** The set of valid assertion type names (exactly 16, REC-PROD-AC-VOCAB-001). */
+/** The set of valid assertion type names (exactly 17, REC-PROD-AC-VOCAB-001). */
 export const ASSERTION_TYPES: ReadonlySet<string> = new Set(ASSERTION_REFERENCE.map((d) => d.type));

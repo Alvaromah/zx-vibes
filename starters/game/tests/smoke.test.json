@@ -5,6 +5,7 @@
   "assert": [
     { "type": "status", "equals": "ok" },
     { "type": "haltSynced", "equals": true },
+    { "type": "frameBudget", "maxOverrunFrames": 0 },
     { "type": "screenChanged", "equals": true },
     { "type": "cellsNonBlank", "min": 1 },
     { "type": "pixelAt", "x": 251, "y": 99, "set": true },

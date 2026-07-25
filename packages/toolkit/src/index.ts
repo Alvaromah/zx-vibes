@@ -72,6 +72,8 @@ export {
   type RunResult,
   type RunStatus,
   type RunAudio,
+  type RunFrameBudget,
+  type WorstFrameBudget,
   type RunBoot,
   type RunExit,
   type RunEnvelope,
@@ -301,6 +303,8 @@ export {
   type TraceEnvelope,
   type TraceHotspot,
   type TraceLine,
+  type TraceProfile,
+  type TraceProfileEntry,
   type TraceOptions,
 } from './observe/trace.js';
 export {

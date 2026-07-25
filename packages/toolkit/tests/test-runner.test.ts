@@ -93,6 +93,45 @@ const SCRHALF = SCRWHITE.replace('  ld bc, 0x17FF', '  ld bc, 0x0BFF');
 
 const BAD = ['ORG 0x8000', 'dup:', 'dup:', '  ret', ''].join('\n');
 
+const SCENARIO_SETUP = [
+  'ORG 0x8000',
+  '  ld sp, 0xFF00',
+  '  im 1',
+  '  ei',
+  'loop:',
+  '  halt',
+  '  ld a, (scenario_value)',
+  '  ld (result), a',
+  '  jr loop',
+  'scenario_value: defb 0',
+  'result: defb 0',
+  '',
+].join('\n');
+
+const READY_INPUT = [
+  'ORG 0x8000',
+  '  ld sp, 0xFF00',
+  '  im 1',
+  '  ei',
+  'loop:',
+  '  halt',
+  '  ld a, (ready)',
+  '  inc a',
+  '  ld (ready), a',
+  '  ld hl, (counter)',
+  '  inc hl',
+  '  ld (counter), hl',
+  '  ld bc, 0xDFFE',
+  '  in a, (c)',
+  '  and 1',
+  '  ld (p_key), a',
+  '  jr loop',
+  'ready: defb 0',
+  'counter: defw 0',
+  'p_key: defb 1',
+  '',
+].join('\n');
+
 // ===========================================================================
 
 describe('runSpec — multi-assertion spec over the real pipeline (REC-PROD-REPORT-001)', () => {
@@ -164,6 +203,63 @@ describe('runSpec — memDelta signed-change spec (ASSERT-PROD-MEMDELTA-001)', (
     const result = runSpec(file, dir);
     expect(result.ok).toBe(false);
     expect(result.failures.join(' ')).toMatch(/memDelta/);
+  });
+});
+
+describe('runSpec — declarative setup and readiness (REC-PROD-SPEC-006/007)', () => {
+  it('applies symbol-addressed memory setup before the scenario baseline', () => {
+    write('scenario.asm', SCENARIO_SETUP);
+    const file = writeSpec('scenario.test.json', {
+      build: 'scenario.asm',
+      frames: 5,
+      setup: [{ mem: { scenario_value: '2A' } }],
+      assert: [
+        { type: 'memEquals', addr: 'scenario_value', hex: '2A' },
+        { type: 'memDelta', addr: 'scenario_value', min: 0, max: 0 },
+        { type: 'memEquals', addr: 'result', hex: '2A' },
+      ],
+    });
+    expect(runSpec(file, dir)).toMatchObject({ ok: true, failures: [] });
+  });
+
+  it('waits for memory readiness, resets the baseline, and anchors keys at ready frame 0', () => {
+    write('ready.asm', READY_INPUT);
+    const file = writeSpec('ready.test.json', {
+      build: 'ready.asm',
+      frames: 1,
+      waitFor: {
+        type: 'memEquals',
+        addr: 'ready',
+        hex: '05',
+        maxFrames: 20,
+      },
+      keys: '0:P*1',
+      assert: [
+        { type: 'memDelta', addr: 'counter', size: 2, min: 1, max: 1 },
+        { type: 'memEquals', addr: 'p_key', hex: '00' },
+      ],
+    });
+    const result = runSpec(file, dir);
+    expect(result.ok).toBe(true);
+    expect(result.failures).toEqual([]);
+    expect(result.readyAtFrame).toBeGreaterThan(0);
+  });
+
+  it('fails explicitly when readiness does not arrive within maxFrames', () => {
+    write('ready.asm', READY_INPUT);
+    const file = writeSpec('ready-timeout.test.json', {
+      build: 'ready.asm',
+      waitFor: {
+        type: 'memEquals',
+        addr: 'ready',
+        hex: 'FF',
+        maxFrames: 3,
+      },
+      assert: [{ type: 'status', equals: 'ok' }],
+    });
+    const result = runSpec(file, dir);
+    expect(result.ok).toBe(false);
+    expect(result.failures.join(' ')).toMatch(/waitFor.*timed out/i);
   });
 });
 

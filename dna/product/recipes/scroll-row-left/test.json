@@ -4,6 +4,7 @@
   "assert": [
     { "type": "status", "equals": "ok" },
     { "type": "haltSynced", "equals": true },
+    { "type": "frameBudget", "maxOverrunFrames": 0 },
     { "type": "pixelAt", "x": 216, "y": 64, "set": true },
     { "type": "pixelAt", "x": 248, "y": 64, "set": false },
     { "type": "memEquals", "addr": "0x9000", "hex": "2A" },

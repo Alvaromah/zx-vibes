@@ -8,6 +8,8 @@ generated `AGENTS.md`/`CLAUDE.md` playbook still governs everything:
 
 - [Create a game](#create-a-game)
 - [Inspect the screen](#inspect-the-screen)
+- [Enforce frame timing](#enforce-frame-timing)
+- [Anchor scenario tests](#anchor-scenario-tests)
 - [Assert beeper (sound) output](#assert-beeper-sound-output)
 - [Debug hangs](#debug-hangs)
 - [IM1 vs IM2 for games](#im1-vs-im2-for-games)
@@ -24,6 +26,10 @@ cd my-game
 zxs verify                           # build → run → screenshot → tests, all green
 zxs preview --watch                  # play it in the browser, live-reload on edits
 ```
+
+The preview asks for one click/key gesture before enabling beeper audio. Its
+emulation clock keeps running when the tab is hidden; canvas rendering resumes
+when the tab is visible again.
 
 What you get:
 
@@ -74,6 +80,66 @@ Declarative screen assertions in a `tests/*.test.json` spec:
 { "type": "borderColor", "equals": 2 }
 ```
 
+## Enforce frame timing
+
+`haltSynced` is a useful cadence signal, but it is majority-based: one slow frame
+can still leave it `true`. Read the explicit deadline telemetry:
+
+```jsonc
+{
+  "haltSynced": true,
+  "frameBudget": {
+    "frameTStates": 69888,
+    "measuredFrames": 299,
+    "interruptFrames": 299,
+    "overrunFrames": 0,
+    "idleTStates": { "min": 1200, "average": 6400.5 },
+    "worstFrame": { "frame": 42, "busyTStates": 68688, "idleTStates": 1200, "overrun": false }
+  }
+}
+```
+
+Every real-time smoke spec should include:
+
+```jsonc
+{ "type": "frameBudget", "maxOverrunFrames": 0 }
+```
+
+If it fails, `zxs trace --frames 5 --profile` reports actual contended T-states
+by nearest preceding SLD function label, plus HALT-idle and interrupt time.
+Routine ownership is a heuristic; unlabeled code appears as `<unmapped>`.
+
+## Anchor scenario tests
+
+Use `setup` to inject RAM state and `waitFor` to exclude a title/level-loading
+sequence from the measured scenario:
+
+```jsonc
+{
+  "build": "../src/main.asm",
+  "frames": 120,
+  "setup": [
+    { "mem": { "selected_cave": "03", "player_lives": "03" } }
+  ],
+  "waitFor": {
+    "type": "memEquals",
+    "addr": "game_ready",
+    "hex": "01",
+    "maxFrames": 300
+  },
+  "keys": "0:P*20",
+  "assert": [
+    { "type": "frameBudget", "maxOverrunFrames": 0 },
+    { "type": "memDelta", "addr": "player_x", "min": 1 }
+  ]
+}
+```
+
+The warm-up receives no scheduled scenario input. Once ready, input/checkpoint
+frames, counters, and delta/screen baselines restart at zero. In contrast,
+`--keys` frames on `run --state` are relative to each individual run invocation,
+not to the persisted session lifetime.
+
 ## Assert beeper (sound) output
 
 The emulator counts speaker edges (port `0xFE` bit 4). After a run, the JSON carries them
@@ -111,14 +177,15 @@ Tools for the diagnosis:
 zxs run --json                 # status + hang.kind + final registers
 zxs regs                       # PC/SP/flags right now
 zxs disasm PC --count 12       # what is it about to execute?
-zxs trace --frames 5           # per-frame PC hotspots — where time is spent
+zxs trace --frames 5 --profile # actual T-states by routine + HALT idle
 zxs break add 0x8000           # stop at a PC and inspect
 zxs step 10                    # single-step out of a suspicious spot
 ```
 
-A `haltSynced: true` run is the healthy shape for a 50 Hz game: the loop is `halt`ing once
-per frame and the interrupt is releasing it. `haltSynced: false` with `status: ok` usually
-means the loop is free-running (no `halt`) or interrupts are off.
+A `haltSynced: true` run means the loop reached `HALT` for most frame
+interrupts. Require `frameBudget.overrunFrames: 0` as the deadline proof;
+`haltSynced: false` with `status: ok` usually means the loop is free-running or
+interrupts are off.
 
 ## IM1 vs IM2 for games
 

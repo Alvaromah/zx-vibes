@@ -22,7 +22,8 @@ zxs build                     # uses zx.config.json, JSON errors with line + did
 zxs run --bin build/main.bin --org 0x8000 --frames 300 --json
 ```
 
-Read the JSON. `status` must be `"ok"` and `loop.haltSynced` must be `true`.
+Read the JSON. `status` must be `"ok"`, `haltSynced` must be `true`, and
+`frameBudget.overrunFrames` must be `0`.
 Then LOOK at the result: `zxs screen --text` (free) or
 `zxs run ... --screenshot s.png` and view the PNG. **Never report success
 without having run and looked.** Exit codes: 0 ok · 1 build error ·
@@ -34,7 +35,9 @@ and add `{ "type": "beeperEdges", "min": 1 }` to a test.
 For browser playback, use `zxs preview --watch --json`; hand the user the
 reported URL. Use `zxs preview --detach --watch` for a background server,
 `zxs preview --list` to recover the URL, and `zxs preview --stop` when done.
-Without `--watch`, restart preview after source changes.
+Click/press a key once to enable beeper audio. Emulation continues while the
+tab is hidden; rendering resumes when visible. Without `--watch`, restart
+preview after source changes.
 
 ## When stuck
 
@@ -46,7 +49,7 @@ Without `--watch`, restart preview after source changes.
 | Wrong colours | docs/reference/attributes-and-colour.md |
 | Works then crashes | `zxs regs` after longer runs: SP drifting? docs/reference/common-bugs.md#stack-drift |
 | Need to see inside | `zxs break add <label>` → `zxs run --until-break` → `zxs regs`, `zxs step`, `zxs disasm PC` |
-| Where is the time going | `zxs trace --frames 5` |
+| Where is the time going | `zxs trace --frames 5 --profile` |
 | Need read-only investigation | `zxs run --no-save` or `zxs screen --z80 game.z80 --png s.png` |
 | Need to inspect assets | docs/reference/reverse-engineering.md, `zxs gfx find --json` |
 
@@ -56,7 +59,11 @@ Without `--watch`, restart preview after source changes.
 - Use `lib/` routines (CI-tested) before writing primitives from scratch:
   `clear_screen`, `cell_addr`, `sprite_xor_8x8`, `attr_addr`, `read_qaop`.
 - Game loop shape: `EI` once → `HALT` → input → update → XOR-erase/draw →
-  repeat. Keep `haltSynced` true; budget = 69,888 T-states/frame.
+  repeat. Keep `haltSynced` true **and** assert zero frame overruns; budget =
+  69,888 T-states/frame.
+- Put `ASSERT end_label - start_label == expected_width` around fixed-width
+  `DEFM` artwork rows; ordinary text is variable-width, so intent belongs beside
+  the asset.
 - Every routine documents in/out/clobbers in a comment.
 - Controls: QAOP + Space unless told otherwise.
 
@@ -64,3 +71,5 @@ Without `--watch`, restart preview after source changes.
 
 `zxs verify` must pass. When you add a mechanic, add an assertion to
 `tests/smoke.test.json` (or a new spec) that would catch its regression.
+Use declarative `setup` memory writes and `waitFor` readiness when a mechanic
+would otherwise require playing through a long intro.

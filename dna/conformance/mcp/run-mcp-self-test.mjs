@@ -38,7 +38,7 @@ const EXPECTED_SCHEMA = {
   zx_inspect: ['memAddr', 'memLen'],
   zx_debug: ['action', 'spec', 'id', 'type', 'range', 'count', 'frames'],
   zx_keys: ['keys', 'typeText', 'extraFrames'],
-  zx_state: ['action', 'file'],
+  zx_state: ['action', 'file', 'blank'],
 };
 
 // A program that pokes 0xAB at 0x9000 then settles into the HALT loop — a clean

@@ -49,7 +49,8 @@ use by hand — is:
 
 1. Edit `src/main.asm`.
 2. `zxs build`
-3. `zxs run --json` — 300 frames under a hang watchdog; check `status: "ok"`.
+3. `zxs run --json` — check `status: "ok"`, `haltSynced: true`, and
+   `frameBudget.overrunFrames: 0`.
 4. `zxs screen --text` — look at the result. Never trust, always look.
 5. `zxs verify` — the acceptance gate (build → run → screenshot → tests).
 
@@ -60,6 +61,8 @@ there when you (or your agent) want to:
 
 - **Create a game** — what the scaffold gives you and the tight iteration loop.
 - **Inspect the screen** — text OCR, PNG snapshots, declarative screen assertions.
+- **Enforce frame timing** — expose missed deadlines and profile T-states by routine.
+- **Anchor scenarios** — inject test state with `setup` and start input at `waitFor`.
 - **Assert sound** — prove the beeper actually beeped (`beeperEdges`).
 - **Debug hangs** — what the `di-halt`, `tight-loop`, and `pc-in-rom` verdicts mean.
 - **IM1 vs IM2** — when to leave the ROM interrupt handler behind, with a
@@ -90,7 +93,7 @@ there when you (or your agent) want to:
 The everyday commands:
 
 ```bash
-zxs doctor                  # check the toolchain
+zxs doctor                  # check runtime assets and ambiguous PATH installs
 zxs build
 zxs run --frames 120 --keys "5:P*40" --screenshot screen.png
 zxs screen --text           # the 32×24 grid as text — cheap eyes for agents
@@ -108,7 +111,7 @@ zxs disasm PC --count 12
 zxs break add 0x8000
 zxs watch add --write 0x5800-0x5aff
 zxs step 10
-zxs trace --frames 5
+zxs trace --frames 5 --profile
 zxs state save session.zxstate
 zxs state export --z80 session.z80
 zxs gfx screen --out screen.png
@@ -119,8 +122,9 @@ zxs gfx attrs --out attrs.png
 rebuilds and reloads on source changes. If the requested port is busy it
 picks the next free one and prints the URL (`--strict-port` to fail
 instead). `--detach`, `--list`, and `--stop` manage a background server;
-`--stop` only stops the tracked zx-vibes server. `.sna` files are not
-supported yet and fail with a clear error.
+`--stop` only stops the tracked zx-vibes server. Click or press a key once
+to enable beeper audio; emulation continues while a hidden tab's rendering
+is suspended. `.sna` files are not supported yet and fail with a clear error.
 
 Reverse-engineering commands are gated behind an environment flag:
 
