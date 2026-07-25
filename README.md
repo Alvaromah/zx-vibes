@@ -315,8 +315,8 @@ Current package manifest versions:
 
 | Package | Version | Public surface |
 | --- | ---: | --- |
-| `zx-vibes` | `0.3.0` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
-| `@zx-vibes/toolkit` | `0.4.0` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
+| `zx-vibes` | `0.4.0` | Umbrella package with `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
+| `@zx-vibes/toolkit` | `0.5.0` | `zxs`, `zxs-mcp`, and `zx-vibes` bins; package exports for CLI and MCP internals. |
 | `@zx-vibes/asm` | `0.3.0` | `zxasm` bin plus `spectral-asm` compatibility alias; assembler/disassembler API. |
 | `@zx-vibes/cpu` | `0.1.0` | Z80 CPU core exercised by the `dna/conformance` suites. |
 | `@zx-vibes/ula` | `0.1.0` | ULA video/timing core exercised by the `dna/conformance` suites. |
@@ -326,7 +326,7 @@ Current package manifest versions:
 `@zx-vibes/toolkit`. `zxasm --version` reports the assembler package version.
 
 Each starter project under `starters/` pins a `zx-vibes` dev dependency floor
-of `^0.3.0`, kept in sync with the umbrella package version by
+of `^0.4.0`, kept in sync with the umbrella package version by
 `pnpm run check:versions`.
 
 ## Release, CI, and Security
