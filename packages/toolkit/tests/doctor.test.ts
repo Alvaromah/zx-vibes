@@ -83,6 +83,47 @@ function fakeNpmZxsInstall(name: string, complete = true): string[] {
   return commands;
 }
 
+/**
+ * The layout `npm install -g zx-vibes` actually produces: the shims target the
+ * UMBRELLA package's bin, and npm nests (or hoists) the toolkit beneath it. This
+ * is the documented install path, so the completeness check must reach the
+ * toolkit root through it rather than falling back to the shim directory.
+ */
+function fakeGlobalUmbrellaInstall(
+  name: string,
+  { complete = true, hoisted = false } = {},
+): string[] {
+  const prefix = join(dir, name);
+  const umbrella = join(prefix, 'node_modules', 'zx-vibes');
+  const root = hoisted
+    ? join(prefix, 'node_modules', '@zx-vibes', 'toolkit')
+    : join(umbrella, 'node_modules', '@zx-vibes', 'toolkit');
+  mkdirSync(join(umbrella, 'bin'), { recursive: true });
+  writeFileSync(
+    join(umbrella, 'package.json'),
+    JSON.stringify({ name: 'zx-vibes', version: '0.0.0-test' }),
+  );
+  writeFileSync(join(umbrella, 'bin', 'zxs.js'), '#!/usr/bin/env node\n');
+
+  mkdirSync(join(root, 'bin'), { recursive: true });
+  writeFileSync(
+    join(root, 'package.json'),
+    JSON.stringify({ name: '@zx-vibes/toolkit', version: '0.0.0-test' }),
+  );
+  writeFileSync(join(root, 'bin', 'zxs.js'), '#!/usr/bin/env node\n');
+  if (complete) {
+    mkdirSync(join(root, 'dist'), { recursive: true });
+    writeFileSync(join(root, 'dist', 'cli.js'), 'export {};\n');
+  }
+
+  const target = 'node_modules/zx-vibes/bin/zxs.js';
+  const commands = [join(prefix, 'zxs'), join(prefix, 'zxs.cmd'), join(prefix, 'zxs.ps1')];
+  writeFileSync(commands[0]!, `exec "$basedir/${target}" "$@"\n`);
+  writeFileSync(commands[1]!, `"%dp0%\\${target.replaceAll('/', '\\')}" %*\n`);
+  writeFileSync(commands[2]!, `& "$basedir/${target}" $args\n`);
+  return commands;
+}
+
 function fakeNpxZxsInstall(name: string): string[] {
   const install = join(dir, name, 'node_modules');
   const root = join(install, '@zx-vibes', 'toolkit');
@@ -131,6 +172,38 @@ describe('doctor zxs PATH resolution', () => {
     const check = checkZxsPath(fakeNpmZxsInstall('broken', false));
     expect(check.ok).toBe(false);
     expect(check.detail).toMatch(/missing dist\/cli\.js/);
+  });
+
+  // `npm install -g zx-vibes` writes shims that point at the umbrella package's
+  // own bin, not the toolkit's. Resolving only the toolkit form left the
+  // documented install path falling back to the shim directory, which silently
+  // disabled the missing-dist check for it.
+  it('resolves global umbrella-package shims to the nested toolkit root', () => {
+    const check = checkZxsPath(fakeGlobalUmbrellaInstall('global-umbrella'));
+    expect(check.ok).toBe(true);
+    expect(check.detail).toMatch(/3 command shims/);
+    expect(check.detail).toMatch(/@zx-vibes[\\/]toolkit/);
+  });
+
+  it('resolves global umbrella-package shims when npm hoists the toolkit', () => {
+    const check = checkZxsPath(fakeGlobalUmbrellaInstall('hoisted-umbrella', { hoisted: true }));
+    expect(check.ok).toBe(true);
+    expect(check.detail).toMatch(/@zx-vibes[\\/]toolkit/);
+  });
+
+  it('detects an incomplete umbrella install missing dist/cli.js', () => {
+    const check = checkZxsPath(fakeGlobalUmbrellaInstall('broken-umbrella', { complete: false }));
+    expect(check.ok).toBe(false);
+    expect(check.detail).toMatch(/missing dist\/cli\.js/);
+  });
+
+  it('still separates an umbrella install from a distinct toolkit install', () => {
+    const check = checkZxsPath([
+      ...fakeGlobalUmbrellaInstall('umbrella-a'),
+      ...fakeNpmZxsInstall('toolkit-b'),
+    ]);
+    expect(check.ok).toBe(false);
+    expect(check.detail).toMatch(/2 distinct zxs installations/);
   });
 
   it('the bin shim explains how to recover when dist/cli.js is absent', () => {
