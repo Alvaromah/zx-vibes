@@ -5,6 +5,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual escape hatch for the Changesets "Version Packages" PR. That PR is
+  # opened by changesets/action with the repo GITHUB_TOKEN, and GitHub does not
+  # start workflow runs for events raised by that token — so its six required
+  # contexts never report and the PR stays permanently BLOCKED. Dispatching this
+  # workflow against `changeset-release/main` posts the same check runs for that
+  # head SHA, which satisfies branch protection without an --admin bypass.
+  #
+  # The permanent fix is to give changesets/action a PAT instead of the default
+  # GITHUB_TOKEN, which requires creating that secret.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -35,3 +45,31 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run lint
       - run: pnpm run test
+
+  # A PR that changes a published package without declaring a bump releases
+  # nothing: with no changeset, `changeset version` is a no-op, so the work sits
+  # on main unpublished (exactly what happened to PR #29). Catch it at review
+  # time rather than at release time.
+  #
+  # Not in the required-contexts list yet — add "changeset" to branch protection
+  # once you are happy with its signal.
+  changeset:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # changeset status --since needs real history to diff against the base.
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Every changed published package declares a version bump
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          pnpm exec changeset status --since=origin/${{ github.base_ref }}
