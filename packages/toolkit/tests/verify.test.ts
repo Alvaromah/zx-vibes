@@ -6,10 +6,11 @@
 // artifact, and — the load-bearing contract — that the embedded `run` report is BYTE-FOR-
 // BYTE the same shape `zxs run --json` emits (CLI-PROD-RULE-VERIFY-001, not a re-impl).
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { PNG } from 'pngjs';
 import { runVerify } from '../src/verify/verify.js';
 import { runCli } from '../src/cli.js';
 import { ExitCode, type OutputStreams } from '../src/output/envelope.js';
@@ -157,6 +158,44 @@ describe('runVerify — embeds the REAL run report shape (CLI-PROD-RULE-VERIFY-0
     }
     expect(Number.isInteger(runEnv.audio.beeperEdges)).toBe(true);
     expect(runEnv.boot).toMatchObject({ source: 'build', org: 0x8000 });
+  });
+});
+
+describe('runVerify — config "tests" points the suite elsewhere (CFG-PROD-FIELD-TESTS-001)', () => {
+  it('runs the suite from the configured directory instead of tests/', () => {
+    write('zx.config.json', JSON.stringify({ entry: 'main.asm', tests: 'specs' }));
+    write('main.asm', OK_MAIN);
+    write('specs/probe.asm', OK_MAIN);
+    write(
+      'specs/probe.test.json',
+      JSON.stringify({ build: 'probe.asm', frames: 30, assert: [{ type: 'borderColor', equals: 2 }] }),
+    );
+
+    const env = runVerify({ cwd: dir });
+    expect(env.ok).toBe(true);
+    expect(env.tests?.total).toBe(1);
+    expect(env.tests?.results[0]?.spec).toBe('specs/probe.test.json');
+  });
+
+  it('with "tests" configured, a plain tests/ directory is NOT implicitly run', () => {
+    write('zx.config.json', JSON.stringify({ entry: 'main.asm', tests: 'specs' }));
+    write('main.asm', OK_MAIN);
+    testsAssertingBorder(7); // would FAIL if picked up — border is 2
+
+    const env = runVerify({ cwd: dir });
+    expect(env.ok).toBe(true); // specs/ is absent → no test stage at all
+    expect(env.tests).toBeUndefined();
+  });
+});
+
+describe('runVerify — --scale upsizes the screenshot artifact (CLI-PROD-VERIFY-002)', () => {
+  it('writes the screenshot at 2x through the one scaler', () => {
+    project(OK_MAIN);
+    const env = runVerify({ cwd: dir, scale: 2 });
+    expect(env.ok).toBe(true);
+    const png = PNG.sync.read(readFileSync(join(dir, '.zxs/verify-screen.png')));
+    expect(png.width).toBe(512);
+    expect(png.height).toBe(384);
   });
 });
 

@@ -44,7 +44,11 @@ import { captureScreenshot } from '../observe/screenshot.js';
 
 /** Default screenshot artifact path (CLI-PROD-VERIFY-002), relative to the project root. */
 export const DEFAULT_VERIFY_SCREENSHOT = '.zxs/verify-screen.png';
-/** The project-root directory whose presence enables the test stage (CLI-PROD-VERIFY-001). */
+/**
+ * The default test-suite directory whose presence enables the test stage
+ * (CLI-PROD-VERIFY-001). Projects can point verify elsewhere with the optional
+ * `tests` key in `zx.config.json` (CFG-PROD-FIELD-TESTS-001).
+ */
 export const TESTS_DIR = 'tests';
 
 // The verify report fields (CLI-PROD-OUT-VERIFY-001 `{ ok, stage, build, run?, tests? }`).
@@ -75,6 +79,8 @@ export interface VerifyOptions {
   cwd?: string | undefined;
   /** `--screenshot` override (defaults to {@link DEFAULT_VERIFY_SCREENSHOT}). */
   screenshot?: string | undefined;
+  /** `--scale` integer upscale 1..4 for the screenshot artifact (default 1). */
+  scale?: number | undefined;
 }
 
 /**
@@ -118,12 +124,14 @@ export function runVerify(options: VerifyOptions = {}): VerifyEnvelope {
   // `.zxs/verify-screen.png`, CLI-PROD-VERIFY-002). The artifact is written even on a hang
   // (it documents the final screen); its path is reported in the envelope.
   const screenshot = options.screenshot ?? DEFAULT_VERIFY_SCREENSHOT;
-  captureScreenshot(result.machine, resolve(cwd, screenshot));
+  captureScreenshot(result.machine, resolve(cwd, screenshot), normalizeScale(options.scale));
 
-  // Stage 5 — run the `tests/` suite iff the directory exists (CLI-PROD-VERIFY-001).
-  // RT-PROD-EDGE-002: an absent `tests/` passes on build+run alone; an empty suite passes
+  // Stage 5 — run the test suite iff its directory exists (CLI-PROD-VERIFY-001). The
+  // directory is the config's `tests` (default `tests/`, CFG-PROD-FIELD-TESTS-001).
+  // RT-PROD-EDGE-002: an absent dir passes on build+run alone; an empty suite passes
   // vacuously (`runTestSuite` reports total 0 → ok true).
-  const tests = hasTestsDir(cwd) ? buildTestEnvelope(runTestSuite(TESTS_DIR, cwd)) : undefined;
+  const testsDir = resolved.tests;
+  const tests = hasTestsDir(cwd, testsDir) ? buildTestEnvelope(runTestSuite(testsDir, cwd)) : undefined;
 
   // ok = build.ok AND run.ok AND (no tests ran OR tests.failed === 0) (RT-PROD-VERIFY-002).
   const ok = build.ok && run.ok && (tests === undefined || tests.failed === 0);
@@ -159,19 +167,29 @@ function report(
   };
 }
 
-/** Whether a `tests/` directory exists at the project root (the test-stage gate). */
-function hasTestsDir(cwd: string): boolean {
+/** Whether the configured tests directory exists at the project root (the test-stage gate). */
+function hasTestsDir(cwd: string, dir: string = TESTS_DIR): boolean {
   try {
-    return statSync(resolve(cwd, TESTS_DIR)).isDirectory();
+    return statSync(resolve(cwd, dir)).isDirectory();
   } catch {
     return false;
   }
+}
+
+/** Normalize the screenshot `--scale` (integer 1..4, default 1) — same rule as `screen`/`run`. */
+function normalizeScale(scale: number | undefined): number {
+  if (scale === undefined) return 1;
+  if (!Number.isInteger(scale) || scale < 1 || scale > 4) {
+    throw userError(`Invalid --scale: ${scale} (expected an integer 1..4)`, 'verify');
+  }
+  return scale;
 }
 
 // --- CLI wiring ------------------------------------------------------------
 
 interface VerifyCliOptions {
   screenshot?: string;
+  scale?: string;
 }
 
 /** The `verify` command handler: maps the CLI context onto the verify pipeline. */
@@ -180,6 +198,7 @@ export function verifyCommand(context: CommandContext): VerifyEnvelope {
   return runVerify({
     cwd: process.cwd(),
     screenshot: options.screenshot,
+    scale: options.scale !== undefined ? Number(options.scale) : undefined,
   });
 }
 
@@ -188,6 +207,7 @@ export function configureVerifyCommand(command: Command): void {
   command
     .description('Project acceptance gate: build -> run -> screenshot -> tests')
     .option('--screenshot <file>', 'screenshot output path (default .zxs/verify-screen.png)')
+    .option('--scale <n>', 'integer upscale 1..4 for the screenshot (default 1)')
     .option('--json', 'emit a single machine-readable JSON envelope');
 }
 

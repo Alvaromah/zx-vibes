@@ -15,10 +15,11 @@ import { userError } from '../output/envelope.js';
 /** The canonical config file name (CFG-PROD-FILE-001). */
 export const CONFIG_FILE = 'zx.config.json';
 
-/** Built-in defaults (CFG-PROD-FIELD-ORG-001, -ASM-001, -OUTDIR-001). */
+/** Built-in defaults (CFG-PROD-FIELD-ORG-001, -ASM-001, -OUTDIR-001, -TESTS-001). */
 export const DEFAULT_ORG = '0x8000';
 export const DEFAULT_ASSEMBLER = 'builtin';
 export const DEFAULT_OUT_DIR = 'build';
+export const DEFAULT_TESTS_DIR = 'tests';
 
 /** The resolved assembler backend (config-schema.md CFG-PROD-FIELD-ASM-001). */
 export type Assembler = 'builtin' | 'sjasmplus';
@@ -32,6 +33,7 @@ export interface ZxProjectConfig {
   org?: string;
   assembler?: string;
   outDir?: string;
+  tests?: string;
   name?: string;
   template?: string;
   toolkit?: string;
@@ -43,6 +45,8 @@ export interface ResolvedConfig {
   org: string;
   assembler: Assembler;
   outDir: string;
+  /** The declarative-test suite directory `verify` runs (CFG-PROD-FIELD-TESTS-001). */
+  tests: string;
   name: string | undefined;
   template: string | undefined;
   toolkit: string | undefined;
@@ -127,6 +131,7 @@ export function resolveConfig(options: ResolveOptions = {}): ResolvedConfig {
     org: firstDefined(flags.org, config.org) ?? DEFAULT_ORG,
     assembler,
     outDir: firstDefined(flags.outDir, config.outDir) ?? DEFAULT_OUT_DIR,
+    tests: firstDefined(config.tests) ?? DEFAULT_TESTS_DIR,
     name: config.name,
     template: config.template,
     toolkit: config.toolkit,

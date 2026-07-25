@@ -88,16 +88,18 @@ describe('resolveConfig precedence (CFG-PROD-RESOLVE-001/003)', () => {
     expect(resolved.org).toBe(DEFAULT_ORG);
     expect(resolved.assembler).toBe(DEFAULT_ASSEMBLER);
     expect(resolved.outDir).toBe(DEFAULT_OUT_DIR);
+    expect(resolved.tests).toBe('tests');
     expect(resolved.entry).toBeUndefined();
   });
 
   it('config overrides defaults', () => {
-    const config = { entry: 'a.asm', org: '0x7000', outDir: 'out', assembler: 'sjasmplus' };
+    const config = { entry: 'a.asm', org: '0x7000', outDir: 'out', assembler: 'sjasmplus', tests: 'specs' };
     const resolved = resolveConfig({ config, env: {} });
     expect(resolved.entry).toBe('a.asm');
     expect(resolved.org).toBe('0x7000');
     expect(resolved.outDir).toBe('out');
     expect(resolved.assembler).toBe('sjasmplus');
+    expect(resolved.tests).toBe('specs');
   });
 
   it('env (ZXS_ASSEMBLER) overrides config for the assembler', () => {
