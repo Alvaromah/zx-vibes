@@ -8,7 +8,8 @@
 // frame budget under the hang watchdog while applying the scheduled keyboard + Kempston
 // plans and the instruction-granular stop conditions, then reports the `run` envelope
 // (CLI-PROD-OUT-RUN-001): `{ ok, stage:"run", status, boot, exit, framesRun,
-// tstatesRun, audio, registers, screen, input }` (+ a `hang` verdict on a hang).
+// tstatesRun, haltSynced, frameBudget, audio, registers, screen, input }`
+// (+ a `hang` verdict on a hang).
 //
 // The run loop is built on `HostIo` (port-`0xFE` write observation → beeper edges +
 // border + port-write count, the single primitive that makes RUN-BEEPER-001
@@ -19,6 +20,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Command } from 'commander';
 import type { Machine } from '@zx-vibes/machine';
+import { FRAME_T_STATES } from '@zx-vibes/ula';
 import { resolveConfig } from '../config/config.js';
 import { ExitCode, envError, userError } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
@@ -30,7 +32,7 @@ import { renderBeeperWav } from './wav.js';
 import { loadDebugStore, loadSession, saveSession } from '../state/persist.js';
 import { parseAddress, parseRange, type AddressRange } from '../util/address.js';
 import { HostIo } from './io-device.js';
-import { runFrameObserved } from './run-loop.js';
+import { runFrameObserved, type StepObservation } from './run-loop.js';
 import {
   definiteHang,
   newHangStats,
@@ -96,10 +98,41 @@ export interface RunBoot {
 
 /** The exit summary (CLI-PROD-OUT-RUN-001 `exit`, enriched on a hang per CLI-PROD-OUT-RUN-002). */
 export interface RunExit {
-  reason: 'frame-budget' | 'until-pc' | 'breakpoint' | 'watchpoint' | 'hang';
+  reason: 'frame-budget' | 'until-pc' | 'breakpoint' | 'watchpoint' | 'condition' | 'hang';
   pc: number;
   kind?: HangVerdict['kind'];
   likelyCause?: string;
+}
+
+/** One frame with the greatest observed active (non-HALT) cost. */
+export interface WorstFrameBudget {
+  /** One-based completed-frame ordinal within this invocation. */
+  frame: number;
+  /** T-states spent executing non-idle instructions or interrupt acknowledge. */
+  busyTStates: number;
+  /** T-states spent repeatedly fetching HALT while waiting for the frame interrupt. */
+  idleTStates: number;
+  /** Whether this frame's interrupt arrived before the CPU had reached HALT. */
+  overrun: boolean;
+}
+
+/** Per-run frame-deadline telemetry (RT-PROD-RUN-FRAME-BUDGET-001). */
+export interface RunFrameBudget {
+  /** Canonical 48K video-frame length. */
+  frameTStates: number;
+  /** Completed frame boundaries after a HALT-resumed interrupt established cadence. */
+  measuredFrames: number;
+  /** Maskable frame interrupts accepted during the invocation. */
+  interruptFrames: number;
+  /** Measured frame boundaries reached while the CPU was still busy rather than halted. */
+  overrunFrames: number;
+  /** HALT-wait time across the measured frames in this invocation. */
+  idleTStates: {
+    min: number;
+    average: number;
+  };
+  /** The frame with the greatest busy-T-state cost, or null when no frame ran. */
+  worstFrame: WorstFrameBudget | null;
 }
 
 /** Per-invocation run parameters (RT-PROD-CONFIG-002) — already parsed to numbers/ranges. */
@@ -132,8 +165,12 @@ export interface RunParams {
   watchRead?: AddressRange[] | undefined;
   /** Temporary write watchpoints (`--watch-write`). */
   watchWrite?: AddressRange[] | undefined;
+  /** Reuse an observable I/O device across a warm-up and its measured run. */
+  io?: HostIo | undefined;
   /** Per-frame checkpoint hook (seam for the test runner's temporal/`at` snapshots, Slice 4). */
   onFrame?: ((frame: number, machine: Machine, io: HostIo) => void) | undefined;
+  /** Stop successfully when an internal condition becomes true after a completed frame. */
+  stopAfterFrame?: ((framesRun: number, machine: Machine, io: HostIo) => boolean) | undefined;
   /**
    * Per-instruction hook (Slice 7a): called just before each instruction executes,
    * with the live machine (PC = the instruction about to run). The seam `trace`
@@ -143,6 +180,8 @@ export interface RunParams {
    * own next instruction.
    */
   onStep?: ((machine: Machine) => void) | undefined;
+  /** Post-instruction timing hook used by `trace --profile`. */
+  onStepComplete?: ((machine: Machine, step: StepObservation) => void) | undefined;
 }
 
 /** The structured run result the run service produces (consumed by `verify`/`test`/the CLI). */
@@ -159,6 +198,8 @@ export interface RunResult {
    * HALT/interrupt-cadence alignment (REC-PROD-EDGE-002: meaningless when hangs are off).
    */
   haltSynced: boolean;
+  /** Frame-deadline and HALT-idle telemetry for this invocation. */
+  frameBudget: RunFrameBudget;
   exit: RunExit;
   hang?: HangVerdict;
   audio: RunAudio;
@@ -194,7 +235,7 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     throw envError(READ_WATCH_UNAVAILABLE, 'run');
   }
 
-  const io = new HostIo();
+  const io = params.io ?? new HostIo();
   machine.io = io;
 
   const keys = parseKeySchedule(params.keys);
@@ -218,6 +259,13 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   // HALT-sync cadence (ASSERT-PROD-HALT-001): count frames whose once-per-frame
   // interrupt resumed the CPU from a HALT wait (the interrupt-paced game loop).
   let haltedInterruptFrames = 0;
+  let interruptFrames = 0;
+  let frameBudgetStarted = false;
+  let measuredFrames = 0;
+  let overrunFrames = 0;
+  let idleTStatesTotal = 0;
+  let minIdleTStates = Number.POSITIVE_INFINITY;
+  let worstFrame: WorstFrameBudget | null = null;
 
   let status: RunStatus = 'ok';
   let reason: RunExit['reason'] = 'frame-budget';
@@ -289,6 +337,8 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     // HALT-synced cadence the hang stats must count as progress (an idle HALT
     // loop looks byte-identical at every pinned frame boundary).
     let haltResumed = false;
+    let frameIdleTStates = 0;
+    const frameStartTStates = machine.tStatesTotal;
     frameSawRamPc = false;
     stopped = runFrameObserved(
       machine,
@@ -298,14 +348,45 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
         params.onStep?.(m);
       },
       (wasHalted) => {
+        interruptFrames += 1;
         if (wasHalted) {
           haltedInterruptFrames += 1;
           haltResumed = true;
+          frameBudgetStarted = true;
         }
+      },
+      (m, step) => {
+        if (step.wasHalted) frameIdleTStates += step.tStates;
+        params.onStepComplete?.(m, step);
       },
     );
     framesRun = f + 1;
+    const frameTStates = machine.tStatesTotal - frameStartTStates;
+    const busyTStates = Math.max(0, frameTStates - frameIdleTStates);
+    // `runFrameObserved` returning false means the actual frame boundary was
+    // reached. Inspect HALT there, rather than at the next accepted interrupt:
+    // otherwise a slow final frame would be reported only by a later invocation.
+    if (!stopped && frameBudgetStarted) {
+      measuredFrames += 1;
+      const frameOverrun = !machine.halted;
+      if (frameOverrun) overrunFrames += 1;
+      idleTStatesTotal += frameIdleTStates;
+      minIdleTStates = Math.min(minIdleTStates, frameIdleTStates);
+      if (worstFrame === null || busyTStates > worstFrame.busyTStates) {
+        worstFrame = {
+          frame: framesRun,
+          busyTStates,
+          idleTStates: frameIdleTStates,
+          overrun: frameOverrun,
+        };
+      }
+    }
     params.onFrame?.(f, machine, io);
+    if (!stopped && params.stopAfterFrame?.(framesRun, machine, io)) {
+      stopped = true;
+      reason = 'condition';
+      stopPc = machine.registers.pc & 0xffff;
+    }
     if (stopped) break;
     if (detectHangs) updateHangStats(stats, machine, { haltResumed, io, sawRamPc: frameSawRamPc });
   }
@@ -338,12 +419,24 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   // simple majority threshold separates them robustly (Incidental heuristic).
   const haltSynced =
     detectHangs && status !== 'hang' && framesRun > 0 && haltedInterruptFrames * 2 > framesRun;
+  const frameBudget: RunFrameBudget = {
+    frameTStates: FRAME_T_STATES,
+    measuredFrames,
+    interruptFrames,
+    overrunFrames,
+    idleTStates: {
+      min: measuredFrames > 0 ? minIdleTStates : 0,
+      average: measuredFrames > 0 ? idleTStatesTotal / measuredFrames : 0,
+    },
+    worstFrame,
+  };
 
   return {
     status,
     framesRun,
     tstatesRun,
     haltSynced,
+    frameBudget,
     exit,
     ...(verdict ? { hang: verdict } : {}),
     audio: {
@@ -381,6 +474,8 @@ type RunReport = {
   exit: RunExit;
   framesRun: number;
   tstatesRun: number;
+  haltSynced: boolean;
+  frameBudget: RunFrameBudget;
   audio: RunAudio;
   registers: RegisterSnapshot;
   screen: ScreenSummary;
@@ -405,6 +500,8 @@ export function buildRunEnvelope(result: RunResult, boot: RunBoot): RunEnvelope 
     exit: result.exit,
     framesRun: result.framesRun,
     tstatesRun: result.tstatesRun,
+    haltSynced: result.haltSynced,
+    frameBudget: result.frameBudget,
     audio: result.audio,
     registers: result.registers,
     screen: result.screen,

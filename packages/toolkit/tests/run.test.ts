@@ -117,6 +117,50 @@ const READ_KEYS = [
 // interrupt + post-EI-delay path for the determinism guard).
 const INT_LOOP = ['ORG 0x8000', '  im 1', '  ei', 'main:', '  nop', '  jr main', ''].join('\n');
 
+// HALT-synced loop with one deliberately oversized iteration every ten updates.
+// The majority heuristic remains true, while the frame-budget telemetry must expose
+// the intermittent missed deadlines.
+const SPORADIC_OVERRUN = [
+  'ORG 0x8000',
+  'JP start',
+  'isr:',
+  '  EI',
+  '  RETI',
+  'ORG 0x81FF',
+  '  DEFW isr',
+  'ORG 0x8300',
+  'start:',
+  '  DI',
+  '  LD SP,0xFF00',
+  '  LD A,0x81',
+  '  LD I,A',
+  '  IM 2',
+  '  XOR A',
+  '  LD (period),A',
+  '  EI',
+  'loop:',
+  '  HALT',
+  '  LD A,(period)',
+  '  INC A',
+  '  CP 10',
+  '  JR NZ,fast',
+  '  XOR A',
+  '  LD (period),A',
+  '  LD BC,5000',
+  '  JR busy',
+  'fast:',
+  '  LD (period),A',
+  '  LD BC,1500',
+  'busy:',
+  '  DEC BC',
+  '  LD A,B',
+  '  OR C',
+  '  JR NZ,busy',
+  '  JR loop',
+  'period: DEFB 0',
+  '',
+].join('\n');
+
 // --- run envelope shape (CLI-PROD-OUT-RUN-001) -----------------------------
 
 describe('runProgram — envelope shape (CLI-PROD-OUT-RUN-001 / RT-PROD-RUN-001/005)', () => {
@@ -139,6 +183,10 @@ describe('runProgram — envelope shape (CLI-PROD-OUT-RUN-001 / RT-PROD-RUN-001/
     expect(typeof result.screen.border).toBe('number');
     expect(typeof result.screen.hash).toBe('string');
     expect(result.input).toEqual({ keys: [], joy: [] });
+    expect(result.frameBudget.frameTStates).toBe(69888);
+    expect(result.frameBudget.measuredFrames).toBe(0);
+    expect(result.frameBudget.overrunFrames).toBe(0);
+    expect(result.frameBudget.worstFrame).toBeNull();
   });
 
   it('honors a smaller --frames budget', () => {
@@ -146,6 +194,53 @@ describe('runProgram — envelope shape (CLI-PROD-OUT-RUN-001 / RT-PROD-RUN-001/
     const result = runProgram(loadBinMachine(file, org), org, { frames: 20 });
     expect(result.framesRun).toBe(20);
     expect(result.status).toBe('ok');
+  });
+});
+
+describe('runProgram — frame-budget telemetry (RT-PROD-RUN-FRAME-BUDGET-001)', () => {
+  it('exposes intermittent overruns that the majority haltSynced heuristic misses', () => {
+    const { file, org } = asmBin('sporadic-overrun', SPORADIC_OVERRUN);
+    const result = runProgram(loadBinMachine(file, org), org, { frames: 80 });
+    expect(result.status).toBe('ok');
+    expect(result.haltSynced).toBe(true);
+    expect(result.frameBudget.interruptFrames).toBeGreaterThan(0);
+    expect(result.frameBudget.overrunFrames).toBeGreaterThan(0);
+    expect(result.frameBudget.overrunFrames).toBeLessThan(result.frameBudget.measuredFrames);
+    expect(result.frameBudget.idleTStates.average).toBeGreaterThan(0);
+    expect(result.frameBudget.worstFrame).not.toBeNull();
+  });
+
+  it('evaluates the just-completed deadline even when no later interrupt observes it', () => {
+    const finalOverrun = [
+      'ORG 0x8000',
+      '  JP start',
+      'isr:',
+      '  EI',
+      '  RETI',
+      'ORG 0x81FF',
+      '  DEFW isr',
+      'ORG 0x8300',
+      'start:',
+      '  DI',
+      '  LD SP,0xFF00',
+      '  LD A,0x81',
+      '  LD I,A',
+      '  IM 2',
+      '  EI',
+      '  HALT',
+      'busy:',
+      '  JR busy',
+      '',
+    ].join('\n');
+    const { file, org } = asmBin('final-overrun', finalOverrun);
+    const result = runProgram(loadBinMachine(file, org), org, {
+      frames: 2,
+      detectHangs: false,
+    });
+    expect(result.frameBudget.measuredFrames).toBe(1);
+    expect(result.frameBudget.interruptFrames).toBe(1);
+    expect(result.frameBudget.overrunFrames).toBe(1);
+    expect(result.frameBudget.worstFrame?.overrun).toBe(true);
   });
 });
 

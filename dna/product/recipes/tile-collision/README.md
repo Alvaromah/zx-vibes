@@ -38,5 +38,5 @@ column at `0x9001` and a `0x2A` sentinel at `0x9000`, then idles HALT-synced.
 - the walker stopped exactly at column 19 (`memEquals 0x9001 = 13`) — probing
   `col+1` before stepping, never entering the wall;
 - the sentinel confirms completion (`memEquals 0x9000 = 2A`);
-- the run is healthy (`status ok`, `haltSynced true`);
+- the run is healthy (`status ok`, `haltSynced true`, zero frame-budget overruns);
 - the wall + walker attribute cells are on screen (`attrNonBlank >= 2`).

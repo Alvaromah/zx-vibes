@@ -27,6 +27,7 @@ export default [
   {
     files: [
       'packages/asm/bin/**/*.js',
+      'packages/toolkit/player/**/*.js',
       'packages/toolkit/bin/**/*.js',
       'packages/zx-vibes/bin/**/*.js',
       'packages/cpu/src/**/*.mjs',

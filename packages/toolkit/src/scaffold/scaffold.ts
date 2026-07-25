@@ -97,6 +97,7 @@ export const SMOKE_TEST_JSON = `${JSON.stringify(
     assert: [
       { type: 'status', equals: 'ok' },
       { type: 'haltSynced', equals: true },
+      { type: 'frameBudget', maxOverrunFrames: 0 },
       { type: 'borderColor', equals: 2 },
     ],
   },
@@ -127,6 +128,10 @@ A program that assembles is not a program that works. Always close the loop:
 2. \`zxs run --json\` — run it fresh for 300 frames under the hang watchdog.
 3. \`zxs screen --text\` — read the screen back (cheap eyes).
 4. \`zxs verify --json\` — the single acceptance gate: build -> run -> screenshot -> tests.
+
+\`run\` must report \`status:"ok"\`, \`haltSynced:true\`, and
+\`frameBudget.overrunFrames:0\`; an occasional missed frame can hide behind a healthy
+majority-based HALT signal, so keep a \`frameBudget\` assertion in real-time specs.
 
 \`zxs verify\` exits \`0\` only when the build succeeds, the run does **not** hang, and
 every spec under \`tests/\` passes. Treat any non-zero exit as "not done yet".

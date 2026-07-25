@@ -23,11 +23,16 @@ Current package version in this repository: `0.5.0`.
 - **Sessions** (`src/runtime/session.ts`) — a fresh-by-default clean-ROM boot
   over `@zx-vibes/machine`, plus the opt-in persistent `.zxstate` session
   (`--state`) shared with the MCP server.
+- **Timing + scenarios** — every run exposes missed-frame/idle telemetry;
+  declarative specs can assert `frameBudget`, inject RAM with `setup`, and anchor
+  input/baselines to `waitFor` readiness. `trace --profile` reports contended
+  T-states by heuristic SLD routine ownership.
 - **The full CLI** (`bin/zxs.js` → `src/cli.ts`, registry in `src/registry.ts`) —
   `build`, `run`, `test`, `verify`, `screen`, `regs`, `mem`, `disasm`, `step`,
   `trace`, `symbols`, `coverage`, `key`, `type`, `state`, `break`, `watch`,
   `preview` (project, `--blank`, or `.z80`/`.tap`/`.tzx`/`.bin` files, with
-  `--watch` live reload and detached lifecycle), `new`, `init`, `clean`,
+  beeper audio, hidden-tab emulation, `--watch` live reload, and detached lifecycle),
+  `new`, `init`, `clean`,
   `doctor`, `setup`, `gfx`, and `version`.
 - **MCP server** (`bin/zxs-mcp.js` → `src/mcp.ts`) — structured build, run,
   screen, inspect, debug, keyboard, and state tools over the same runtime.

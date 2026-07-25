@@ -472,6 +472,7 @@ export const GAME_SMOKE_TEST_JSON = `{
   "assert": [
     { "type": "status", "equals": "ok" },
     { "type": "haltSynced", "equals": true },
+    { "type": "frameBudget", "maxOverrunFrames": 0 },
     { "type": "screenChanged", "equals": true },
     { "type": "cellsNonBlank", "min": 1 },
     { "type": "pixelAt", "x": 251, "y": 99, "set": true },
@@ -487,6 +488,7 @@ export const PLATFORMER_SMOKE_TEST_JSON = `{
   "assert": [
     { "type": "status", "equals": "ok" },
     { "type": "haltSynced", "equals": true },
+    { "type": "frameBudget", "maxOverrunFrames": 0 },
     { "type": "screenChanged", "equals": true },
     { "type": "cellsNonBlank", "min": 30 },
     { "type": "memEquals", "addr": "0xBF00", "hex": "1F" },

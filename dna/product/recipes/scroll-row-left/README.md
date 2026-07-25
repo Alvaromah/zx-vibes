@@ -42,7 +42,7 @@ scrolls the row four times (32 px), stores a `0x2A` completion sentinel at
 
 ## The proof (`test.json`)
 
-- the run completes HALT-synced (`status ok`, `haltSynced true`);
+- the run completes HALT-synced with zero frame-budget overruns;
 - the block ARRIVED: pixel (216, 64) is set — 4 passes x 8 px left of x=248;
 - the seam is CLEAN: pixel (248, 64) is clear;
 - the sentinel confirms the code path ran to completion (`memEquals 0x9000 = 2A`).

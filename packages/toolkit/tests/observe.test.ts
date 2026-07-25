@@ -380,6 +380,29 @@ describe('trace (CLI-PROD-TRACE-001)', () => {
     expect(lines).toHaveLength(env.instructionsTraced);
     expect(env.last.length).toBeLessThanOrEqual(10);
   });
+
+  it('--profile reports real T-states by nearest preceding SLD function label', () => {
+    project(COVER);
+    const env = runTrace({ cwd: dir, frames: 2, profile: true });
+    const profile = env.profile;
+    expect(profile).toBeDefined();
+    expect(profile?.attribution).toBe('nearest-preceding-sld-function');
+    expect(profile?.heuristic).toBe(true);
+    expect(profile?.totalTStates).toBeGreaterThan(0);
+    expect(
+      (profile?.activeTStates ?? 0) +
+        (profile?.idleTStates ?? 0) +
+        (profile?.interruptTStates ?? 0),
+    ).toBe(profile?.totalTStates);
+    expect(profile?.entries.find((entry) => entry.symbol === 'loop')?.tStates).toBeGreaterThan(0);
+    expect(profile?.entries.every((entry) => entry.tStatesPerFrame > 0)).toBe(true);
+    expect(profile?.entries.every((entry) => entry.percentOfFrame > 0)).toBe(true);
+    expect(
+      (profile?.activePercentOfRun ?? 0) +
+        (profile?.idlePercentOfRun ?? 0) +
+        (profile?.interruptPercentOfRun ?? 0),
+    ).toBeCloseTo(100, 1);
+  });
 });
 
 // =========================================================================
@@ -475,9 +498,15 @@ describe('zxs observe — CLI end-to-end (--json single envelope, exit 0)', () =
     expect(step.code).toBe(ExitCode.OK);
     expect((step.env as { steps: number }).steps).toBe(2);
 
-    const trace = await cli(['trace', '--bin', bin, '--org', '0x8000', '--frames', '2', '--json'], dir);
+    const trace = await cli(
+      ['trace', '--bin', bin, '--org', '0x8000', '--frames', '2', '--profile', '--json'],
+      dir,
+    );
     expect(trace.code).toBe(ExitCode.OK);
     expect((trace.env as { instructionsTraced: number }).instructionsTraced).toBeGreaterThan(0);
+    expect(
+      (trace.env as { profile: { totalTStates: number } }).profile.totalTStates,
+    ).toBeGreaterThan(0);
   });
 
   it('symbols / coverage via a configured entry', async () => {

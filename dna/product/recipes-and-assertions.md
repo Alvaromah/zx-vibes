@@ -7,7 +7,8 @@ schema + assertions were mined once from the oracle
 (`packages/toolkit/src/cli/commands/test-cmd.ts` in the legacy oracle repo and `recipes/`)
 and stay `contract`; the **v2 additions** (temporal/checkpoint assertions, memory
 delta/range assertions, `screenDiff` visual regression, the Kempston `joy` input
-schedule, and the dropped `coloredCells` alias) are `decision:ADR-0027`.
+schedule, declarative scenario setup/readiness, frame-budget enforcement, and the
+dropped `coloredCells` alias) are `decision:ADR-0027`.
 
 ## Purpose
 
@@ -19,17 +20,20 @@ schedule, and the dropped `coloredCells` alias) are `decision:ADR-0027`.
 
 - [id: REC-PROD-SPEC-001] A test spec is a single JSON object in a `test.json` or `*.test.json` file (one spec per file, not an array). [provenance: contract]
 - [id: REC-PROD-SPEC-002] `zxs test [path]` discovers spec files by recursively walking the path (default `.`), skipping `node_modules`, `.git`, `.zxs`, `build`, and `dist`. [provenance: contract]
-- [id: REC-PROD-SPEC-003] The spec fields are: `build` (required — path to the `.asm` entry to assemble, relative to the spec file), `org` (optional load address, default `0x8000`), `frames` (optional frame budget, default `120`), `keys` (optional keyboard input schedule), `joy` (optional Kempston input schedule, v2), `detectHangs` (optional boolean, default `true`), and `assert` (required array of assertions). [provenance: contract]
-- [id: REC-PROD-SPEC-004] The `keys` schedule uses the `"frame:KEY*hold,..."` form (default hold 3 frames; frame relative to run start), the same grammar as `zxs run --keys`. [provenance: contract]
+- [id: REC-PROD-SPEC-003] The spec fields are: `build` (required — path to the `.asm` entry to assemble, relative to the spec file), `org` (optional load address, default `0x8000`), `frames` (optional measured frame budget, default `120`), `keys` (optional keyboard input schedule), `joy` (optional Kempston input schedule, v2), `detectHangs` (optional boolean, default `true`), `setup` (optional pre-run actions), `waitFor` (optional readiness predicate), and `assert` (required array of assertions). [provenance: contract]
+- [id: REC-PROD-SPEC-004] The `keys` schedule uses the `"frame:KEY*hold,..."` form (default hold 3 frames), the same grammar as `zxs run --keys`. In a persistent `run --state` invocation frames are relative to that invocation, not the lifetime of the session; in a test spec they are relative to the measured run after `waitFor` succeeds (or initial run start when `waitFor` is absent). [provenance: contract]
 - [id: REC-PROD-SPEC-005] The `joy` schedule uses the same `"frame:VALUE*hold,..."` grammar as `zxs run --joy`, where each `VALUE` is any subset of `UDLR` + `F` mapping to the active-high Kempston byte `000FUDLR` on port `0x1F` (peripherals.md `JOY-KEMPSTON-*`, W10.13). [provenance: decision:ADR-0027]
+- [id: REC-PROD-SPEC-006] `setup` is an ordered array of memory-write actions. Each action is `{ "mem": { "<address-or-build-label>": "<even-length hex bytes>", ... } }`; writes occur after the binary is loaded and before readiness/baseline capture, and a write that crosses `0xFFFF` fails the spec. [provenance: contract]
+- [id: REC-PROD-SPEC-007] `waitFor` currently accepts `{ "type": "memEquals", "addr": <address-or-build-label>, "hex": "<bytes>", "maxFrames"?: 300 }`. It runs a no-input warm-up until the bytes match after a completed frame, fails on timeout/hang, and reports `readyAtFrame` when used. [provenance: contract]
 
 ## Run semantics
 
-- [id: REC-PROD-RUN-001] Each spec runs in isolation: assemble `build` to a temp output, boot a cached clean-ROM machine, load the binary at `org`, snapshot the screen hash, apply the `keys` plan, then run the machine. [provenance: contract]
+- [id: REC-PROD-RUN-001] Each spec runs in isolation: assemble `build` to a temp output, boot a cached clean-ROM machine, load the binary at `org`, apply `setup`, optionally warm up through `waitFor`, capture the measured baseline, apply the `keys`/`joy` plans from measured frame zero, then run the machine. [provenance: contract]
 - [id: REC-PROD-RUN-002] The run length is `max(frames ?? 120, planFrames)`, where `planFrames` is one past the last scheduled key event — so scheduled input always has time to play. [provenance: contract]
 - [id: REC-PROD-RUN-003] A hang watchdog is attached unless `detectHangs: false`; a detected hang makes the run `status` `"hang"`. [provenance: contract]
 - [id: REC-PROD-RUN-004] Assertions are evaluated against the post-run machine state (and, for `screenChanged`, the pre/post screen hash). [provenance: contract]
 - [id: REC-PROD-RUN-005] For the v2 temporal/delta assertions the runner captures, in one run, the **start-of-run** state (referenced memory + screen) and **per-checkpoint** snapshots at each `at`-frame, so `at`/`memDelta` evaluate without re-running; an `at`-frame past the run length fails the assertion (no snapshot). [provenance: decision:ADR-0027]
+- [id: REC-PROD-RUN-006] Warm-up machine state (including border/speaker level) carries into the measured run, but observable counters, delta/screen baselines, frame numbers, and input schedules reset at readiness. Intro/loading work therefore does not satisfy or pollute scenario assertions. [provenance: contract]
 
 ## Assertion catalog
 
@@ -39,6 +43,7 @@ unbounded). The full vocabulary:
 
 - [id: ASSERT-PROD-STATUS-001] `status` `{ equals: "ok" | "hang" }` — the final run outcome (`"hang"` if the watchdog/CPU flagged a hang, else `"ok"`). [provenance: contract]
 - [id: ASSERT-PROD-HALT-001] `haltSynced` `{ equals: boolean }` — whether the main loop aligned to the HALT/interrupt cadence (only meaningful when `detectHangs` is on). [provenance: contract]
+- [id: ASSERT-PROD-FRAME-BUDGET-001] `frameBudget` `{ maxOverrunFrames?: 0, requireMeasured?: true }` — after a maskable interrupt first resumes `HALT`, bounds completed frame boundaries reached while the CPU was still active instead of waiting in `HALT`; by default at least one HALT-synchronized deadline must be measured and no frame may overrun. This excludes unsynchronized boot work and catches intermittent (including final-frame) missed deadlines that a majority-based `haltSynced` signal can hide. [provenance: contract]
 - [id: ASSERT-PROD-SCREENINC-001] `screenIncludes` `{ text: string }` — passes if the ROM-font OCR of the screen contains `text` on some row. [provenance: contract]
 - [id: ASSERT-PROD-CELLS-001] `cellsNonBlank` `{ min?, max? }` — count of 8×8 cells with ≥ 1 bitmap pixel set. [provenance: contract]
 - [id: ASSERT-PROD-ATTR-001] `attrNonBlank` `{ min?, max? }` — count of attribute cells whose byte differs from the default `0x38`. (The legacy `coloredCells` alias is **dropped** in v2; use `attrNonBlank` — ADR-0027.) [provenance: contract]
@@ -57,7 +62,7 @@ unbounded). The full vocabulary:
 
 ## Outputs
 
-- [id: REC-PROD-REPORT-001] A spec result is `{ spec, ok, failures[] }`; `ok` is true iff every assertion passed, and each failure is a human-readable string naming the assertion and the expected-vs-actual mismatch. [provenance: contract]
+- [id: REC-PROD-REPORT-001] A spec result is `{ spec, ok, failures[], readyAtFrame? }`; `ok` is true iff readiness/build succeeded and every assertion passed, and each failure is a human-readable string naming the assertion and the expected-vs-actual mismatch. `readyAtFrame` is present only when `waitFor` was used. [provenance: contract]
 - [id: REC-PROD-REPORT-002] The suite result is `{ ok, total, passed, failed, results[] }`; `ok` is true iff every spec passed. [provenance: contract]
 - [id: REC-PROD-REPORT-003] `zxs test` exits `0` when the suite is green and `1` when any spec fails. [provenance: contract]
 
@@ -70,6 +75,7 @@ unbounded). The full vocabulary:
 
 - [id: REC-PROD-EDGE-001] A spec with no `keys` runs the bare `frames` budget; a spec whose key plan extends past `frames` runs to the end of the plan. [provenance: contract]
 - [id: REC-PROD-EDGE-002] `haltSynced` is unasserted/meaningless when `detectHangs: false`. [provenance: contract]
+- [id: REC-PROD-EDGE-003] `frameBudget.requireMeasured` defaults to true; a run that establishes no HALT/interrupt cadence (or stops before completing its first synchronized deadline) fails that assertion rather than silently treating zero observed overruns as proof of timing health. [provenance: contract]
 
 ## Degrees of freedom
 
@@ -81,8 +87,9 @@ unbounded). The full vocabulary:
 - The CORE schema + assertions are `contract`, mined once from the oracle test
   runner (`src/cli/commands/test-cmd.ts`: the `TestSpec`/`Assertion` types, the
   evaluation logic, `ASSERTION_REFERENCE`) and the `recipes/` layout. The v2
-  additions — the `joy` input schedule, the temporal `at` / `memInRange` /
-  `memDelta` / `screenDiff` assertions, the start/checkpoint capture, and the
+  additions — the `joy` input schedule, declarative `setup` / `waitFor`, the
+  `frameBudget` assertion, the temporal `at` / `memInRange` / `memDelta` /
+  `screenDiff` assertions, the start/checkpoint capture, and the
   dropped `coloredCells` alias — are `decision:ADR-0027` (additions citing
   `peripherals.md` for Kempston and `cli.md` for `screen --diff`). Two rows are
   `decision:ADR-0001` (Incidental). No `UNKNOWN`. Cross-references: `cli.md`
@@ -97,6 +104,7 @@ unbounded). The full vocabulary:
   "assert": [
     { "type": "status", "equals": "ok" },
     { "type": "haltSynced", "equals": true },
+    { "type": "frameBudget", "maxOverrunFrames": 0 },
     { "type": "cellsNonBlank", "max": 0 },
     { "type": "memEquals", "addr": "0x5800", "hex": "28" }
   ]
@@ -119,6 +127,15 @@ unbounded). The full vocabulary:
 {
   "build": "../src/main.asm",
   "frames": 200,
+  "setup": [
+    { "mem": { "selected_cave": "03", "player_lives": "03" } }
+  ],
+  "waitFor": {
+    "type": "memEquals",
+    "addr": "game_ready",
+    "hex": "01",
+    "maxFrames": 300
+  },
   "joy": "0:R*120,120:RF*20",
   "assert": [
     { "type": "memDelta", "addr": "0x6000", "size": 2, "min": 1 },
@@ -135,4 +152,4 @@ unbounded). The full vocabulary:
 
 - [id: REC-PROD-AC-BEEPER-001] The `beeperEdges` assertion (ASSERT-PROD-BEEPER-001) reading an integer edge count is the spec-level expression of coverage row `RUN-BEEPER-001`; a `conformance/cli/` test fixture asserts a known program's edge count. [provenance: contract]
 - [id: REC-PROD-AC-EXIT-001] `zxs test` exiting `0`/`1` on suite pass/fail (REC-PROD-REPORT-003) is the contract a `conformance/cli/` snapshot relies on; it is the same exit discipline `verify` composes. [provenance: contract]
-- [id: REC-PROD-AC-VOCAB-001] A regenerated `zxs test` MUST implement exactly the **16** assertion types above with these parameter shapes and semantics: the 12 core types (`status`, `haltSynced`, `screenIncludes`, `cellsNonBlank`, `attrNonBlank`, `screenChanged`, `memEquals`, `regEquals`, `pixelAt`, `borderColor`, `beeperEdges`, `portFEWrites`) plus the four v2 additions (`at`, `memInRange`, `memDelta`, `screenDiff`). The `coloredCells` alias is **not** implemented (dropped in v2). [provenance: decision:ADR-0027]
+- [id: REC-PROD-AC-VOCAB-001] A regenerated `zxs test` MUST implement exactly the **17** assertion types above with these parameter shapes and semantics: the 12 core types (`status`, `haltSynced`, `screenIncludes`, `cellsNonBlank`, `attrNonBlank`, `screenChanged`, `memEquals`, `regEquals`, `pixelAt`, `borderColor`, `beeperEdges`, `portFEWrites`), `frameBudget`, and the four v2 temporal/visual additions (`at`, `memInRange`, `memDelta`, `screenDiff`). The `coloredCells` alias is **not** implemented (dropped in v2). [provenance: decision:ADR-0027]

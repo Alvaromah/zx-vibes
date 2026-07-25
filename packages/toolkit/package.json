@@ -50,7 +50,7 @@
     "build": "tsup && tsup --config tsup.player.config.ts",
     "prepack": "pnpm run build",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src tests bin",
+    "lint": "eslint src tests bin player",
     "test": "vitest run",
     "check:docs": "node scripts/check-docs.mjs"
   },

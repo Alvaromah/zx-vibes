@@ -74,6 +74,17 @@ export class HostIo implements MachineIo {
     return this.speakerLevel;
   }
 
+  /**
+   * Start a new observation window without changing the live hardware-facing state.
+   * Used after a declarative readiness warm-up: border/speaker/EAR carry into the
+   * measured scenario, while audio/write assertions count only scenario activity.
+   */
+  resetObservations(): void {
+    this.beeperEdges = 0;
+    this.portFEWrites = 0;
+    this.edges.length = 0;
+  }
+
   read(port: number): number {
     // The ULA answers any even port (A0 = 0); `0xFE` is the canonical keyboard read
     // (HOST-IO-PORTFE-ADDR-001). The high byte selects the half-rows.

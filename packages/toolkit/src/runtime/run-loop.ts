@@ -28,6 +28,19 @@ export type InstructionObserver = (machine: Machine) => boolean;
 /** Called just before each instruction is fetched (e.g. to timestamp the I/O clock). */
 export type BeforeStep = (machine: Machine) => void;
 
+/** One completed instruction, including its real contended duration. */
+export interface StepObservation {
+  /** Address at which the instruction started. */
+  pc: number;
+  /** Real duration charged to the machine clock, including memory contention. */
+  tStates: number;
+  /** Whether this was a repeated HALT fetch while the CPU was already waiting. */
+  wasHalted: boolean;
+}
+
+/** Called just after an instruction completes (interrupt acknowledge is not an instruction). */
+export type AfterStep = (machine: Machine, step: StepObservation) => void;
+
 /**
  * Called when the once-per-frame maskable interrupt is accepted, with `wasHalted`
  * = whether the CPU was waiting in HALT when the interrupt arrived. This is the
@@ -67,6 +80,7 @@ export function runFrameObserved(
   observe: InstructionObserver,
   beforeStep?: BeforeStep,
   onInterrupt?: InterruptObserver,
+  afterStep?: AfterStep,
 ): boolean {
   // Run to the frame boundary (not a fixed quantum): any overrun carried in from
   // the previous frame's final instruction shortens this frame, mirroring
@@ -89,12 +103,16 @@ export function runFrameObserved(
     }
 
     beforeStep?.(machine);
-    const wasEi = machine.memory[machine.registers.pc & 0xffff] === EI_OPCODE;
+    const pc = machine.registers.pc & 0xffff;
+    const wasHalted = machine.halted;
+    const wasEi = machine.memory[pc] === EI_OPCODE;
     if (machine.eiDelay > 0) machine.eiDelay -= 1;
     const before = machine.tStatesTotal;
     machine.stepInstruction();
-    elapsed += machine.tStatesTotal - before;
+    const tStates = machine.tStatesTotal - before;
+    elapsed += tStates;
     if (wasEi) machine.eiDelay = 1;
+    afterStep?.(machine, { pc, tStates, wasHalted });
 
     if (observe(machine)) return true;
   }

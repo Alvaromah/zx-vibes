@@ -4,7 +4,8 @@
 // `zxs test [path]` discovers `test.json` / `*.test.json` specs, runs each in
 // isolation, and reports `{ ok, stage:"test", total, passed, failed, results[] }`
 // (exit 0 iff all pass). Each spec: assemble its `build` entry (in-memory temp,
-// REC-PROD-RUN-001) → boot a clean-ROM machine → load at `org` → run a fixed budget
+// REC-PROD-RUN-001) → boot a clean-ROM machine → load at `org` → apply `setup` →
+// optionally warm up to `waitFor` readiness → run a fixed measured budget
 // (default 120) with the `keys`/`joy` schedule and the hang watchdog → evaluate the
 // assertions against the post-run state, using start-of-run + per-`at`-frame
 // checkpoints captured in ONE run (REC-PROD-RUN-005, the temporal/delta seam).
@@ -23,7 +24,7 @@ import {
 import type { CommandContext } from '../registry.js';
 import { loadBytesMachine } from '../runtime/session.js';
 import { runProgram } from '../runtime/run.js';
-import { DEFAULT_BORDER, type HostIo } from '../runtime/io-device.js';
+import { HostIo } from '../runtime/io-device.js';
 import { readRegisters } from '../observe/registers.js';
 import { SCREEN_BASE, SCREEN_IMAGE_SIZE, hashBytes } from '../observe/screen.js';
 import { parseAddress } from '../util/address.js';
@@ -49,6 +50,8 @@ export interface SpecResult {
   ok: boolean;
   /** Human-readable failure strings (assertion mismatches or build diagnostics). */
   failures: string[];
+  /** Warm-up frames elapsed before `waitFor` became true (0 when already ready). */
+  readyAtFrame?: number;
 }
 
 /** The whole-suite verdict (REC-PROD-REPORT-002). */
@@ -68,6 +71,8 @@ interface TestSpec {
   keys?: string;
   joy?: string;
   detectHangs?: boolean;
+  setup?: unknown;
+  waitFor?: unknown;
   assert: unknown[];
 }
 
@@ -141,6 +146,98 @@ function toDiagnosticLine(d: Diagnostic): string {
   return `${d.file}:${d.line}: ${d.message}`;
 }
 
+function resolveSpecAddress(raw: unknown, symbols: Map<string, number>, field: string): number {
+  if (
+    typeof raw === 'number' &&
+    Number.isInteger(raw) &&
+    raw >= 0 &&
+    raw <= 0xffff
+  ) {
+    return raw;
+  }
+  if (typeof raw === 'string') {
+    const symbol = symbols.get(raw);
+    if (symbol !== undefined) return symbol & 0xffff;
+    return parseAddress(raw, 'test') & 0xffff;
+  }
+  throw userError(`${field} must be an address string, number, or build label`, 'test');
+}
+
+function parseSpecHex(raw: unknown, field: string): Uint8Array {
+  if (typeof raw !== 'string') throw userError(`${field} must be a hex-byte string`, 'test');
+  const compact = raw.replace(/\s+/g, '');
+  if (compact.length === 0 || compact.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(compact)) {
+    throw userError(`${field} is not a valid even-length hex-byte string`, 'test');
+  }
+  const out = new Uint8Array(compact.length / 2);
+  for (let i = 0; i < out.length; i += 1) out[i] = parseInt(compact.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+function requireWriteFits(addr: number, bytes: Uint8Array, field: string): void {
+  if (addr + bytes.length > 0x10000) {
+    throw userError(`${field} overruns 0xFFFF`, 'test');
+  }
+}
+
+/** Apply declarative pre-run memory writes after load and before the baseline snapshot. */
+function applySpecSetup(raw: unknown, machine: Machine, symbols: Map<string, number>): void {
+  if (raw === undefined) return;
+  if (!Array.isArray(raw)) throw userError('test spec "setup" must be an array', 'test');
+  for (let i = 0; i < raw.length; i += 1) {
+    const action = raw[i];
+    if (!action || typeof action !== 'object' || Array.isArray(action)) {
+      throw userError(`setup[${i}] must be an object`, 'test');
+    }
+    const mem = (action as Record<string, unknown>).mem;
+    if (!mem || typeof mem !== 'object' || Array.isArray(mem)) {
+      throw userError(`setup[${i}] requires a "mem" address-to-hex object`, 'test');
+    }
+    const writes = Object.entries(mem as Record<string, unknown>);
+    if (writes.length === 0) throw userError(`setup[${i}].mem must not be empty`, 'test');
+    for (const [address, rawHex] of writes) {
+      const addr = resolveSpecAddress(address, symbols, `setup[${i}].mem address`);
+      const bytes = parseSpecHex(rawHex, `setup[${i}].mem.${address}`);
+      requireWriteFits(addr, bytes, `setup[${i}].mem.${address}`);
+      machine.memory.set(bytes, addr);
+    }
+  }
+}
+
+interface ResolvedWaitFor {
+  addr: number;
+  bytes: Uint8Array;
+  maxFrames: number;
+  label: string;
+}
+
+function resolveWaitFor(raw: unknown, symbols: Map<string, number>): ResolvedWaitFor | null {
+  if (raw === undefined) return null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw userError('test spec "waitFor" must be an object', 'test');
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.type !== 'memEquals') {
+    throw userError('waitFor.type must be "memEquals"', 'test');
+  }
+  const addr = resolveSpecAddress(obj.addr, symbols, 'waitFor.addr');
+  const bytes = parseSpecHex(obj.hex, 'waitFor.hex');
+  requireWriteFits(addr, bytes, 'waitFor');
+  const maxFrames = obj.maxFrames === undefined ? 300 : obj.maxFrames;
+  if (typeof maxFrames !== 'number' || !Number.isInteger(maxFrames) || maxFrames < 1) {
+    throw userError('waitFor.maxFrames must be a positive integer', 'test');
+  }
+  const label = typeof obj.addr === 'string' ? obj.addr : `0x${addr.toString(16).toUpperCase()}`;
+  return { addr, bytes, maxFrames, label };
+}
+
+function memoryMatches(machine: Machine, waitFor: ResolvedWaitFor): boolean {
+  for (let i = 0; i < waitFor.bytes.length; i += 1) {
+    if (machine.memory[waitFor.addr + i] !== waitFor.bytes[i]) return false;
+  }
+  return true;
+}
+
 // --- one spec (REC-PROD-RUN-001..005) --------------------------------------
 
 /**
@@ -189,8 +286,44 @@ export function runSpec(specFile: string, cwd: string): SpecResult {
           : parseAddress(parsed.org, 'test');
 
     const machine = loadBytesMachine(asm.bytes, loadOrg);
-    // Start-of-run snapshot (pre-input, REC-PROD-RUN-001): clean border, no audio yet.
-    const start = captureSnapshot(0, machine, DEFAULT_BORDER, 0, 0);
+    applySpecSetup(parsed.setup, machine, symbols);
+
+    // A readiness warm-up runs without scenario input. Once the predicate becomes
+    // true, its live machine/I/O state carries forward but assertion counters and
+    // baselines restart, so intro work does not pollute the measured scenario.
+    const io = new HostIo();
+    const waitFor = resolveWaitFor(parsed.waitFor, symbols);
+    let readyAtFrame: number | undefined;
+    if (waitFor !== null) {
+      if (memoryMatches(machine, waitFor)) {
+        readyAtFrame = 0;
+      } else {
+        const warmup = runProgram(machine, loadOrg, {
+          frames: waitFor.maxFrames,
+          detectHangs: parsed.detectHangs ?? true,
+          io,
+          stopAfterFrame: (framesRun, current) => {
+            if (!memoryMatches(current, waitFor)) return false;
+            readyAtFrame = framesRun;
+            return true;
+          },
+        });
+        if (readyAtFrame === undefined) {
+          const detail = warmup.status === 'hang'
+            ? `the warm-up ended in a ${warmup.hang?.kind ?? 'hang'}`
+            : `timed out after ${waitFor.maxFrames} frame(s)`;
+          return {
+            spec,
+            ok: false,
+            failures: [`waitFor memEquals "${waitFor.label}" failed: ${detail}`],
+          };
+        }
+      }
+      io.resetObservations();
+    }
+
+    // Start-of-scenario snapshot: after setup/readiness, before scenario input.
+    const start = captureSnapshot(0, machine, io.borderColor(), 0, 0);
 
     const checkpointFrames = collectCheckpointFrames(parsed.assert);
     const checkpoints = new Map<number, Snapshot>();
@@ -206,6 +339,7 @@ export function runSpec(specFile: string, cwd: string): SpecResult {
       keys: parsed.keys,
       joy: parsed.joy,
       detectHangs: parsed.detectHangs ?? true,
+      io,
       onFrame,
     });
 
@@ -221,6 +355,7 @@ export function runSpec(specFile: string, cwd: string): SpecResult {
       start,
       status: result.status === 'hang' ? 'hang' : 'ok',
       haltSynced: result.haltSynced,
+      frameBudget: result.frameBudget,
       framesRun: result.framesRun,
       checkpoints,
       symbols,
@@ -237,7 +372,12 @@ export function runSpec(specFile: string, cwd: string): SpecResult {
       }
     }
 
-    return { spec, ok: failures.length === 0, failures };
+    return {
+      spec,
+      ok: failures.length === 0,
+      failures,
+      ...(readyAtFrame !== undefined ? { readyAtFrame } : {}),
+    };
   } catch (error) {
     // A run/load error (bad org, unreadable include, …) fails this spec, not the suite.
     return { spec, ok: false, failures: [describe(error)] };
@@ -329,7 +469,7 @@ interface TestCliOptions {
 export function testCommand(context: CommandContext): Envelope {
   const options = context.options as TestCliOptions;
   if (options.listAssertions) {
-    // ASSERT-PROD-LIST-001: print the 16-assertion reference.
+    // ASSERT-PROD-LIST-001: print the 17-assertion reference.
     return successEnvelope('test', { assertions: ASSERTION_REFERENCE });
   }
   const path = context.args[0] ?? '.';
@@ -342,7 +482,7 @@ export function configureTestCommand(command: Command): void {
   command
     .description('Run declarative asm tests (or print the assertion reference)')
     .argument('[path]', 'spec file or directory to walk (default ".")')
-    .option('--list-assertions', 'print the 16-assertion reference')
+    .option('--list-assertions', 'print the 17-assertion reference')
     .option('--json', 'emit a single machine-readable JSON envelope');
 }
 
