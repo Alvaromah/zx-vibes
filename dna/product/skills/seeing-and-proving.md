@@ -22,8 +22,8 @@ zxs verify --json                               # the acceptance gate
   Spectrum's interleaved line order — the decode is in
   [memory-map.md](../reference/memory-map.md), and the palette/FLASH rules in
   [screen-render.md](../reference/screen-render.md). When a screenshot looks
-wrong, `zxs mem read` the display file and compare against the decode before
-blaming your renderer.
+  wrong, `zxs mem read` the display file and compare against the decode before
+  blaming your renderer.
 
 For ASCII-authored sprite/tile rows, make geometry executable in the source:
 put labels around each fixed-width block and use assembler `ASSERT` expressions

@@ -114,6 +114,8 @@ function defaultSjasmplusAvailable(): boolean {
 }
 
 const TOOLKIT_PACKAGE = '@zx-vibes/toolkit';
+/** The user-facing umbrella package whose bins `npm install -g zx-vibes` installs. */
+const UMBRELLA_PACKAGE = 'zx-vibes';
 
 /** Locate every command file named `zxs` that the current PATH can resolve. */
 export function findZxsPathCandidates(
@@ -198,6 +200,12 @@ function findToolkitRoot(start: string): string | undefined {
 /**
  * Resolve npm's extensionless/`.cmd`/`.ps1` shim family to one canonical package
  * root. All three wrappers from one Windows install therefore count once.
+ *
+ * Two shim families reach the same runtime. A shim can target the toolkit's own
+ * bin (`@zx-vibes/toolkit/bin/zxs.js`, what a monorepo `npm link` produces), or
+ * the umbrella package's bin (`zx-vibes/bin/zxs.js`) — which is what the
+ * DOCUMENTED `npm install -g zx-vibes` actually writes. Both resolve to the
+ * toolkit root, so the `dist/cli.js` completeness check applies either way.
  */
 function owningToolkitRoot(command: string): string | undefined {
   const direct = findToolkitRoot(safeRealpath(command));
@@ -209,16 +217,29 @@ function owningToolkitRoot(command: string): string | undefined {
   } catch {
     return undefined;
   }
-  if (!body.includes('@zx-vibes/toolkit/bin/zxs.js')) return undefined;
+  // Check the toolkit form first: `@zx-vibes/toolkit/bin/zxs.js` does not contain
+  // `zx-vibes/bin/zxs.js` (the scope is followed by `toolkit/`), so the two are
+  // unambiguous, but ordering keeps that independent of the literals.
+  const viaToolkit = body.includes(`${TOOLKIT_PACKAGE}/bin/zxs.js`);
+  const viaUmbrella = !viaToolkit && body.includes(`${UMBRELLA_PACKAGE}/bin/zxs.js`);
+  if (!viaToolkit && !viaUmbrella) return undefined;
 
-  // Global npm wrappers target `$basedir/node_modules/@zx-vibes/toolkit`;
-  // project/npx `.bin` wrappers target `$basedir/../@zx-vibes/toolkit`.
+  // Global npm wrappers target `$basedir/node_modules/...`; project/npx `.bin`
+  // wrappers target `$basedir/../...`. For the umbrella package npm may nest the
+  // toolkit under it or hoist it, so try both.
   const commandDir = dirname(command);
-  const possibleRoots = [
-    join(commandDir, 'node_modules', '@zx-vibes', 'toolkit'),
-    join(commandDir, '..', '@zx-vibes', 'toolkit'),
-    join(commandDir, '@zx-vibes', 'toolkit'),
-  ];
+  const possibleRoots = viaToolkit
+    ? [
+        join(commandDir, 'node_modules', '@zx-vibes', 'toolkit'),
+        join(commandDir, '..', '@zx-vibes', 'toolkit'),
+        join(commandDir, '@zx-vibes', 'toolkit'),
+      ]
+    : [
+        join(commandDir, 'node_modules', UMBRELLA_PACKAGE, 'node_modules', '@zx-vibes', 'toolkit'),
+        join(commandDir, 'node_modules', '@zx-vibes', 'toolkit'),
+        join(commandDir, '..', UMBRELLA_PACKAGE, 'node_modules', '@zx-vibes', 'toolkit'),
+        join(commandDir, '..', '@zx-vibes', 'toolkit'),
+      ];
   for (const possibleRoot of possibleRoots) {
     const root = findToolkitRoot(possibleRoot);
     if (root !== undefined) return root;
@@ -226,9 +247,8 @@ function owningToolkitRoot(command: string): string | undefined {
 
   // Preserve an expected root even for a broken target so the missing dist check
   // fails loudly instead of downgrading it to an unknown shim directory.
-  const expected = body.includes('node_modules/@zx-vibes/toolkit')
-    ? possibleRoots[0]!
-    : possibleRoots[1]!;
+  const globalLayout = body.includes('node_modules/');
+  const expected = globalLayout ? possibleRoots[0]! : possibleRoots[viaToolkit ? 1 : 2]!;
   return safeRealpath(expected);
 }
 
