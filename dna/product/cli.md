@@ -55,13 +55,14 @@ to the regeneration slices, not to this re-author phase.
 - [id: CLI-PROD-RUN-001] `zxs run` executes the emulator **fresh by default** — a pure function of (source, frame budget, scheduled input) — booting from a `--bin`/`--sna`/`--z80`/`--tap` source or the configured entry. On-disk session resume is opt-in via `--state <file>` (ADR-0027 stateless-default). [provenance: decision:ADR-0027]
 - [id: CLI-PROD-RUN-002] `run` accepts a frame budget `--frames <n>` (default `300`; 50 frames ≈ 1 second). [provenance: contract]
 - [id: CLI-PROD-RUN-003] `run` supports stop conditions `--until-pc <addr>`, `--until-break`, `--until-watch`, `--until-write <range>`, `--until-change <addr>`, and temporary watchpoints `--watch-read <range>` / `--watch-write <range>`. These feed the **one** watchpoint model shared with `watch add` (ADR-0027 — no separate ephemeral vs persistent model). [provenance: contract]
-- [id: CLI-PROD-RUN-004] `run` supports scheduled keyboard input via `--keys <spec>` (the canonical input form, e.g. `"60:O*30,120:SPACE*5"`), output capture via `--screenshot <file>` / `--wav <file>`, and session control via `--state <file>` (opt-in resume) and `--no-save` / `--read-only` (when a session is active). [provenance: contract]
+- [id: CLI-PROD-RUN-004] `run` supports scheduled keyboard input via `--keys <spec>` (the canonical input form, e.g. `"60:O*30,120:SPACE*5"`), output capture via `--screenshot <file>` / `--wav <file>` (with `--scale <1..4>` applying the one presentation-only screenshot zoom, as on `screen`), and session control via `--state <file>` (opt-in resume) and `--no-save` / `--read-only` (when a session is active). [provenance: contract]
+- [id: CLI-PROD-RUN-006] `run --no-detect-hangs` disables the hang watchdog for that run (the CLI form of the test-spec `detectHangs:false` escape): the run always exits by frame budget / stop condition, `status` is never `hang`, and `haltSynced` is meaningless (REC-PROD-EDGE-002). The default stays watchdog-on (RT-PROD-RUN-003). [provenance: contract]
 - [id: CLI-PROD-RUN-005] `run` supports scheduled **Kempston joystick** input via `--joy <spec>` using the same `frame:value*hold` schedule as `--keys`, where the value is any subset of `UDLR` + `F` (fire) mapping to the active-high `000FUDLR` byte on port `0x1F` (peripherals.md `JOY-KEMPSTON-*`, W10.13). [provenance: decision:ADR-0027]
 
 ### verify
 
-- [id: CLI-PROD-VERIFY-001] `zxs verify` runs the project acceptance pipeline: build → run (300 frames, fresh, with hang watchdog) → screenshot → run the `tests/` suite if present. It **composes the real `run` report** (the same JSON shape as `run --json`), not a trimmed inline re-implementation (ADR-0027). [provenance: contract]
-- [id: CLI-PROD-VERIFY-002] `verify` accepts `--screenshot <file>` (default `.zxs/verify-screen.png`) and `--json`. [provenance: contract]
+- [id: CLI-PROD-VERIFY-001] `zxs verify` runs the project acceptance pipeline: build → run (300 frames, fresh, with hang watchdog) → screenshot → run the test suite if its directory is present (the config's `tests` dir, default `tests/` — config-schema.md CFG-PROD-FIELD-TESTS-001). It **composes the real `run` report** (the same JSON shape as `run --json`), not a trimmed inline re-implementation (ADR-0027). [provenance: contract]
+- [id: CLI-PROD-VERIFY-002] `verify` accepts `--screenshot <file>` (default `.zxs/verify-screen.png`), `--scale <1..4>` (the one presentation-only screenshot zoom), and `--json`. [provenance: contract]
 
 ### preview
 
@@ -88,7 +89,7 @@ to the regeneration slices, not to this re-author phase.
 
 ### State & debug — state, break, watch
 
-- [id: CLI-PROD-STATE-001] `zxs state` manages the opt-in persistent session: `save <file>`, `load <file>`, `reset`, and `export --z80 <file>` (exports the session as a `.z80` v1 snapshot; `--tap`/`--scr` export the same machine in those formats). [provenance: contract]
+- [id: CLI-PROD-STATE-001] `zxs state` manages the opt-in persistent session: `save <file>`, `load <file>`, `reset` (resets the session to the program's own boot state — the configured entry assembled fresh / `--bin` — falling back to a clean ROM when nothing is configured; `--blank` forces the bare clean-ROM boot), and `export --z80 <file>` (exports the session as a `.z80` v1 snapshot; `--tap`/`--scr` export the same machine in those formats). [provenance: contract]
 - [id: CLI-PROD-BREAK-001] `zxs break` manages breakpoints: `add <spec>` (label / `file.asm:line` / address), `list`, and `rm <id|all>`. [provenance: contract]
 - [id: CLI-PROD-WATCH-001] `zxs watch` manages memory watchpoints (the one watchpoint model): `add --read <range>|--write <range>`, `list`, `rm <id|all>`, and `clear`. [provenance: contract]
 
