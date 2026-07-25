@@ -9,8 +9,14 @@ onlyBuiltDependencies:
 allowBuilds:
   esbuild: true
 
+# Transitive dependencies pinned to their first patched release. Each pin below
+# satisfies the range its consumer declares, so nothing is forced across a major
+# boundary. Keep this list in step with the Dependabot alerts: a bump in a root
+# manifest alone does not move a package that is pinned here.
 overrides:
+  brace-expansion@1: "1.1.16" # via minimatch@3 (^1.1.7) <- eslint
   esbuild: "0.28.1"
+  fast-uri: "3.1.4" # via ajv (^3.0.1) <- @modelcontextprotocol/sdk
   form-data: "4.0.6"
-  js-yaml: "4.2.0"
+  js-yaml: "4.3.0" # via read-yaml-file (^4.0.0) <- @changesets/cli
   read-yaml-file: "2.1.0"
