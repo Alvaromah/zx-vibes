@@ -28,7 +28,7 @@ CLI (`cli.md`) as MCP tools over stdio. Mined once from the oracle
 - [id: MCP-PROD-TOOL-DEBUG-001] `zx_debug` performs a debugger `action`: `break-add`, `break-rm`, `break-list`, `watch-add`, `watch-rm`, `watch-list`, `step`, `step-over`, `disasm`, `trace`. Params: `spec` (addr/label/`file:line`), `id` (int; omit = all), `type` (`read`|`write`, default write), `range`, `count` (int 1–256), `frames` (int 1–5000, default 5). [provenance: contract]
 - [id: MCP-PROD-TOOL-DEBUG-002] `zx_debug` break/watch additions persist for subsequent `zx_run` calls (run with `untilPc`/`frames` to continue to them). [provenance: contract]
 - [id: MCP-PROD-TOOL-KEYS-001] `zx_keys` injects keyboard input and runs enough frames for it to register. Params: `keys` (frame:KEY*hold schedule), `typeText` (string), `extraFrames` (int 0–5000, default 10). [provenance: contract]
-- [id: MCP-PROD-TOOL-STATE-001] `zx_state` performs a state `action`: `save`, `load`, `reset`, `export-z80`. Param: `file` (string). State files interoperate with the CLI session at `.zxs/state.zxstate`. [provenance: contract]
+- [id: MCP-PROD-TOOL-STATE-001] `zx_state` performs a state `action`: `save`, `load`, `reset`, `export-z80`. Params: `file` (string); `blank` (boolean, reset only — `reset` reloads the built program per cli.md CLI-PROD-STATE-001, `blank:true` forces the bare clean-ROM boot). State files interoperate with the CLI session at `.zxs/state.zxstate`. [provenance: contract]
 
 ## Outputs
 

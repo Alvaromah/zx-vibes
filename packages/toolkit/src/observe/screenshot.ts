@@ -81,9 +81,11 @@ export function writePng(absPath: string, image: RgbaImage): void {
 /**
  * Capture a machine's current screen to a PNG file at `absPath` (RT-PROD-VERIFY-001
  * screenshot stage). Reads the 6912-byte screen image and renders it through the single
- * shared renderer at FLASH phase 0 (deterministic, FLASH-stable). Returns `absPath`.
+ * shared renderer at FLASH phase 0 (deterministic, FLASH-stable). `scale` is the same
+ * presentation-only integer zoom `screen --scale` applies (1..4, default 1) — one
+ * scaler behind every PNG artifact (CLI-PROD-RULE-SCREENSHOT-001). Returns `absPath`.
  */
-export function captureScreenshot(machine: Machine, absPath: string): string {
-  writePng(absPath, renderRgbaImage(readScreenImage(machine), 0));
+export function captureScreenshot(machine: Machine, absPath: string, scale = 1): string {
+  writePng(absPath, scaleRgba(renderRgbaImage(readScreenImage(machine), 0), scale));
   return absPath;
 }

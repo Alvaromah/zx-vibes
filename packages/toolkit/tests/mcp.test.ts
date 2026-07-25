@@ -88,7 +88,7 @@ describe('catalog (MCP-PROD-SERVER-003 / MCP-PROD-AC-CATALOG-001)', () => {
     expect(keys('zx_inspect')).toEqual(['memAddr', 'memLen'].sort());
     expect(keys('zx_debug')).toEqual(['action', 'spec', 'id', 'type', 'range', 'count', 'frames'].sort());
     expect(keys('zx_keys')).toEqual(['extraFrames', 'keys', 'typeText'].sort());
-    expect(keys('zx_state')).toEqual(['action', 'file'].sort());
+    expect(keys('zx_state')).toEqual(['action', 'blank', 'file'].sort());
   });
 
   it('input schemas enforce the documented bounds (scale 1..4, debug action enum)', () => {
@@ -331,7 +331,7 @@ describe('CLI <-> MCP .zxstate interop (MCP-PROD-AC-INTEROP-001)', () => {
     expect(session.machine.memory[0x0000]).toBe(0xf3);
   });
 
-  it('export-z80 writes a v1 snapshot; reset returns the hot machine to a clean boot', () => {
+  it('export-z80 writes a v1 snapshot; reset reloads the program (blank:true for a bare boot)', () => {
     project();
     const { session, tools } = catalog();
     jsonOf(call(tools, 'zx_build', { entry: 'main.asm' }));
@@ -340,9 +340,15 @@ describe('CLI <-> MCP .zxstate interop (MCP-PROD-AC-INTEROP-001)', () => {
     expect(exp.format).toBe('z80');
     expect(readFileSync(join(dir, 'out.z80')).length).toBeGreaterThan(0);
 
+    // reset = back to the PROGRAM's boot state (the configured entry, rebuilt fresh).
     jsonOf(call(tools, 'zx_state', { action: 'reset' }));
-    expect(session.machine.memory[0x9000]).toBe(0x00); // RAM cleared
-    expect(session.machine.registers.pc).toBe(0x0000); // fresh boot
+    expect(session.machine.memory[0x9000]).toBe(0x00); // run-time RAM effects cleared
+    expect(session.machine.registers.pc).toBe(0x8000); // back at the entry, program loaded
+
+    // blank:true = the old bare clean-ROM boot with nothing loaded.
+    jsonOf(call(tools, 'zx_state', { action: 'reset', blank: true }));
+    expect(session.machine.registers.pc).toBe(0x0000);
+    expect(session.machine.memory[0x8000]).toBe(0x00);
   });
 
   it('rejects a foreign-emulator .zxstate on load (emulatorId guard)', () => {

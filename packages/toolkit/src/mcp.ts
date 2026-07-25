@@ -55,7 +55,7 @@ import { encodePng, scaleRgba } from './observe/screenshot.js';
 import { asciiBytes, hexBytes } from './observe/memory.js';
 import { resolveDisasmSpec, type DisasmEntry } from './observe/disasm.js';
 import { type StepEntry } from './observe/step.js';
-import type { SourceMapEntry, SymbolDef } from './observe/source.js';
+import { resolveObserveMachine, type SourceMapEntry, type SymbolDef } from './observe/source.js';
 import { charToKey } from './input/input-command.js';
 import {
   loadDebugStore,
@@ -600,7 +600,14 @@ function toolState(session: McpSession, args: ToolArgs): CallToolResult {
       });
     }
     case 'reset':
-      session.machine = bootFreshMachine();
+      // Reset to the program's own boot state (the configured entry assembled fresh),
+      // falling back to a clean ROM when no entry is configured — the same semantics
+      // as `zxs state reset` (CLI-PROD-STATE-001): an agent iterating on scenarios
+      // gets the PROGRAM back, not blank RAM. `blank:true` keeps the bare boot.
+      session.machine =
+        args.blank === true
+          ? bootFreshMachine()
+          : resolveObserveMachine({ cwd, stage: 'state' }).machine;
       session.border = DEFAULT_BORDER;
       return jsonResult({
         ok: true,
@@ -730,10 +737,11 @@ export function buildCatalog(session: McpSession): McpTool[] {
       name: 'zx_state',
       title: 'Manage the persistent session',
       description:
-        'Perform a state action: save, load, reset, or export-z80. State files interoperate with the CLI session (.zxstate).',
+        'Perform a state action: save, load, reset (reloads the built program; blank:true for a bare ROM boot), or export-z80. State files interoperate with the CLI session (.zxstate).',
       inputSchema: {
         action: z.enum(['save', 'load', 'reset', 'export-z80']),
         file: z.string().optional(),
+        blank: z.boolean().optional(),
       },
       handler: (args) => guard(() => toolState(session, args)),
     },

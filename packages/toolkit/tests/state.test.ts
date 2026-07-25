@@ -4,7 +4,7 @@
 // RT-PROD-SESSION-*, file-formats.md FF-ZXSTATE-001, mcp-tools.md
 // MCP-PROD-RULE-INTEROP-001 / MCP-PROD-AC-INTEROP-001).
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -149,7 +149,7 @@ describe('state save/load/reset (CLI-PROD-STATE-001)', () => {
     expect([...loaded.machine.memory.slice(0x9100, 0x9104)]).toEqual([0xde, 0xad, 0xbe, 0xef]);
   });
 
-  it('reset returns the session machine to a fresh clean-ROM boot', () => {
+  it('reset with no configured entry falls back to a fresh clean-ROM boot', () => {
     runStateSave(STATE, { cwd: dir });
     runMemWrite({ cwd: dir, state: STATE, addr: '0x9000', hex: 'FF' });
     expect(loadSession(STATE, dir).machine.memory[0x9000]).toBe(0xff);
@@ -159,6 +159,33 @@ describe('state save/load/reset (CLI-PROD-STATE-001)', () => {
     expect(reset.machine.memory[0x9000]).toBe(0x00); // RAM cleared
     expect(reset.machine.memory[0x0000]).toBe(0xf3); // ROM mapped (DI)
     expect(reset.machine.registers.pc).toBe(0x0000);
+  });
+
+  it('reset reloads the configured entry: the session sees the PROGRAM again, not blank RAM', () => {
+    // A project whose entry stores a probe byte pattern at its org.
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'main.asm'), ['ORG 0x8000', '  ld a, 1', 'spin:', '  jr spin', ''].join('\n'));
+    writeFileSync(join(dir, 'zx.config.json'), JSON.stringify({ entry: 'src/main.asm' }));
+
+    runStateSave(STATE, { cwd: dir });
+    runMemWrite({ cwd: dir, state: STATE, addr: '0x8000', hex: '00 00 00 00' }); // clobber the program
+
+    runStateReset({ cwd: dir, state: STATE });
+    const reset = loadSession(STATE, dir);
+    expect(reset.machine.registers.pc).toBe(0x8000); // back at the entry...
+    expect(reset.machine.memory[0x8000]).toBe(0x3e); // ...with the program bytes reloaded (ld a,1)
+  });
+
+  it('reset --blank forces the bare clean-ROM boot even with an entry configured', () => {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'main.asm'), ['ORG 0x8000', '  ld a, 1', 'spin:', '  jr spin', ''].join('\n'));
+    writeFileSync(join(dir, 'zx.config.json'), JSON.stringify({ entry: 'src/main.asm' }));
+
+    runStateSave(STATE, { cwd: dir });
+    runStateReset({ cwd: dir, state: STATE, blank: true });
+    const reset = loadSession(STATE, dir);
+    expect(reset.machine.registers.pc).toBe(0x0000);
+    expect(reset.machine.memory[0x8000]).toBe(0x00); // nothing loaded
   });
 
   it('a mutation without --state applies in-memory but does NOT persist', () => {

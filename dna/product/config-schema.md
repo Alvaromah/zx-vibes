@@ -23,6 +23,7 @@ defaults, resolution precedence, validation) captured exactly.
 - [id: CFG-PROD-FIELD-ORG-001] `org` (string) — load/origin address as a hex string; default `"0x8000"`. [provenance: contract]
 - [id: CFG-PROD-FIELD-ASM-001] `assembler` (`"builtin"` | `"sjasmplus"`) — the assembler backend; default `"builtin"` = the embedded `@zx-vibes/asm` (ADR-0027 D3). The legacy value `"spectral"` is accepted as a deprecated back-compat alias for `"builtin"`; `"sjasmplus"` is the external escape hatch. [provenance: decision:ADR-0027]
 - [id: CFG-PROD-FIELD-OUTDIR-001] `outDir` (string) — output directory for `.bin`/`.sld`; default `"build"`. [provenance: contract]
+- [id: CFG-PROD-FIELD-TESTS-001] `tests` (string) — the declarative-test suite directory the `verify` gate runs (cli.md CLI-PROD-VERIFY-001); default `"tests"`. `zxs test [path]` is unaffected (its path is an argument). [provenance: contract]
 - [id: CFG-PROD-FIELD-NAME-001] `name` (string) — project name; informational metadata, not validated or enforced. [provenance: contract]
 - [id: CFG-PROD-FIELD-TEMPLATE-001] `template` (string) — the starter template a project was generated from (e.g. `game`); informational metadata. [provenance: contract]
 - [id: CFG-PROD-FIELD-TOOLKIT-001] `toolkit` (string) — the toolkit/package the project uses (e.g. `zx-vibes`); informational metadata. [provenance: contract]

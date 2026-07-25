@@ -9,13 +9,15 @@
 //     agent playbook (KP-PROD-CONTENT-PLAYBOOK-001), the same material `new`/`init`
 //     emit (shared `PLAYBOOK` from the scaffold service).
 //
-// SCOPE FLAG (NOT silent, per the task's no-silent-debt rule, C5): the FULL knowledge
-// pack — `reference/` docs generated from `dna/domain/` (KP-PROD-SOURCE-REF-001),
-// the authored `skills/` (KP-PROD-CONTENT-SKILLS-001), the CI-gated `recipes/`
-// (KP-PROD-CONTENT-RECIPES-001), and the `examples/` (KP-PROD-CONTENT-EXAMPLES-001) —
-// is NOT yet generated in this repo, so `setup` installs the playbook now and reports
-// the rest under `deferred[]`. Generating that pack (KP-PROD-AC-TRACE-001 traceability
-// + KP-PROD-GROW-001 growth order) is the explicit follow-up.
+// The full knowledge pack ships embedded (pack-content.ts, generated from the DNA
+// by `pnpm run gen:knowledge-pack` and pinned by check:drift): `reference/` docs
+// generated from `dna/domain/` + the product render specs (KP-PROD-SOURCE-REF-001),
+// the authored hub-and-spoke `skills/` (KP-PROD-CONTENT-SKILLS-001), and the
+// CI-gated `recipes/` (KP-PROD-CONTENT-RECIPES-001, gated by tests/recipes.test.ts).
+// The growth-order mandate (KP-PROD-AC-GROW-001: scrolling + collision FIRST) is
+// satisfied by the first two recipes. SCOPE FLAG (NOT silent, C5): `examples/`
+// (KP-PROD-CONTENT-EXAMPLES-001 — the worked tutorial + the pong-by-agent proof
+// artifact) does not exist in this repo yet, so it stays under `deferred[]`.
 //
 // Idempotent + non-destructive (like `init`): a present managed file is preserved and
 // reported under `skipped[]` unless `--force`; the `.mcp.json` registration is merged
@@ -28,6 +30,7 @@ import type { Command } from 'commander';
 import { successEnvelope, userError, type SuccessEnvelope } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
 import { PLAYBOOK } from '../scaffold/scaffold.js';
+import { PACK_FILES } from './pack-content.js';
 
 /** The supported agents (CLI-PROD-SETUP-001 `--agent <codex|claude>`). */
 export type SetupAgent = 'claude' | 'codex';
@@ -40,13 +43,12 @@ export const MCP_SERVER_COMMAND = 'zxs-mcp';
 export const SKILL_NAME = 'zx-vibes';
 
 /**
- * The full knowledge-pack content NOT yet generatable from this repo — reported under
+ * The knowledge-pack content NOT yet generatable from this repo — reported under
  * `deferred[]` so the gap is loud, never a silent absence (knowledge-pack.md C5).
+ * reference/, skills/, and recipes/ ship embedded (pack-content.ts); only the
+ * examples remain.
  */
 export const DEFERRED_PACK_CONTENT: ReadonlyArray<string> = [
-  'reference/ — hardware/domain docs generated from dna/domain/ (KP-PROD-SOURCE-REF-001)',
-  'skills/ — the authored hub-and-spoke skills (KP-PROD-CONTENT-SKILLS-001)',
-  'recipes/ — the CI-gated recipe corpus (KP-PROD-CONTENT-RECIPES-001)',
   'examples/ — the worked tutorial + pong-by-agent proof (KP-PROD-CONTENT-EXAMPLES-001)',
 ];
 
@@ -55,7 +57,25 @@ function mcpServerEntry(): { command: string } {
   return { command: MCP_SERVER_COMMAND };
 }
 
-/** The native Claude Code skill file (YAML front-matter + the playbook body). */
+/** The pack pointer appended to the playbook wherever the pack is installed beside it. */
+function packIndexSection(root: string): string {
+  return [
+    '',
+    '## The knowledge pack',
+    '',
+    `Installed beside this file under \`${root}\`:`,
+    '',
+    `- \`skills/INDEX.md\` — the hub: per-technique guides (seeing/proving, persistent`,
+    '  sessions, hang debugging, IM 1 vs IM 2, collision, scrolling).',
+    '- `reference/` — hardware truth generated from the toolkit DNA (memory map, ULA',
+    '  timing, opcodes, keyboard, beeper, file formats, …). Trust it over folklore.',
+    '- `recipes/` — CI-tested routine + demo + `test.json` triples to copy from.',
+    '',
+    'Start at `skills/INDEX.md`.',
+  ].join('\n');
+}
+
+/** The native Claude Code skill file (YAML front-matter + the playbook body + pack index). */
 function skillMarkdown(): string {
   return [
     '---',
@@ -66,6 +86,7 @@ function skillMarkdown(): string {
     '---',
     '',
     PLAYBOOK,
+    packIndexSection(`.claude/skills/${SKILL_NAME}/`),
   ].join('\n');
 }
 
@@ -166,26 +187,42 @@ export function runSetup(options: SetupOptions): SetupEnvelope {
   });
 }
 
-/** The Claude Code target set: the project `.mcp.json` (merged) + the native skill. */
+/** The embedded pack files as write targets under `root` (KP-PROD-PKG-001). */
+function packTargets(root: string): Target[] {
+  return PACK_FILES.map((file) => ({
+    abs: resolve(root, ...file.path.split('/')),
+    content: file.content,
+    mode: 'write' as const,
+  }));
+}
+
+/** The Claude Code target set: `.mcp.json` (merged) + the native skill + the pack. */
 function claudeTargets(cwd: string): Target[] {
+  const skillRoot = resolve(cwd, '.claude', 'skills', SKILL_NAME);
   return [
     { abs: resolve(cwd, '.mcp.json'), content: '', mode: 'merge-mcp' },
-    {
-      abs: resolve(cwd, '.claude', 'skills', SKILL_NAME, 'SKILL.md'),
-      content: skillMarkdown(),
-      mode: 'write',
-    },
+    { abs: resolve(skillRoot, 'SKILL.md'), content: skillMarkdown(), mode: 'write' },
+    // The pack rides inside the skill directory, so the native skill mechanism
+    // carries reference/skills/recipes along with SKILL.md (KP-PROD-PKG-001).
+    ...packTargets(skillRoot),
   ];
 }
 
-/** The Codex target set: the config TOML (project or global) + the playbook (AGENTS.md). */
+/** The Codex target set: the config TOML (project or global) + the playbook + the pack. */
 function codexTargets(cwd: string, home: string, writeGlobal: boolean): Target[] {
   const configAbs = writeGlobal
     ? resolve(home, '.codex', 'config.toml')
     : resolve(cwd, '.codex', 'config.toml');
   const targets: Target[] = [{ abs: configAbs, content: codexConfigToml(), mode: 'write' }];
-  // The playbook (the minimal available skill knowledge) always lands in the project.
-  targets.push({ abs: resolve(cwd, 'AGENTS.md'), content: PLAYBOOK, mode: 'write' });
+  // The playbook (the minimal available skill knowledge) always lands in the project,
+  // with the pack beside the Codex config and the playbook pointing at it.
+  const packRoot = resolve(cwd, '.codex', SKILL_NAME);
+  targets.push({
+    abs: resolve(cwd, 'AGENTS.md'),
+    content: PLAYBOOK + packIndexSection(`.codex/${SKILL_NAME}/`) + '\n',
+    mode: 'write',
+  });
+  targets.push(...packTargets(packRoot));
   return targets;
 }
 

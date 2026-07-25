@@ -225,6 +225,10 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   let verdict: HangVerdict | undefined;
   let stopped = false;
 
+  // Whether the CURRENT frame executed any instruction with PC in RAM — the
+  // ROM-residence signal for the `pc-in-rom` heuristic (see HangFrameObservation).
+  let frameSawRamPc = false;
+
   // The per-instruction observer: a definite hang (immediate), the target-PC
   // breakpoint, then the write/change watchpoints.
   const observe = (m: Machine): boolean => {
@@ -239,6 +243,7 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
       }
     }
     const pc = m.registers.pc & 0xffff;
+    if (pc >= RAM_BASE) frameSawRamPc = true;
     if (untilPc !== undefined && pc === untilPc) {
       status = 'breakpoint';
       reason = 'until-pc';
@@ -284,6 +289,7 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     // HALT-synced cadence the hang stats must count as progress (an idle HALT
     // loop looks byte-identical at every pinned frame boundary).
     let haltResumed = false;
+    frameSawRamPc = false;
     stopped = runFrameObserved(
       machine,
       observe,
@@ -301,7 +307,7 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     framesRun = f + 1;
     params.onFrame?.(f, machine, io);
     if (stopped) break;
-    if (detectHangs) updateHangStats(stats, machine, haltResumed);
+    if (detectHangs) updateHangStats(stats, machine, { haltResumed, io, sawRamPc: frameSawRamPc });
   }
 
   // A run that reached its budget with no early stop may still be a PROBABLE hang
@@ -439,11 +445,14 @@ interface RunCliOptions {
   keys?: string;
   joy?: string;
   screenshot?: string;
+  scale?: string;
   wav?: string;
   state?: string;
   /** Commander negation of `--no-save`: `false` when the flag is present (default true). */
   save?: boolean;
   readOnly?: boolean;
+  /** Commander negation of `--no-detect-hangs`: `false` when the flag is present (default true). */
+  detectHangs?: boolean;
 }
 
 /** Boot the run machine from the source flags / configured entry, returning the boot descriptor. */
@@ -534,6 +543,7 @@ export function runCommand(context: CommandContext): RunEnvelope {
 
   const params: RunParams = {
     frames: options.frames !== undefined ? parsePositiveInt(options.frames) : undefined,
+    detectHangs: options.detectHangs,
     keys: options.keys,
     joy: options.joy,
     untilPc: options.untilPc !== undefined ? parseAddress(options.untilPc, 'run') : undefined,
@@ -553,7 +563,7 @@ export function runCommand(context: CommandContext): RunEnvelope {
   // screenshot encoder (CLI-PROD-RULE-SCREENSHOT-001); the WAV renders the run's beeper edge
   // stream per beeper-output.md (BEEPER-PCM-*). Both are deterministic functions of the run.
   if (options.screenshot !== undefined) {
-    captureScreenshot(result.machine, resolve(cwd, options.screenshot));
+    captureScreenshot(result.machine, resolve(cwd, options.screenshot), parseScale(options.scale));
   }
   if (options.wav !== undefined) {
     const startT = result.machine.tStatesTotal - result.tstatesRun;
@@ -585,6 +595,16 @@ function parsePositiveInt(input: string): number {
   return n;
 }
 
+/** Normalize `--scale` exactly like `screen --scale` (integer 1..4, default 1). */
+function parseScale(input: string | undefined): number {
+  if (input === undefined) return 1;
+  const n = Number(input);
+  if (!Number.isInteger(n) || n < 1 || n > 4) {
+    throw userError(`Invalid --scale: ${input} (expected an integer 1..4)`, 'run');
+  }
+  return n;
+}
+
 const collect = (value: string, previous: string[] = []): string[] => [...previous, value];
 
 /** Declare the `run` command's flags on its commander instance (CLI-PROD-RUN-001..005). */
@@ -597,6 +617,7 @@ export function configureRunCommand(command: Command): void {
     .option('--tap <file>', 'boot from a .tap tape (instant-loads its CODE block)')
     .option('--org <addr>', 'load origin for --bin / the built entry (default 0x8000)')
     .option('--frames <n>', 'frame budget (default 300; 50 frames ≈ 1 second)')
+    .option('--no-detect-hangs', 'disable the hang watchdog (the CLI form of detectHangs:false)')
     .option('--until-pc <addr>', 'stop when PC reaches this address')
     .option('--until-break', 'run until a breakpoint fires (raises the frame budget)')
     .option('--until-watch', 'run until a watchpoint fires (raises the frame budget)')
@@ -612,6 +633,7 @@ export function configureRunCommand(command: Command): void {
     .option('--keys <spec>', 'scheduled keyboard input, e.g. "60:O*30,120:SPACE*5"')
     .option('--joy <spec>', 'scheduled Kempston input, e.g. "60:R*30,90:RF*10"')
     .option('--screenshot <file>', 'capture the post-run screen to a PNG (the one encoder)')
+    .option('--scale <n>', 'integer upscale 1..4 for --screenshot (default 1)')
     .option('--wav <file>', 'capture the run beeper audio to a WAV (mono 16-bit PCM)')
     .option('--state <file>', 'resume + persist an opt-in persistent session (.zxstate)')
     .option('--no-save', 'do not persist the session (when --state is active)')
