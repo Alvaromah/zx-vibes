@@ -8,7 +8,9 @@
 //                          default session path and republish its embedded debug
 //                          store to `.zxs/debug.json` (the MCP→CLI handoff,
 //                          MCP-PROD-RULE-INTEROP-001).
-//   - `reset`              reset the session machine to a fresh clean-ROM boot.
+//   - `reset`              reset the session to the program's boot state (the
+//                          configured entry rebuilt fresh / `--bin`); `--blank`
+//                          resets to a clean-ROM boot with nothing loaded.
 //   - `export --z80 <f>`   export the session machine as a `.z80` **v1** snapshot
 //                          (CLI-PROD-STATE-001, contract). `--tap`/`--scr` export the
 //                          same machine in those formats via the real formats emitter
@@ -138,11 +140,22 @@ export function runStateLoad(file: string, options: { cwd?: string | undefined }
   };
 }
 
-/** `state reset` — reset the session machine to a fresh clean-ROM boot (CLI-PROD-STATE-001). */
-export function runStateReset(options: { cwd?: string | undefined; state?: string | undefined } = {}): StateEnvelope {
+/**
+ * `state reset` — reset the session to the program's own boot state (CLI-PROD-STATE-001):
+ * source a machine exactly like the observe/save path (the configured entry assembled
+ * fresh, or `--bin`, else a clean ROM), so `reset -> run --state -> mem read` sees the
+ * PROGRAM again, not blank RAM. "Reset" on an emulator means "restart the machine with
+ * the program", which is what an agent iterating on scenarios needs between takes;
+ * `--blank` keeps the old semantics (a clean-ROM boot with nothing loaded).
+ */
+export function runStateReset(
+  options: StateCommonOptions & { blank?: boolean | undefined } = {},
+): StateEnvelope {
   const cwd = resolve(options.cwd ?? process.cwd());
   const file = options.state ?? DEFAULT_STATE_PATH;
-  const machine = bootFreshMachine();
+  const machine = options.blank
+    ? bootFreshMachine()
+    : resolveObserveMachine({ cwd, bin: options.bin, org: options.org, stage: 'state' }).machine;
   // Keep the user's breakpoints (resetting machine state is not deleting debug config).
   saveSession(file, { machine, border: DEFAULT_BORDER, debug: loadDebugStore(cwd) }, cwd);
   return { ok: true, stage: 'state', op: 'reset', file, pc: machine.registers.pc & 0xffff, border: DEFAULT_BORDER };
@@ -291,7 +304,7 @@ export function stateCommand(context: CommandContext): StateEnvelope {
       return runStateLoad(file, { cwd });
     }
     case 'reset':
-      return runStateReset({ cwd, state: options.state as string | undefined });
+      return runStateReset({ ...common, blank: options.blank as boolean | undefined });
     case 'export': {
       // `state export --<fmt> <file>` (CLI-PROD-STATE-001): a format FLAG, not a separate
       // verb. `--z80` is the v1 toolkit snapshot (the contract); `--tap`/`--scr` export the
@@ -334,6 +347,7 @@ export function configureStateCommand(command: Command): void {
     .option('--state <file>', 'session file to source/target (default .zxs/state.zxstate)')
     .option('--bin <file>', 'source a raw binary at --org when there is no session yet')
     .option('--org <addr>', 'load origin for --bin (default 0x8000)')
+    .option('--blank', 'reset to a clean-ROM boot with nothing loaded (reset only)')
     .option('--z80 <file>', 'export target for `state export` (a .z80 v1 snapshot)')
     .option('--tap <file>', 'export the session RAM as a loadable .tap (CODE tape at 0x4000)')
     .option('--scr <file>', 'export the session screen as a 6912-byte .scr image')
