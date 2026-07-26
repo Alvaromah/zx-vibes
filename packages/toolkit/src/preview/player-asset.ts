@@ -55,9 +55,11 @@ export function playerBundleExists(): boolean {
 }
 
 /**
- * The minimal HTML page served at `/`. It hosts a 256x192 <canvas> (CSS-scaled with
- * pixelated rendering) and loads the bundled player ES module, which fetches the program
- * + ROM and runs the reconstructed machine. The `label` is a short Incidental caption.
+ * The minimal HTML page served at `/`. It hosts the 320x240 bordered <canvas>
+ * (RASTER-GEOMETRY-001: the 256x192 display inset in the visible raster border,
+ * CSS-scaled with pixelated rendering) and loads the bundled player ES module, which
+ * fetches the program + ROM and runs the reconstructed machine. The `label` is a
+ * short Incidental caption.
  */
 export function playerHtml(label: string): string {
   const caption = escapeHtml(label);
@@ -71,15 +73,15 @@ export function playerHtml(label: string): string {
   :root { color-scheme: dark; }
   body { margin: 0; background: #111; color: #ddd; font: 13px/1.4 system-ui, sans-serif;
          display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px; }
-  #frame { padding: 24px; border-radius: 4px; background: #000; line-height: 0; }
-  #screen { width: 512px; height: 384px; image-rendering: pixelated; display: block; }
+  #frame { line-height: 0; }
+  #screen { width: 640px; height: 480px; image-rendering: pixelated; display: block; }
   .meta { opacity: 0.75; }
   code { color: #9cf; }
 </style>
 </head>
 <body>
   <div class="meta">zxs preview · <span id="status">loading…</span></div>
-  <div id="frame"><canvas id="screen" width="256" height="192"></canvas></div>
+  <div id="frame"><canvas id="screen" width="320" height="240"></canvas></div>
   <div class="meta">${caption} — host keys drive the 48K matrix; <code>--watch</code> live-reloads.</div>
   <script type="module" src="player.js"></script>
 </body>

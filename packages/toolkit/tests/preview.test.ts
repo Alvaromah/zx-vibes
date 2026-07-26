@@ -81,6 +81,9 @@ describe('preview server — serves the bundled player + program (RT-PROD-PREVIE
     expect(res.headers.get('content-type')).toContain('text/html');
     const html = await res.text();
     expect(html).toContain('<canvas id="screen"');
+    // The bordered raster frame (RT-PROD-PREVIEW-008 / RASTER-GEOMETRY-001):
+    // the canvas is the 320x240 bordered frame, not a bare 256x192 display.
+    expect(html).toContain('width="320" height="240"');
     expect(html).toContain('player.js');
   });
 
