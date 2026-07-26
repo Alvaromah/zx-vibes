@@ -155,16 +155,80 @@ export function printEnvelope(envelope: Envelope, options: PrintOptions): void {
   }
 }
 
-/** Human-readable (Incidental) one-line rendering of a success envelope. */
+/**
+ * Fields that carry a machine-readable payload an agent parses from `--json` but
+ * a human never wants dumped inline: file manifests, per-item result arrays, the
+ * `next` hint list. In human mode these are SUMMARIZED (a count) instead of
+ * stringified — `zxs setup` otherwise prints 27 absolute paths on one line.
+ * Wording is Incidental (CLI-PROD-FREE-001); `--json` is untouched.
+ */
+const SUMMARIZED_FIELDS = new Set([
+  'files', 'created', 'skipped', 'installed', 'deferred', 'removed',
+  'artifacts', 'results', 'errors', 'warnings', 'next', 'checks', 'assertions',
+  'symbols', 'top', 'last', 'entries', 'executed', 'routines', 'edges',
+]);
+
+/**
+ * Summarize one bulk list. The KEY already names what is being counted, so the
+ * count alone reads best (`installed=27`, not `installed=27 files`). Lists whose
+ * items carry a boolean `ok` — `doctor` checks, `test` results — report the
+ * verdict too, because a bare count would hide the one fact worth reading.
+ */
+function summarizeList(items: readonly unknown[]): string {
+  const verdicts = items.filter(
+    (item): item is { ok: boolean } =>
+      item !== null && typeof item === 'object' && typeof (item as { ok?: unknown }).ok === 'boolean',
+  );
+  if (verdicts.length === items.length && items.length > 0) {
+    const passed = verdicts.filter((v) => v.ok).length;
+    return passed === items.length ? `${items.length}/${items.length} ok` : `${passed}/${items.length} ok`;
+  }
+  return String(items.length);
+}
+
+/**
+ * Human-readable (Incidental, CLI-PROD-FREE-001) one-line rendering of a success
+ * envelope: the scalar facts inline, bulk payloads as counts. The full data is
+ * always one `--json` away, so nothing is lost — only the wall of text.
+ */
 function formatHuman(envelope: SuccessEnvelope): string {
   const { ok: _ok, stage, ...rest } = envelope;
-  const extras = Object.entries(rest)
-    .map(([key, value]) => `${key}=${formatScalar(value)}`)
-    .join(' ');
-  return extras ? `${stage}: ${extras}` : `${stage}: ok`;
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(rest)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value) && SUMMARIZED_FIELDS.has(key)) {
+      // Empty bulk lists are noise in human mode — an agent reads them in --json.
+      if (value.length > 0) parts.push(`${key}=${summarizeList(value)}`);
+      continue;
+    }
+    // A nested envelope (`verify` composes build/run/tests) collapses to its
+    // verdict: three truncated JSON blobs told the reader nothing, and the
+    // whole point of the gate line is which stage passed.
+    if (isEnvelopeLike(value)) {
+      parts.push(`${key}=${value.ok ? 'ok' : 'failed'}`);
+      continue;
+    }
+    parts.push(`${key}=${formatScalar(value)}`);
+  }
+  return parts.length > 0 ? `${stage}: ${parts.join(' ')}` : `${stage}: ok`;
 }
+
+/** A nested command envelope — `{ ok, stage, … }` — rather than a plain record. */
+function isEnvelopeLike(value: unknown): value is { ok: boolean } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as { ok?: unknown; stage?: unknown };
+  return typeof candidate.ok === 'boolean' && typeof candidate.stage === 'string';
+}
+
+/**
+ * A scalar renders as itself; a nested object/array that is NOT a summarized bulk
+ * field (a small record like `audio` or `registers`) still renders as compact
+ * JSON, but is truncated so one oversized field cannot swamp the line.
+ */
+const MAX_INLINE_JSON = 120;
 
 function formatScalar(value: unknown): string {
   if (value === null || typeof value !== 'object') return String(value);
-  return JSON.stringify(value);
+  const json = JSON.stringify(value);
+  return json.length > MAX_INLINE_JSON ? `${json.slice(0, MAX_INLINE_JSON - 1)}…` : json;
 }

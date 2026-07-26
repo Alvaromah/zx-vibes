@@ -210,6 +210,20 @@ class HostKeyboard {
 const CPU_HZ = 3_500_000;
 const BEEPER_GAIN = 0.22;   // a 1-bit square wave at full scale is harsh
 
+/**
+ * Queued audio the worklet keeps ahead of the speaker, in seconds — the dominant,
+ * controllable half of the beeper's delay behind the picture (the rest is the
+ * output device's own latency, which the page cannot change).
+ *
+ * The producer posts one ~20 ms buffer per emulated frame and slightly outpaces
+ * the audio hardware clock, so the queue always settles just under whatever
+ * ceiling trimming enforces: THE CEILING IS THE LATENCY. 100 ms measured ~70 ms
+ * of standing queue. 40 ms keeps two frames of jitter slack — enough to ride out
+ * the ordinary one-frame-per-pulse cadence and a missed pulse — while roughly
+ * halving the audible lag.
+ */
+const BEEPER_QUEUE_SECONDS = 0.04;
+
 const BEEPER_WORKLET = `
 class ZxsBeeper extends AudioWorkletProcessor {
   constructor() {
@@ -220,12 +234,21 @@ class ZxsBeeper extends AudioWorkletProcessor {
     this.port.onmessage = (e) => {
       if (e.data === 'flush') { this.queue.length = 0; this.read = 0; return; }
       this.queue.push(e.data);
-      // Bound the latency. The run loop can emit up to 8 frames in one clock pulse, so a
-      // slow tab would otherwise build a queue that plays seconds behind the picture.
+      // Bound the latency: the queue depth IS the delay behind the picture, and a
+      // slow tab (up to 8 frames in one clock pulse) would otherwise let it grow.
+      // Shed the EXACT excess by advancing the read cursor rather than dropping
+      // whole ~20 ms buffers: same bound, but the discontinuity is a few
+      // milliseconds instead of a whole frame, so trimming stays inaudible at a
+      // tight target.
       let total = -this.read;
       for (const q of this.queue) total += q.length;
-      while (this.queue.length > 1 && total > sampleRate * 0.1) {
-        total -= this.queue[0].length - this.read;
+      let excess = total - Math.round(sampleRate * ${BEEPER_QUEUE_SECONDS});
+      while (excess > 0 && this.queue.length > 0) {
+        const available = this.queue[0].length - this.read;
+        if (available > excess) { this.read += excess; break; }
+        // Never drop the buffer being played out to empty; leave the tail.
+        if (this.queue.length === 1) { this.read += Math.max(0, available - 1); break; }
+        excess -= available;
         this.queue.shift();
         this.read = 0;
       }
