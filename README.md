@@ -252,8 +252,8 @@ change is explicitly about optional `sjasmplus` support.
 
 | Package | Version | What it is |
 | --- | ---: | --- |
-| `zx-vibes` | `0.6.1` | Umbrella package: `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
-| `@zx-vibes/toolkit` | `0.6.1` | The `zxs` CLI, MCP server, and preview player implementation. |
+| `zx-vibes` | `0.7.0` | Umbrella package: `zx-vibes`, `zxs`, `zxs-mcp`, and `zxasm` bins. |
+| `@zx-vibes/toolkit` | `0.7.0` | The `zxs` CLI, MCP server, and preview player implementation. |
 | `@zx-vibes/asm` | `0.3.0` | `zxasm` assembler/disassembler (+ `spectral-asm` alias). |
 | `@zx-vibes/cpu` | `0.1.0` | Z80 CPU core. |
 | `@zx-vibes/ula` | `0.1.0` | ULA video/timing core. |
@@ -265,7 +265,7 @@ earlier `create-zx-vibes` and `@zx-vibes/emulator` packages are deprecated
 on npm — `zxs new` and the emulator core packages replace them.
 
 Each starter under `starters/` pins a `zx-vibes` dev dependency floor of
-`^0.6.1`, kept in sync with the umbrella package version by
+`^0.7.0`, kept in sync with the umbrella package version by
 `pnpm run check:versions`.
 
 ## CI and releases
