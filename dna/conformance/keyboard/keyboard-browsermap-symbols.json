@@ -1,0 +1,50 @@
+{
+  "id": "KBD-BROWSERMAP-002",
+  "area": "gallery",
+  "tier": "contract",
+  "provenance": "decision:ADR-0028",
+  "input": {
+    "kind": "keyboard-browsermap",
+    "cases": [
+      { "name": "comma", "key": "," },
+      { "name": "period", "key": "." },
+      { "name": "double-quote", "key": "\"" },
+      { "name": "semicolon", "key": ";" },
+      { "name": "colon", "key": ":" },
+      { "name": "minus", "key": "-" },
+      { "name": "plus", "key": "+" },
+      { "name": "equals", "key": "=" },
+      { "name": "asterisk", "key": "*" },
+      { "name": "slash", "key": "/" },
+      { "name": "question", "key": "?" },
+      { "name": "apostrophe", "key": "'" },
+      { "name": "underscore", "key": "_" },
+      { "name": "less-than", "key": "<" },
+      { "name": "greater-than", "key": ">" },
+      { "name": "exclamation", "key": "!" },
+      { "name": "unmapped-extended-bracket", "key": "[" }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "comma", "keys": ["SYMBOL_SHIFT", "N"], "positions": [{ "row": 7, "bit": 1 }, { "row": 7, "bit": 3 }] },
+      { "name": "period", "keys": ["SYMBOL_SHIFT", "M"], "positions": [{ "row": 7, "bit": 1 }, { "row": 7, "bit": 2 }] },
+      { "name": "double-quote", "keys": ["SYMBOL_SHIFT", "P"], "positions": [{ "row": 7, "bit": 1 }, { "row": 5, "bit": 0 }] },
+      { "name": "semicolon", "keys": ["SYMBOL_SHIFT", "O"], "positions": [{ "row": 7, "bit": 1 }, { "row": 5, "bit": 1 }] },
+      { "name": "colon", "keys": ["SYMBOL_SHIFT", "Z"], "positions": [{ "row": 7, "bit": 1 }, { "row": 0, "bit": 1 }] },
+      { "name": "minus", "keys": ["SYMBOL_SHIFT", "J"], "positions": [{ "row": 7, "bit": 1 }, { "row": 6, "bit": 3 }] },
+      { "name": "plus", "keys": ["SYMBOL_SHIFT", "K"], "positions": [{ "row": 7, "bit": 1 }, { "row": 6, "bit": 2 }] },
+      { "name": "equals", "keys": ["SYMBOL_SHIFT", "L"], "positions": [{ "row": 7, "bit": 1 }, { "row": 6, "bit": 1 }] },
+      { "name": "asterisk", "keys": ["SYMBOL_SHIFT", "B"], "positions": [{ "row": 7, "bit": 1 }, { "row": 7, "bit": 4 }] },
+      { "name": "slash", "keys": ["SYMBOL_SHIFT", "V"], "positions": [{ "row": 7, "bit": 1 }, { "row": 0, "bit": 4 }] },
+      { "name": "question", "keys": ["SYMBOL_SHIFT", "C"], "positions": [{ "row": 7, "bit": 1 }, { "row": 0, "bit": 3 }] },
+      { "name": "apostrophe", "keys": ["SYMBOL_SHIFT", "7"], "positions": [{ "row": 7, "bit": 1 }, { "row": 4, "bit": 3 }] },
+      { "name": "underscore", "keys": ["SYMBOL_SHIFT", "0"], "positions": [{ "row": 7, "bit": 1 }, { "row": 4, "bit": 0 }] },
+      { "name": "less-than", "keys": ["SYMBOL_SHIFT", "R"], "positions": [{ "row": 7, "bit": 1 }, { "row": 2, "bit": 3 }] },
+      { "name": "greater-than", "keys": ["SYMBOL_SHIFT", "T"], "positions": [{ "row": 7, "bit": 1 }, { "row": 2, "bit": 4 }] },
+      { "name": "exclamation", "keys": ["SYMBOL_SHIFT", "1"], "positions": [{ "row": 7, "bit": 1 }, { "row": 3, "bit": 0 }] },
+      { "name": "unmapped-extended-bracket", "keys": [], "positions": [] }
+    ]
+  },
+  "normalization": { "profile": "custom" }
+}

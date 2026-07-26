@@ -1653,3 +1653,36 @@ Tracked so the regeneration's known limitations are **not silent debt (C5)**.
   user call on scope/sequencing (knowledge-pack + gallery workstreams). Interim:
   legacy kept excluded; the umbrella `zx-vibes` bins re-wired to the v2 barrel
   (`runCli`/`runMcp`) so the umbrella works against v2 (its smoke test is green).
+
+### ADR-0028 — Preview player host-policy parity with the emulator demos
+The `examples/` emulator demos and the toolkit's bundled preview player run the
+same reconstructed `@zx-vibes/machine` core but grew separate host layers, and
+the player's was narrower in three user-visible ways: it sonified only port-0xFE
+b4 (a MIC-only ROM `SAVE` was silent), mapped no punctuation characters (`,` `.`
+`"` … untypeable), and drew no raster border (a 256×192 canvas with page CSS
+around it — no geometry, no `SAVE` bands). The demos' host policies are adopted
+as the conformed default for the player:
+
+1. **Audible speaker mix** — the ULA drives the speaker from BOTH output lines,
+   EAR (b4) strongly and MIC (b3) weakly (~4:1 measured); the audible level is
+   the weighted sum `0.8·b4 + 0.2·b3`, a fractional 0..1 drive through the
+   existing fractional-grid PCM policy. Pinned as BEEPER-PCM-MIX-001
+   (`beeper-output.md`). The CLI `run --wav` capture intentionally KEEPS the
+   1-bit b4 stream (BEEPER-PCM-EDGE-SOURCE-001) — changing the WAV bytes is a
+   separate decision, not taken here.
+2. **Symbol-character browser keymap** — printable symbol characters map to
+   their 48K SYMBOL SHIFT chords (the red legends), resolved from the produced
+   character (`event.key`) so any host layout types them; a host Shift held only
+   to produce a symbol does not press CAPS SHIFT (CAPS+SYM would enter EXTENDED
+   mode mid-chord). Pinned as KBD-BROWSERMAP-002 (`keyboard-input.md`).
+3. **In-canvas raster border** — the player renders the 320×240 bordered frame
+   of RASTER-GEOMETRY-001 with a per-scanline border colour taken from the
+   frame's chronological border events (the row-granular reading of
+   RASTER-TSTATE-PIXEL-001), so `SAVE`/`LOAD` paints its red/cyan bands
+   (RASTER-SAVE-PP-001). Pinned as RT-PROD-PREVIEW-008 (`toolkit-runtime.md`).
+
+The player consumes these as pure modules under `packages/toolkit/src/preview/`
+(the PR-#29 pattern), keeping the demos' standalone bundle untouched.
+Consolidating the four host-layer copies (demos, player, CLI, conformance
+models) into one shared package is explicitly deferred — this ADR pins the
+BEHAVIOR so the copies can no longer diverge silently.

@@ -1363,6 +1363,15 @@ behaviors:
     status: covered
     notes: "S5 (R-W8-05, decision:ADR-0016) host input policy KBD-BROWSERMAP-001. ArrowUp -> CAPS_SHIFT+7, Shift -> CAPS_SHIFT, Backspace -> CAPS_SHIFT+0; the self-test rejects a map that drops combos. Cross-checked vs the oracle PC_KEY_MAP (event.key), not copied."
 
+  - id: KBD-BROWSERMAP-002
+    area: gallery
+    behavior: "printable symbol characters map to their 48K SYMBOL SHIFT chords (the red legends) resolved from the produced character, so punctuation types on any host layout; EXTENDED-mode characters stay unmapped; a host Shift held only to produce a symbol does not press CAPS SHIFT"
+    tier: contract
+    provenance: decision:ADR-0028
+    fixtures: [conformance/keyboard/keyboard-browsermap-symbols.json, conformance/keyboard/run-keyboard-fixtures.mjs, conformance/keyboard/run-keyboard-fixtures-self-test.mjs, conformance/keyboard/keyboard-model.mjs]
+    status: covered
+    notes: "ADR-0028 (preview host-policy parity). ',' -> SYMBOL_SHIFT+N, '.' -> SYMBOL_SHIFT+M, '\"' -> SYMBOL_SHIFT+P, ... , '[' -> unmapped (EXTENDED mode); the self-test rejects a symbol-less map. The Shift-suppression rule is exercised by the toolkit player unit tests (resolveHeldMatrix)."
+
   - id: KBD-LATCH-001
     area: gallery
     behavior: "a key pressed and released before any 50 Hz scan observes it is latched as pressed for exactly one scan (a quick tap stays visible); a key held across a scan releases immediately"

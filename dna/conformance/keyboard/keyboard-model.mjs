@@ -31,7 +31,27 @@ export const BROWSER_KEY_MAP = {
   ArrowLeft: ["CAPS_SHIFT", "5"], ArrowDown: ["CAPS_SHIFT", "6"], ArrowUp: ["CAPS_SHIFT", "7"], ArrowRight: ["CAPS_SHIFT", "8"],
 };
 
+// Printable symbol characters -> SYMBOL SHIFT chords (KBD-BROWSERMAP-002,
+// decision:ADR-0028): the 48K's red key legends, resolved from the PRODUCED
+// character so any host layout types them. Letters/digits stay direct keys;
+// EXTENDED-mode characters (brackets, backslash, tilde, ...) stay unmapped.
+export const SYMBOL_CHAR_MAP = {
+  "!": ["SYMBOL_SHIFT", "1"], "@": ["SYMBOL_SHIFT", "2"], "#": ["SYMBOL_SHIFT", "3"],
+  $: ["SYMBOL_SHIFT", "4"], "%": ["SYMBOL_SHIFT", "5"], "&": ["SYMBOL_SHIFT", "6"],
+  "'": ["SYMBOL_SHIFT", "7"], "(": ["SYMBOL_SHIFT", "8"], ")": ["SYMBOL_SHIFT", "9"],
+  _: ["SYMBOL_SHIFT", "0"], '"': ["SYMBOL_SHIFT", "P"], ";": ["SYMBOL_SHIFT", "O"],
+  ":": ["SYMBOL_SHIFT", "Z"], ",": ["SYMBOL_SHIFT", "N"], ".": ["SYMBOL_SHIFT", "M"],
+  "=": ["SYMBOL_SHIFT", "L"], "+": ["SYMBOL_SHIFT", "K"], "-": ["SYMBOL_SHIFT", "J"],
+  "*": ["SYMBOL_SHIFT", "B"], "/": ["SYMBOL_SHIFT", "V"], "?": ["SYMBOL_SHIFT", "C"],
+  "<": ["SYMBOL_SHIFT", "R"], ">": ["SYMBOL_SHIFT", "T"], "^": ["SYMBOL_SHIFT", "H"],
+  "£": ["SYMBOL_SHIFT", "X"],
+};
+
 export function browserKeyToSpectrum(key) {
+  if (typeof key === "string" && key.length === 1 &&
+      Object.prototype.hasOwnProperty.call(SYMBOL_CHAR_MAP, key)) {
+    return SYMBOL_CHAR_MAP[key];
+  }
   if (Object.prototype.hasOwnProperty.call(BROWSER_KEY_MAP, key)) return BROWSER_KEY_MAP[key];
   if (Object.prototype.hasOwnProperty.call(KEY_MATRIX, key)) return [key];
   const up = typeof key === "string" ? key.toUpperCase() : key;

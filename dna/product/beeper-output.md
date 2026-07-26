@@ -63,6 +63,24 @@ the capture conformance-checkable.
   hardware edge truth; the conformance route fixes the raw mapping and the
   continuity rule, leaving the specific filter coefficients an Incidental host choice.
 
+## The audible speaker mix (host drive policy)
+
+<!-- provenance: decision:ADR-0028 -->
+- [id: BEEPER-PCM-MIX-001] The ULA drives the internal speaker from **both**
+  port-`0xFE` output lines: EAR (`b4`) strongly and MIC (`b3`) weakly, a measured
+  ratio of roughly 4:1. The **audible drive level** the browser preview renders is
+  the weighted **sum** `0.8·b4 + 0.2·b3` — a fractional `0..1` level flowing
+  through the same fractional-grid resampling above (drive `0` → `level0`, drive
+  `1` → `level1`, fractional drives map linearly between). A sum, **not** an XOR:
+  the common game routine that toggles both bits in phase (`OUT 0x18` / `OUT 0x00`)
+  renders a full-swing tone (an XOR model cancels it to silence), while the ROM
+  `SAVE` routine — which toggles **only MIC** — renders audibly at the soft `0.2`
+  swing, as on hardware. This mix is the **preview player's** drive policy
+  (RT-PROD-PREVIEW-006); the deterministic `run --wav` capture below deliberately
+  keeps the 1-bit `b4` stream of BEEPER-PCM-EDGE-SOURCE-001 (changing the WAV
+  bytes is a separate decision). Exercised by the toolkit's player unit tests
+  (`speakerMixLevel` + fractional-level rendering).
+
 ## Continuity across frame boundaries
 
 <!-- provenance: decision:ADR-0016 -->
