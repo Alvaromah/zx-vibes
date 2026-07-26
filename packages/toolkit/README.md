@@ -3,7 +3,7 @@
 The `zxs` CLI: an agent-facing, JSON-first build/run/observe/verify toolkit over
 the `@zx-vibes` assembler and emulator cores, for ZX Spectrum **48K** projects.
 
-Current package version in this repository: `0.7.0`.
+Current package version in this repository: `0.8.0`.
 
 > **Regeneration status — core surface complete (through Slice 11a).**
 > This package is regenerated from its DNA product specs
