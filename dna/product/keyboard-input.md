@@ -57,6 +57,22 @@ oracle for `dna/conformance/keyboard/`.
   is a host input choice (`decision:ADR-0016`), cross-checked against the oracle
   `PC_KEY_MAP`; a shell may rebind it, but this is the conformed default.
 
+<!-- provenance: decision:ADR-0028 -->
+- [id: KBD-BROWSERMAP-002] **Printable symbol characters** map to their 48K
+  SYMBOL SHIFT chords — the machine's red key legends — resolved from the
+  **produced character** (`KeyboardEvent.key`), not the physical key, so they type
+  correctly on any host layout: `!`→SYM+1, `@`→SYM+2, `#`→SYM+3, `$`→SYM+4,
+  `%`→SYM+5, `&`→SYM+6, `'`→SYM+7, `(`→SYM+8, `)`→SYM+9, `_`→SYM+0, `"`→SYM+P,
+  `;`→SYM+O, `:`→SYM+Z, `,`→SYM+N, `.`→SYM+M, `=`→SYM+L, `+`→SYM+K, `-`→SYM+J,
+  `*`→SYM+B, `/`→SYM+V, `?`→SYM+C, `<`→SYM+R, `>`→SYM+T, `^`→SYM+H, `£`→SYM+X
+  (SYM = SYMBOL SHIFT). Letters and digits stay direct keys (KBD-BROWSERMAP-001);
+  characters needing the Spectrum's EXTENDED mode (brackets, backslash, tilde…)
+  stay unmapped. **Shift suppression:** while any symbol character is held, a
+  CAPS SHIFT contributed by a host `Shift` key is dropped — the host Shift that
+  merely produced the character must not turn the chord into CAPS+SYM (EXTENDED
+  mode); a host `Shift` held with **no** symbol character still maps to CAPS SHIFT,
+  so Shift+Ctrl reaches EXTENDED mode deliberately.
+
 ## Quick-tap latch (host policy)
 
 <!-- provenance: decision:ADR-0016 -->
@@ -86,6 +102,9 @@ A keyboard contract satisfies these facts iff, through
 - `keyboard-browsermap.json` (KBD-BROWSERMAP-001) — each browser key maps to the
   right Spectrum key(s) and matrix positions, including the CAPS-SHIFT cursor combos;
   the self-test proves a map that drops combinations fails.
+- `keyboard-browsermap-symbols.json` (KBD-BROWSERMAP-002) — each printable symbol
+  character maps to its SYMBOL SHIFT chord and matrix positions; the Shift-suppression
+  rule is exercised by the toolkit player's unit tests (`resolveHeldMatrix`).
 - `keyboard-latch.json` (KBD-LATCH-001) — a quick tap is visible for exactly one
   scan, a held key for every scan it spans; the self-test proves a latch-less
   keyboard loses the quick tap.

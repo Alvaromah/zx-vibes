@@ -3,12 +3,17 @@
 // (NOT the legacy @zx-vibes/emulator) in the browser: it boots a clean 48K ROM machine,
 // loads the program the preview server serves, targets the exact 48K frame cadence
 // on a visibility-independent clock, renders separately, and
-//   - renders the 256x192 framebuffer to a <canvas> using the EXACT screen-render.md
-//     (SCREEN-FRAMEBUFFER-001) decode + palette.yaml (SCREEN-PALETTE-001) colour table, and
+//   - renders the 320x240 bordered frame (RT-PROD-PREVIEW-008): the 256x192
+//     framebuffer via the EXACT screen-render.md (SCREEN-FRAMEBUFFER-001) decode +
+//     palette.yaml (SCREEN-PALETTE-001), inset in the raster-border.md
+//     (RASTER-GEOMETRY-001) border whose colour varies per scanline from the frame's
+//     port-0xFE border events — so SAVE/LOAD paints its bands (RASTER-SAVE-PP-001), and
 //   - maps the host keyboard onto the 48K matrix per keyboard-input.md (KBD-MATRIX-001 /
-//     KBD-BROWSERMAP-001 / KBD-LATCH-001), and
-//   - renders port-0xFE bit-4 edges through a continuous Web Audio stream after a
-//     browser user gesture.
+//     KBD-BROWSERMAP-001/-002 / KBD-LATCH-001), resolving symbol characters as
+//     SYMBOL SHIFT chords, and
+//   - renders the weighted EAR+MIC speaker mix (BEEPER-PCM-MIX-001) through a
+//     continuous Web Audio stream after a browser user gesture — so a MIC-only
+//     ROM SAVE is audible, soft, exactly as on hardware.
 //
 // This file is authored in browser JS and bundled by tsup (tsup.player.config.ts,
 // platform:browser, noExternal @zx-vibes/*) into assets/preview/player.js, so the
@@ -38,11 +43,26 @@ import {
 import {
   createPreviewBeeperState,
   renderPreviewBeeperChunk,
+  speakerMixLevel,
 } from '../src/preview/beeper-model.ts';
 import {
   advancePreviewFrameClock,
   createPreviewFrameClock,
 } from '../src/preview/frame-clock.ts';
+import {
+  SYMBOL_CHAR_KEYS,
+  claimsBrowserEvent,
+  isHostShiftCode,
+  resolveHeldMatrix,
+} from '../src/preview/host-keys.ts';
+import {
+  BORDER_X,
+  BORDER_Y,
+  OUT_WIDTH,
+  OUT_HEIGHT,
+  borderRowsFromLog,
+  fillBorderRows,
+} from '../src/preview/border-frame.ts';
 
 // ---------------------------------------------------------------------------
 // Palette — palette.yaml / screen-render.md SCREEN-PALETTE-001 (the exact shared
@@ -74,29 +94,10 @@ const KEY_MATRIX = {
   SPACE: [7, 0], SYMBOL_SHIFT: [7, 1], M: [7, 2], N: [7, 3], B: [7, 4],
 };
 
-/** Map a browser KeyboardEvent.key to zero or more Spectrum matrix keys (KBD-BROWSERMAP-001). */
-function mapBrowserKey(key) {
-  if (key.length === 1) {
-    const up = key.toUpperCase();
-    if (up >= 'A' && up <= 'Z') return [up];
-    if (up >= '0' && up <= '9') return [up];
-    if (key === ' ') return ['SPACE'];
-  }
-  switch (key) {
-    case 'Enter': return ['ENTER'];
-    case ' ': return ['SPACE'];
-    case 'Shift': return ['CAPS_SHIFT'];
-    case 'Control': return ['SYMBOL_SHIFT'];
-    case 'ArrowLeft': return ['CAPS_SHIFT', '5'];
-    case 'ArrowDown': return ['CAPS_SHIFT', '6'];
-    case 'ArrowUp': return ['CAPS_SHIFT', '7'];
-    case 'ArrowRight': return ['CAPS_SHIFT', '8'];
-    case 'Backspace':
-    case 'Delete': return ['CAPS_SHIFT', '0'];
-    case 'Escape': return ['CAPS_SHIFT', 'SPACE'];
-    default: return [];
-  }
-}
+// The browser-key → matrix mapping (KBD-BROWSERMAP-001/-002) lives in
+// ../src/preview/host-keys.ts — resolveHeldMatrix recomputes the whole pressed
+// set from the held host keys, which is what keeps SYMBOL SHIFT chords correct
+// when modifiers are released asymmetrically.
 
 /** IN (0xFE) byte for a pressed-key set + a port high byte (KBD-MATRIX-001). */
 function keyboardByte(pressed, highByte, earLevel) {
@@ -114,71 +115,91 @@ function keyboardByte(pressed, highByte, earLevel) {
 }
 
 /**
- * Host keyboard state with the quick-tap latch (KBD-LATCH-001): a key released before
- * any matrix scan observed it stays visible for exactly one subsequent scan; a key held
- * across a scan releases immediately on key-up; a key-up with no matching live key-down
- * registers no phantom press.
+ * Host keyboard state with the quick-tap latch (KBD-LATCH-001): a key pressed
+ * and released before any matrix scan observed it stays visible for exactly one
+ * subsequent scan; a key held across a scan releases at the scan boundary; a
+ * key-up with no matching live key-down registers no phantom press.
+ *
+ * The SCAN is the 50 Hz FRAME, not one IN read. The ROM keyboard interrupt
+ * reads all EIGHT half-rows per frame; treating each read as "the scan" (and
+ * clearing a latch at the first one) would hide a latched key from every
+ * half-row the ROM reads after row 0 — a quick tap on B/N/M/SPACE (row 7, read
+ * last) would vanish before the ROM reached its row. So `beginScan()` — called
+ * once per emulated frame, before the frame runs — freezes the frame's visible
+ * set: the live keys plus the taps buffered since the previous freeze (via
+ * `tap()`, the latch), which are then retired — visible for exactly one scan.
  */
 class HostKeyboard {
   constructor() {
-    this.live = new Set();      // physically down now
-    this.latched = new Set();   // released-but-not-yet-scanned (one scan)
-    this.unseen = new Set();    // live keys a scan has not observed yet
+    this.live = new Set();        // physically down now
+    this.pendingTaps = new Set(); // pressed since the last freeze (one-scan latch)
+    this.scanSet = new Set();     // the frozen visible set for the current frame
     this.border = 7;
-    this.earLevel = 0;
+    this.earLevel = 0;          // last b4 written — the IN bit-6 EAR echo (issue-3)
+    this.audioLevel = 0;        // weighted EAR+MIC speaker drive (BEEPER-PCM-MIX-001)
   }
   down(spectrumKey) {
     if (!(spectrumKey in KEY_MATRIX)) return;
-    if (!this.live.has(spectrumKey)) {
-      this.live.add(spectrumKey);
-      this.unseen.add(spectrumKey);
-    }
+    this.live.add(spectrumKey);
   }
   up(spectrumKey) {
-    if (!this.live.has(spectrumKey)) return; // no phantom press
-    this.live.delete(spectrumKey);
-    if (this.unseen.has(spectrumKey)) {
-      // Released before a scan saw it → latch for one scan.
-      this.unseen.delete(spectrumKey);
-      this.latched.add(spectrumKey);
-    }
+    this.live.delete(spectrumKey); // releasing a key never pressed is a no-op
+  }
+  /** Latch a key for the next frame's scan (only real presses reach here). */
+  tap(spectrumKey) {
+    if (!(spectrumKey in KEY_MATRIX)) return;
+    this.pendingTaps.add(spectrumKey);
+  }
+  /** Start the next frame's scan: freeze live + buffered taps, retire the taps. */
+  beginScan() {
+    this.scanSet = new Set(this.live);
+    for (const k of this.pendingTaps) this.scanSet.add(k);
+    this.pendingTaps.clear();
   }
   pressedSet() {
-    const s = new Set(this.live);
-    for (const k of this.latched) s.add(k);
+    // The frame's frozen set plus keys pressed mid-frame (the live matrix): a
+    // latched tap stays visible to every half-row read of exactly one frame.
+    const s = new Set(this.scanSet);
+    for (const k of this.live) s.add(k);
     return s;
   }
   // The machine `io` contract.
   read(port) {
     if ((port & 0x01) === 0) {
-      const pressed = this.pressedSet();
-      const byte = keyboardByte(pressed, (port >> 8) & 0xff, this.earLevel);
-      // A read IS a scan: live keys are now seen; latched keys release after this scan.
-      for (const k of pressed) this.unseen.delete(k);
-      this.latched.clear();
-      return byte;
+      return keyboardByte(this.pressedSet(), (port >> 8) & 0xff, this.earLevel);
     }
     return 0xff; // undriven odd ports float idle high (no Kempston bound to the host here)
   }
   write(port, value) {
     if ((port & 0x01) !== 0) return;
-    this.border = value & 0x07;
-    const level = (value >> 4) & 1;
-    if (level !== this.earLevel) {
-      this.earLevel = level;
-      // Bit 4 is the speaker (host-io-port-fe.md HOST-IO-PORTFE-BEEPER-001). Report the
-      // transition with the frame clock so the beeper can place it in time; without a
-      // timestamp the pitch would depend on how many OUTs happen to land per frame.
+    // Border (b0-b2) is an EVENT stream (HOST-IO-PORTFE-BORDER-001): report only a
+    // colour that differs from the one in effect, stamped by the caller with the
+    // frame clock so the renderer can place it on the right scanline.
+    const colour = value & 0x07;
+    if (colour !== this.border) {
+      this.border = colour;
+      if (this.onBorder) this.onBorder(colour);
+    }
+    this.earLevel = (value >> 4) & 1; // the IN bit-6 EAR echo tracks b4 (issue-3)
+    // The audible speaker is the weighted EAR+MIC mix (BEEPER-PCM-MIX-001), so a
+    // MIC-only ROM SAVE produces edges too. Report level changes with the frame
+    // clock; without a timestamp the pitch would depend on how many OUTs happen
+    // to land per frame.
+    const level = speakerMixLevel(value);
+    if (level !== this.audioLevel) {
+      this.audioLevel = level;
       if (this.onSpeaker) this.onSpeaker(level);
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Beeper — port 0xFE bit 4 to Web Audio (beeper-output.md).
+// Beeper — the port-0xFE speaker to Web Audio (beeper-output.md). The drive level
+// is the weighted EAR+MIC mix (BEEPER-PCM-MIX-001), so both game beepers (b4) and
+// the ROM SAVE's MIC-only tone (b3) are audible.
 //
-// The CLI already turns the same signal into a WAV (`run --wav`); this is the browser
-// half. Every level change is stamped with the frame clock, and at the end of each
+// The CLI's `run --wav` renders the b4 edge stream; this is the browser half.
+// Every level change is stamped with the frame clock, and at the end of each
 // emulated frame the resulting step function is integrated into one sample per output
 // sample — area-averaged, not point-sampled, because a 4 kHz square wave point-sampled
 // at 48 kHz aliases audibly.
@@ -423,12 +444,14 @@ function startEmulationClock(onPulse) {
 // Renderer — screen-render.md SCREEN-FRAMEBUFFER-001: extract the bitmap bit (MSB
 // leftmost), decode the attribute through @zx-vibes/ula pixelColorIndex with the FLASH
 // phase, map the index through the palette, write RGBA. Reads the live machine memory.
+// The 256x192 display content is written inset by the visible border margins into the
+// 320x240 bordered frame (RASTER-GEOMETRY-001); the caller paints the border rows first.
 // ---------------------------------------------------------------------------
 function renderInto(imageData, memory, frame) {
   const data = imageData.data;
-  let cursor = 0;
   const phase = flashPhase(frame);
   for (let y = 0; y < FRAME_HEIGHT; y += 1) {
+    let cursor = ((y + BORDER_Y) * OUT_WIDTH + BORDER_X) * 4;
     for (let x = 0; x < FRAME_WIDTH; x += 1) {
       const displayByte = memory[displayByteAddress(x, y)] & 0xff;
       const pixelOn = (displayByte >> (7 - (x & 7))) & 1;
@@ -583,11 +606,20 @@ async function boot() {
 
   machine.io = keyboard;
 
-  // ---- beeper ---------------------------------------------------------------
+  // ---- beeper + border event capture ---------------------------------------
+  // Both stamped as (tStatesTotal - frame start): a monotonic 0..~69888 offset.
+  // machine.clock (tStatesTotal mod 69888) would wrap MID-frame — the final
+  // instruction overshoots the boundary — scrambling the ascending-time logs.
   const beeper = new Beeper();
   let emulatedFrameStartTStates = machine.tStatesTotal;
   keyboard.onSpeaker = (level) =>
     beeper.edge(machine.tStatesTotal - emulatedFrameStartTStates, level);
+  // This frame's border-changing writes, flat [t, colour, ...] (RT-PROD-PREVIEW-008);
+  // collapsed to per-scanline colours at each frame end, reusing one row buffer.
+  const borderLog = [];
+  const borderRows = new Uint8Array(OUT_HEIGHT).fill(keyboard.border & 0x07);
+  keyboard.onBorder = (colour) =>
+    borderLog.push(machine.tStatesTotal - emulatedFrameStartTStates, colour);
 
   const soundBtn = document.createElement('button');
   soundBtn.type = 'button';
@@ -645,8 +677,10 @@ async function boot() {
 
   // ---- the 50.08 Hz emulation clock + independently throttled renderer -----
   const canvas = document.getElementById('screen');
+  canvas.width = OUT_WIDTH;
+  canvas.height = OUT_HEIGHT;
   const ctx = canvas.getContext('2d');
-  const image = ctx.createImageData(FRAME_WIDTH, FRAME_HEIGHT);
+  const image = ctx.createImageData(OUT_WIDTH, OUT_HEIGHT);
   let frameCounter = 0;
 
   function applyAutotype() {
@@ -673,9 +707,15 @@ async function boot() {
     clockState = advanced.state;
     for (let step = 0; step < advanced.frames; step += 1) {
       applyAutotype();
+      keyboard.beginScan(); // freeze this frame's visible key set (KBD-LATCH-001)
       emulatedFrameStartTStates = machine.tStatesTotal;
+      // The colour in force at the top of this frame is whatever the previous
+      // frame left behind; the log then collects this frame's changes.
+      const borderCarry = keyboard.border;
+      borderLog.length = 0;
       stepFrame(machine, trap);
       beeper.endFrame();   // one frame of speaker edges -> one buffer of samples
+      borderRowsFromLog(borderLog, borderCarry, borderRows); // -> scanline colours
       frameCounter += 1;
     }
   }
@@ -686,30 +726,72 @@ async function boot() {
   }, { once: true });
 
   function render() {
+    // Border rows first (the in-canvas raster border), then the display content
+    // inset over it — the border is real pixels now, not page CSS.
+    fillBorderRows(image.data, borderRows, PALETTE_RGB);
     renderInto(image, machine.memory, frameCounter);
     ctx.putImageData(image, 0, 0);
-    const wrap = document.getElementById('frame');
-    if (wrap) {
-      const b = PALETTE_RGB[keyboard.border & 0x07];
-      wrap.style.background = 'rgb(' + b[0] + ',' + b[1] + ',' + b[2] + ')';
-    }
     requestAnimationFrame(render);
   }
   requestAnimationFrame(render);
 
   // ---- host keyboard wiring (real interactive input) -----------------------
+  // Held host keys, event.code -> event.key AT KEYDOWN. The full matrix set is
+  // recomputed from this on every event (host-keys.ts resolveHeldMatrix): a
+  // symbol chord's identity is the key captured at keydown, so releasing the
+  // host Shift before the symbol key still releases SYMBOL_SHIFT+P cleanly —
+  // per-event keyup mapping would see "2" where the keydown saw '"' and leave
+  // the chord stuck.
+  //
+  // Two pieces of per-hold state:
+  //   - stickyShift: a Shift code that produced a symbol keeps its CAPS
+  //     suppressed until it is physically released (host-keys.ts), so the
+  //     few-millisecond gap where the Shift outlives its symbol key cannot
+  //     pulse CAPS into the same scan as the latched chord (= EXTENDED mode).
+  //   - keyboard.tap(): every key that APPEARS in the resolved set is buffered
+  //     for the next frame's scan (KBD-LATCH-001, scan = frame) — except a
+  //     CAPS that exists only because a host Shift is held, whose sub-frame
+  //     pulses are resolution artifacts, not user taps (a bare-CAPS tap types
+  //     nothing on the machine; combo CAPS — arrows, DELETE — arrives with its
+  //     partner from the same named mapping and is buffered with it).
+  const held = new Map();
+  const stickyShift = new Set();
+  let resolvedKeys = new Set();
+  const syncHeldKeys = () => {
+    let symbolNow = false;
+    for (const [, key] of held) {
+      if (key.length === 1 && key in SYMBOL_CHAR_KEYS) { symbolNow = true; break; }
+    }
+    if (symbolNow) {
+      for (const [code] of held) if (isHostShiftCode(code)) stickyShift.add(code);
+    }
+    const next = resolveHeldMatrix(held, stickyShift);
+    const withoutShifts = new Map([...held].filter(([code]) => !isHostShiftCode(code)));
+    const nextSansShift = resolveHeldMatrix(withoutShifts, stickyShift);
+    for (const k of next) {
+      if (!resolvedKeys.has(k)) {
+        const shiftOnlyCaps = k === 'CAPS_SHIFT' && !nextSansShift.has('CAPS_SHIFT');
+        if (!shiftOnlyCaps) keyboard.tap(k);
+      }
+    }
+    resolvedKeys = next;
+    for (const k of Object.keys(KEY_MATRIX)) {
+      if (next.has(k)) keyboard.down(k);
+      else keyboard.up(k);
+    }
+  };
   window.addEventListener('keydown', (e) => {
     if (autoload && autoload.next < autoload.blocks.length) return; // autoload owns the keyboard
-    const keys = mapBrowserKey(e.key);
-    if (keys.length === 0) return;
+    if (!claimsBrowserEvent(e)) return; // F-keys / OS chords stay with the browser
+    held.set(e.code, e.key);
+    syncHeldKeys();
     e.preventDefault();
-    for (const k of keys) keyboard.down(k);
   });
   window.addEventListener('keyup', (e) => {
-    const keys = mapBrowserKey(e.key);
-    if (keys.length === 0) return;
+    if (isHostShiftCode(e.code)) stickyShift.delete(e.code);
+    if (!held.delete(e.code)) return; // we never claimed its keydown
+    syncHeldKeys();
     e.preventDefault();
-    for (const k of keys) keyboard.up(k);
   });
 
   // ---- live-reload over SSE (preview --watch, RT-PROD-PREVIEW-005) ----------

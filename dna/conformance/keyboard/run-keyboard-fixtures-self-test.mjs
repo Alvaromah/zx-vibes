@@ -34,7 +34,19 @@ export const KEY_MATRIX = (() => {
 const NAMED = { Enter:["ENTER"], " ":["SPACE"], Shift:["CAPS_SHIFT"], Control:["SYMBOL_SHIFT"],
   Backspace:["CAPS_SHIFT","0"], Delete:["CAPS_SHIFT","0"], Escape:["CAPS_SHIFT","SPACE"],
   ArrowLeft:["CAPS_SHIFT","5"], ArrowDown:["CAPS_SHIFT","6"], ArrowUp:["CAPS_SHIFT","7"], ArrowRight:["CAPS_SHIFT","8"] };
+// KBD-BROWSERMAP-002: printable symbol characters -> SYMBOL SHIFT chords (the red
+// legends), authored here from the documented policy table, not the shipped model.
+const SYM = { "!":["SYMBOL_SHIFT","1"], "@":["SYMBOL_SHIFT","2"], "#":["SYMBOL_SHIFT","3"],
+  "$":["SYMBOL_SHIFT","4"], "%":["SYMBOL_SHIFT","5"], "&":["SYMBOL_SHIFT","6"],
+  "'":["SYMBOL_SHIFT","7"], "(":["SYMBOL_SHIFT","8"], ")":["SYMBOL_SHIFT","9"],
+  "_":["SYMBOL_SHIFT","0"], "\\"":["SYMBOL_SHIFT","P"], ";":["SYMBOL_SHIFT","O"],
+  ":":["SYMBOL_SHIFT","Z"], ",":["SYMBOL_SHIFT","N"], ".":["SYMBOL_SHIFT","M"],
+  "=":["SYMBOL_SHIFT","L"], "+":["SYMBOL_SHIFT","K"], "-":["SYMBOL_SHIFT","J"],
+  "*":["SYMBOL_SHIFT","B"], "/":["SYMBOL_SHIFT","V"], "?":["SYMBOL_SHIFT","C"],
+  "<":["SYMBOL_SHIFT","R"], ">":["SYMBOL_SHIFT","T"], "^":["SYMBOL_SHIFT","H"],
+  "\\u00a3":["SYMBOL_SHIFT","X"] };
 export function browserKeyToSpectrum(key) {
+  if (typeof key === "string" && key.length === 1 && SYM[key]) return SYM[key];
   if (NAMED[key]) return NAMED[key];
   if (KEY_MATRIX[key]) return [key];
   const up = typeof key === "string" ? key.toUpperCase() : key;
@@ -77,6 +89,13 @@ const DROP_COMBO = REFERENCE_MODEL.replace(
   "if (NAMED[key]) return NAMED[key].slice(0, 1);",
 );
 
+// Broken: no symbol-character map (KBD-BROWSERMAP-002 dropped — the pre-ADR-0028
+// player: punctuation types nothing).
+const NO_SYMBOLS = REFERENCE_MODEL.replace(
+  "if (typeof key === \"string\" && key.length === 1 && SYM[key]) return SYM[key];",
+  "",
+);
+
 const SMALL_MATRIX = {
   id: "KBD-SELF-TEST-MATRIX", area: "emulator", tier: "fidelity", provenance: "hardware",
   input: { kind: "keyboard-matrix", cases: [{ name: "z-wrong-row", pressed: ["Z"], portHigh: "0xFD" }] },
@@ -95,6 +114,12 @@ const SMALL_BROWSERMAP = {
   expected: { cases: [{ name: "cursor-up", keys: ["CAPS_SHIFT", "7"], positions: [{ row: 0, bit: 0 }, { row: 4, bit: 3 }] }] },
   normalization: { profile: "custom" },
 };
+const SMALL_SYMBOLMAP = {
+  id: "KBD-SELF-TEST-SYMBOLS", area: "gallery", tier: "contract", provenance: "decision:ADR-0028",
+  input: { kind: "keyboard-browsermap", cases: [{ name: "comma", key: "," }] },
+  expected: { cases: [{ name: "comma", keys: ["SYMBOL_SHIFT", "N"], positions: [{ row: 7, bit: 1 }, { row: 7, bit: 3 }] }] },
+  normalization: { profile: "custom" },
+};
 
 function run(args) { return spawnSync(process.execPath, [runnerPath, ...args], { encoding: "utf8" }); }
 function assert(condition, message) { if (!condition) throw new Error(message); }
@@ -106,16 +131,20 @@ async function main() {
     const noRow = path.join(dir, "no-row.mjs");
     const noLatch = path.join(dir, "no-latch.mjs");
     const dropCombo = path.join(dir, "drop-combo.mjs");
+    const noSymbols = path.join(dir, "no-symbols.mjs");
     const fMatrix = path.join(dir, "matrix.json");
     const fLatch = path.join(dir, "latch.json");
     const fMap = path.join(dir, "map.json");
+    const fSymbols = path.join(dir, "symbols.json");
     await writeFile(ref, REFERENCE_MODEL, "utf8");
     await writeFile(noRow, NO_ROW_SELECT, "utf8");
     await writeFile(noLatch, NO_LATCH, "utf8");
     await writeFile(dropCombo, DROP_COMBO, "utf8");
+    await writeFile(noSymbols, NO_SYMBOLS, "utf8");
     await writeFile(fMatrix, JSON.stringify(SMALL_MATRIX), "utf8");
     await writeFile(fLatch, JSON.stringify(SMALL_LATCH), "utf8");
     await writeFile(fMap, JSON.stringify(SMALL_BROWSERMAP), "utf8");
+    await writeFile(fSymbols, JSON.stringify(SMALL_SYMBOLMAP), "utf8");
 
     const real = run(["--module", ref, "--fixtures", realFixtures, "--quiet"]);
     assert(real.status === 0, `expected real keyboard fixtures to pass against the independent reference\n${real.stdout}\n${real.stderr}`);
@@ -128,12 +157,15 @@ async function main() {
 
     const dropRun = run(["--module", dropCombo, "--fixtures", fMap, "--quiet"]);
     assert(dropRun.status !== 0, "expected the combo-dropping browser map to fail the browsermap fixture");
+
+    const noSymbolsRun = run(["--module", noSymbols, "--fixtures", fSymbols, "--quiet"]);
+    assert(noSymbolsRun.status !== 0, "expected the symbol-less browser map to fail the symbols fixture");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 
   console.log(
-    "Keyboard fixture self-test passed: real matrix + browsermap + latch fixtures validate against an independent reference; ignoring the half-row select, dropping the quick-tap latch, and dropping key combos are rejected.",
+    "Keyboard fixture self-test passed: real matrix + browsermap(+symbols) + latch fixtures validate against an independent reference; ignoring the half-row select, dropping the quick-tap latch, dropping key combos, and dropping the symbol map are rejected.",
   );
 }
 
