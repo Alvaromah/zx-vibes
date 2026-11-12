@@ -24,6 +24,7 @@
 //   fileLength | versionMajor | versionMinor | blockCount
 //   blockId[i] | blockField[i, "name"] | blockDataLength[i] | blockDataByte[i, o]
 //   blockName[i] | blockText[i] | blockPulseCount[i] | blockPulse[i, k]
+//   blockItem[i, "list", k, "name"?] | blockItemCount[i, "list"] | blockBytesLength[i, "name"]
 //   serializeLength | serializeByte[o] | serializeMatchesFile
 //   roundtripParseSerialize | roundtripSerializeParse
 //   parseThrows                                       // parseTzx(file) throws (malformed-file rejection)
@@ -114,6 +115,14 @@ function buildDispatch(model, fileBytes, tzx, tzxSpec) {
     blockText: (i) => parsed().blocks[i].text,
     blockPulseCount: (i) => parsed().blocks[i].pulses.length,
     blockPulse: (i, k) => parsed().blocks[i].pulses[k],
+    // A list-valued field (entries of 0x28/0x32/0x33, offsets of 0x26): the k-th item, or
+    // one field of it.
+    blockItem: (i, list, k, name) => {
+      const item = parsed().blocks[i][list][k];
+      return name === undefined ? item : item[name];
+    },
+    blockItemCount: (i, list) => parsed().blocks[i][list].length,
+    blockBytesLength: (i, name) => parsed().blocks[i][name].length,
     serializeLength: () => model.serializeTzx(tzx).length,
     serializeByte: (o) => model.serializeTzx(tzx)[o],
     serializeMatchesFile: () => bytesEqual(model.serializeTzx(tzx), fileBytes),

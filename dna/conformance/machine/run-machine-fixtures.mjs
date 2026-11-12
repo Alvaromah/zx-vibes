@@ -16,9 +16,11 @@
 //     the default per-access model (MACHINE-CONTENTION-CLOCK-001).
 //   - "machine-frame": builds a Machine and runs one runFrame(), exercising the
 //     boundary interrupt sampling + acceptance integrated with contention + HALT.
+//   Both accept "romWriteProtect": true, which builds the machine with writes to
+//   0x0000-0x3FFF ignored (MACHINE-ROM-READONLY-001).
 //
 // Package contract (the regeneration target, @zx-vibes/machine):
-//   createMachine({ registers?, memory?, io?, clock? }) -> Machine
+//   createMachine({ registers?, memory?, io?, clock?, exactContention?, romWriteProtect? }) -> Machine
 //     machine.stepInstruction() -> { tStates, contention, halted }
 //     machine.runFrame({ dataBus? }) -> { tStates, accepted }
 //     machine.registers / machine.memory / machine.clock / machine.halted
@@ -163,6 +165,7 @@ function runRunCase(module, testCase, expected, failures) {
     memory: buildMemory(testCase.memory, testCase.name),
     clock: parseNum(testCase.clock ?? 0, `${testCase.name}.clock`),
     exactContention: Boolean(testCase.exact),
+    romWriteProtect: Boolean(testCase.romWriteProtect),
   });
   const steps = parseNum(testCase.steps ?? 1, `${testCase.name}.steps`);
   let contention = 0;
@@ -184,6 +187,7 @@ function runFrameCase(module, testCase, expected, failures) {
     registers: buildRegisters(testCase.registers, testCase.name),
     memory: buildMemory(testCase.memory, testCase.name),
     clock: parseNum(testCase.clock ?? 0, `${testCase.name}.clock`),
+    romWriteProtect: Boolean(testCase.romWriteProtect),
   });
   const dataBus = testCase.dataBus === undefined ? undefined : parseNum(testCase.dataBus, `${testCase.name}.dataBus`);
   const frame = machine.runFrame(dataBus === undefined ? {} : { dataBus });

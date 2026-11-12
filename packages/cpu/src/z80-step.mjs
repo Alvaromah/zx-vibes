@@ -125,7 +125,19 @@ function rot(op, v, f) {
   return { res, f: sz53p(res) | carry };
 }
 
-export function step({ registers: reg, memory, io, clock }) {
+/**
+ * Execute one instruction.
+ * @param {object} state
+ * @param {Record<string, number>} state.registers the register file (8-bit halves), updated in place
+ * @param {Uint8Array} state.memory the 64 KB address space
+ * @param {{ read(port: number): number, write(port: number, value: number): void }} state.io port I/O (used by IN/OUT)
+ * @param {{ access?(address: number): void, mcycle?(address: number, tStates: number): void, internal?(address: number, n: number): void, inexact?(): void }} [state.clock] optional bus-cycle hooks for contention
+ * @param {number} [state.romTop] writes to addresses below this are ignored, as a
+ *   ROM ignores them (0x4000 on a 48K machine; MACHINE-ROM-READONLY-001). The
+ *   write's bus cycle still happens and is timed. Default 0: all memory writable.
+ * @returns {{ registers: Record<string, number>, tStates: number }}
+ */
+export function step({ registers: reg, memory, io, clock, romTop = 0 }) {
   // A memory bus cycle: notify the legacy per-access hook and the M-cycle hook
   // (carrying the cycle length t: 4 for an M1 opcode fetch, 3 for an operand or
   // data access). Both are optional; absent clock => no calls (no-clock oracle).
@@ -141,7 +153,7 @@ export function step({ registers: reg, memory, io, clock }) {
   // conformed per-access model for such an instruction (MACHINE-CONTENTION-MCYCLE-001).
   const inexact = clock && clock.inexact ? () => clock.inexact() : null;
   const rd = (a, t = 3) => { const v = memory[a & 0xffff]; if (onCycle) onCycle(a, t); return v; };
-  const wr = (a, v, t = 3) => { memory[a & 0xffff] = v & 0xff; if (onCycle) onCycle(a, t); };
+  const wr = (a, v, t = 3) => { const m = a & 0xffff; if (m >= romTop) memory[m] = v & 0xff; if (onCycle) onCycle(a, t); };
   let pc = reg.pc & 0xffff;
   // R increments live per M1 fetch (bit 7 fixed). Doing it before the instruction
   // body executes is what makes LD A,R read the post-increment value and LD R,A
@@ -293,9 +305,11 @@ export function step({ registers: reg, memory, io, clock }) {
   // genuinely flat opcodes add it explicitly via t4. (Witnessed by dd00/ddfd00.)
   const t4 = idx ? 4 : 0;
 
-  if (x === 1 && y === 6 && zc === 6 && !idx) { // HALT: PC stays on the instruction
+  if (x === 1 && y === 6 && zc === 6) { // HALT: PC stays on the 76 opcode
+    // DD 76 / FD 76 are HALT too: the prefix is just an extra 4 T M1
+    // (Z80-EXEC-PREFIX-HALT-001), not LD (IX+d),(IX+d).
     reg.pc = (pc - 1) & 0xffff;
-    return { registers: reg, tStates: 4 };
+    return { registers: reg, tStates: 4 + t4 };
   } else if (x === 1) { // LD r,r'
     set8(y, get8(zc));
     tStates = (y === 6 || zc === 6) ? (idx ? 19 : 7) : (idx ? 8 : 4);

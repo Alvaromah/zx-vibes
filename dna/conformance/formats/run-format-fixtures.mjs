@@ -9,7 +9,9 @@
 //   - "z80-decode": parse a pinned .z80 byte blob (hex) with readZ80() and assert
 //     the decoded registers/memory/border/version. This pins the on-disk format
 //     (header offsets, version markers, RLE) to the documented spec, not merely to
-//     write()'s own inverse.
+//     write()'s own inverse. A case whose expected entry carries `error` (a
+//     case-insensitive pattern) instead asserts that readZ80() THROWS with a matching
+//     message — the files the reader must reject (FMT-Z80-VALIDATE-001).
 //
 // Package contract (the regeneration target, @zx-vibes/machine):
 //   writeZ80({ registers, memory, border }) -> Uint8Array
@@ -103,6 +105,21 @@ function runRoundtrip(module, c, failures) {
 
 function runDecode(module, c, expected, failures) {
   const bytes = hexToBytes(c.bytes, c.name);
+  if (expected.error !== undefined) {
+    // A rejection case: readZ80 must throw, with a message matching the pattern.
+    let message;
+    try {
+      module.readZ80(bytes);
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    if (message === undefined) {
+      failures.push(`${c.name}: readZ80 decoded the file, expected a rejection matching /${expected.error}/i`);
+    } else if (!new RegExp(expected.error, "i").test(message)) {
+      failures.push(`${c.name}: readZ80 rejected with "${message}", expected /${expected.error}/i`);
+    }
+    return;
+  }
   const result = module.readZ80(bytes);
   compareRegisters(c.name, expected.registers, result.registers, failures);
   compareMemory(c.name, expected.memory, result.memory, failures);

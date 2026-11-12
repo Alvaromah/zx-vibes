@@ -21,9 +21,19 @@ export const IM2_T_STATES = 19;
 export const NMI_VECTOR = 0x0066;
 export const NMI_T_STATES = 11;
 
+// Write the pushed return address (low byte at sp, high byte above it). A byte
+// below `romTop` lands in ROM and is ignored, as for a CPU write
+// (MACHINE-ROM-READONLY-001); 0 = all memory writable.
+function pushWord(memory, sp, value, romTop) {
+  const lo = sp & 0xffff;
+  const hi = (sp + 1) & 0xffff;
+  if (lo >= romTop) memory[lo] = value & 0xff;
+  if (hi >= romTop) memory[hi] = (value >> 8) & 0xff;
+}
+
 // Accept a maskable interrupt against the given CPU state.
 //
-//   acceptInterrupt({ registers, memory, halted?, dataBus? })
+//   acceptInterrupt({ registers, memory, halted?, dataBus?, romTop? })
 //     -> { registers, tStates, accepted, halted }
 //
 // registers: the same plain register object the CPU step() uses (a,f,...,pc,sp,
@@ -34,7 +44,7 @@ export const NMI_T_STATES = 11;
 // Mutates and returns `registers` (clearing IFF1/IFF2, bumping R, moving SP/PC)
 // and writes the pushed return address into `memory`. If IFF1 is clear the
 // interrupt is masked: nothing changes, accepted=false, tStates=0.
-export function acceptInterrupt({ registers, memory, halted = false, dataBus = INT_DATA_BUS }) {
+export function acceptInterrupt({ registers, memory, halted = false, dataBus = INT_DATA_BUS, romTop = 0 }) {
   const reg = registers;
   if (!reg.iff1) {
     return { registers: reg, tStates: 0, accepted: false, halted };
@@ -52,8 +62,7 @@ export function acceptInterrupt({ registers, memory, halted = false, dataBus = I
 
   // Push the return address, high byte first.
   const sp = (reg.sp - 2) & 0xffff;
-  memory[sp] = pc & 0xff;
-  memory[(sp + 1) & 0xffff] = (pc >> 8) & 0xff;
+  pushWord(memory, sp, pc, romTop);
   reg.sp = sp;
 
   let tStates;
@@ -72,7 +81,7 @@ export function acceptInterrupt({ registers, memory, halted = false, dataBus = I
 
 // Accept a non-maskable interrupt against the given CPU state.
 //
-//   acceptNmi({ registers, memory, halted? })
+//   acceptNmi({ registers, memory, halted?, romTop? })
 //     -> { registers, tStates, accepted, halted }
 //
 // NMI is edge-triggered and NON-maskable: unlike acceptInterrupt it ignores
@@ -85,7 +94,7 @@ export function acceptInterrupt({ registers, memory, halted = false, dataBus = I
 //
 // Mutates and returns `registers` (clearing IFF1, bumping R, moving SP/PC) and
 // writes the pushed return address into `memory`; IFF2 and IM are untouched.
-export function acceptNmi({ registers, memory, halted = false }) {
+export function acceptNmi({ registers, memory, halted = false, romTop = 0 }) {
   const reg = registers;
 
   // Leaving HALT: the frozen PC sits on the HALT opcode, so the return address is
@@ -100,8 +109,7 @@ export function acceptNmi({ registers, memory, halted = false }) {
 
   // Push the return address, high byte first.
   const sp = (reg.sp - 2) & 0xffff;
-  memory[sp] = pc & 0xff;
-  memory[(sp + 1) & 0xffff] = (pc >> 8) & 0xff;
+  pushWord(memory, sp, pc, romTop);
   reg.sp = sp;
 
   // Fixed NMI restart vector.

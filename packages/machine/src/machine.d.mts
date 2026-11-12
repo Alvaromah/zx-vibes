@@ -1,4 +1,5 @@
-export function createMachine(options?: {}): Machine;
+/** @param {ConstructorParameters<typeof Machine>[0]} [options] */
+export function createMachine(options?: ConstructorParameters<typeof Machine>[0]): Machine;
 export const RESET_REGISTERS: Readonly<{
     a: 255;
     f: 255;
@@ -30,19 +31,41 @@ export const RESET_REGISTERS: Readonly<{
     iyl: 255;
 }>;
 export class Machine {
-    constructor({ registers, memory, io, clock, exactContention }?: {
+    /**
+     * @param {object} [options]
+     * @param {Record<string, number>} [options.registers] initial register file (8-bit halves; unknown names are ignored, missing ones are 0)
+     * @param {Uint8Array | Record<string, ArrayLike<number>>} [options.memory] a 64 KB image used as-is, or { address: bytes } chunks copied into zeroed RAM
+     * @param {{ read(port: number): number, write(port: number, value: number): void }} [options.io] port I/O (default: reads float 0xFF, writes are dropped)
+     * @param {number} [options.clock] initial frame T-state (taken modulo FRAME_T_STATES)
+     * @param {boolean} [options.exactContention] select the M-cycle-exact contention model
+     * @param {boolean} [options.romWriteProtect] ignore writes to 0x0000-0x3FFF, as the 48K ROM does (MACHINE-ROM-READONLY-001); off by default
+     */
+    constructor({ registers, memory, io, clock, exactContention, romWriteProtect }?: {
+        registers?: Record<string, number>;
+        memory?: Uint8Array | Record<string, ArrayLike<number>>;
+        io?: {
+            read(port: number): number;
+            write(port: number, value: number): void;
+        };
         clock?: number;
         exactContention?: boolean;
+        romWriteProtect?: boolean;
     });
-    registers: {};
+    registers: Record<string, number>;
     memory: Uint8Array<ArrayBuffer>;
-    io: any;
+    io: {
+        read(port: number): number;
+        write(port: number, value: number): void;
+    };
     clock: number;
     exactContention: boolean;
+    romWriteProtect: boolean;
     halted: boolean;
     eiDelay: number;
     tStatesTotal: number;
     frames: number;
+    /** The first writable address: 0x4000 when the ROM is write-protected, else 0. */
+    romTop(): 0 | 16384;
     reset(): this;
     _contentionClock(instructionStart: any): {
         base: any;

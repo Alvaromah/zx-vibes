@@ -241,6 +241,21 @@ flag computation that was witnessed only by the FUSE/zexall oracles until now
   oracle is FUSE/zexall, which the `(A | F)` model passes, so `(A | F)` is the
   pinned rule.)
 
+### HALT behind an index prefix
+
+An index prefix (`DD`/`FD`) only changes instructions that use `H`, `L` or `(HL)`;
+in front of any other opcode it is an extra M1 cycle with no other effect. `HALT`
+(`76`) is such an opcode: it uses neither register, and it is not `LD (HL),(HL)`.
+
+<!-- provenance: z80-spec -->
+- [id: Z80-EXEC-PREFIX-HALT-001] `DD 76` and `FD 76` execute as `HALT`. The prefix
+  costs one M1 (4 T, `R + 1`) and the `76` opcode its own M1 (4 T, `R + 1`): 8 T in
+  all, with no displacement byte fetched and no memory read or written. The CPU
+  then halts exactly as for an unprefixed `HALT`: `PC` is left on the `76` opcode,
+  so each following step re-executes `HALT` (4 T) until an interrupt is accepted,
+  and the interrupt's return address is the byte after `76`
+  (MACHINE-INT-ACCEPT-001). Acceptance: `dna/conformance/cpu/prefix/ddfd-halt.json`.
+
 ## Source References
 
 - `z80-spec`: Zilog Z80 CPU User Manual UM0080, `INC r` instruction entry and the

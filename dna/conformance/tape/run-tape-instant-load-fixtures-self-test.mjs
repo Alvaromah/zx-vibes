@@ -38,19 +38,29 @@ function bytesToHex(bytes) { let o = ""; for (const b of bytes) o += (b & 0xff).
 // An INDEPENDENT instant-load reference re-derived from the spec (reduce/slice idiom, distinct
 // from the shipped imperative loop). Operates directly on a memory Uint8Array; returns the
 // observable result plus the stored bytes so RAM can be compared without a machine.
-function referenceInstant(memory, body, { ix, de, flag }) {
+function referenceInstant(memory, body, { ix, de, flag, load = true }) {
   const b = Array.from(body, (x) => x & 0xff);
   const want = de & 0xffff;
   const dest = ix & 0xffff;
-  if (b.length < 2) return { ok: false, bytesLoaded: 0, stored: [] };
-  if (b[0] !== (flag & 0xff)) return { ok: false, bytesLoaded: 0, stored: [] }; // nothing written
-  const available = b.length - 2;
-  const n = Math.min(want, Math.max(0, available));
-  const stored = b.slice(1, 1 + n);
-  stored.forEach((v, i) => { memory[(dest + i) & 0xffff] = v; });
-  const checksumByte = b[1 + want] ?? 0;
-  const parity = [b[0], ...stored, checksumByte].reduce((acc, v) => acc ^ v, 0) & 0xff;
-  return { ok: parity === 0, bytesLoaded: n, stored };
+  if (b.length < 1 || b[0] !== (flag & 0xff)) return { ok: false, bytesLoaded: 0, stored: [] }; // nothing written
+  // LD-BYTES needs the flag, DE data bytes and a checksum byte. With fewer bytes on the tape
+  // every byte after the flag (the checksum included) is data, then the read times out.
+  const tail = b.slice(1);
+  const short = tail.length < want + 1;
+  const taken = short ? tail : tail.slice(0, want);
+  for (const [i, v] of taken.entries()) {
+    const at = (dest + i) & 0xffff;
+    if (!load && memory[at] !== v) return { ok: false, bytesLoaded: i, stored: [] }; // VERIFY stops here
+    if (load) memory[at] = v;
+  }
+  if (short) return { ok: false, bytesLoaded: taken.length, stored: taken };
+  const parity = [b[0], ...taken, tail[want]].reduce((acc, v) => acc ^ v, 0) & 0xff;
+  return { ok: parity === 0, bytesLoaded: taken.length, stored: load ? taken : [] };
+}
+
+// LOAD semantics regardless of the requested mode (used by the verify-as-load adversary).
+function referenceInstantLoadOnly(memory, body, { ix, de, flag }) {
+  return { ...referenceInstant(memory, body, { ix, de, flag, load: true }), tStates: 0 };
 }
 
 async function main() {
@@ -87,18 +97,29 @@ async function main() {
     { name: "data-3", body: body(0xff, dataC), ix, de: dataC.length, flag: 0xff, budget: 14_000_000 },
     { name: "flag-mismatch", body: body(0xff, dataA), ix, de: dataA.length, flag: 0x00, budget: 14_000_000 },
     { name: "corrupt-checksum", body: corruptBodyA, ix, de: dataA.length, flag: 0xff, budget: 14_000_000 },
+    // VERIFY (carry reset) over RAM holding dataA except byte 5: the ROM stops there.
+    { name: "verify-mismatch", body: body(0xff, dataA), ix, de: dataA.length, flag: 0xff, budget: 14_000_000, load: false,
+      preload: Uint8Array.from(dataA, (v, i) => (i === 5 ? v ^ 0xff : v)) },
+    // DE larger than the block: the ROM takes the checksum byte as data, then times out.
+    { name: "short-block", body: body(0xff, dataC), ix, de: dataC.length + 4, flag: 0xff, budget: 14_000_000 },
   ];
-  for (const j of judges) {
+  // A judge's machine: ROM mapped, the RAM window sentinel-filled (or preloaded for VERIFY).
+  const judgeMachine = (j) => {
     const m = romMachine(0xee, j.ix, j.de);
-    const r = edgeLoad(m, blockToPulses(j.body), { ix: j.ix, de: j.de, flag: j.flag, tStateBudget: j.budget });
+    if (j.preload) m.memory.set(j.preload, j.ix);
+    return m;
+  };
+  for (const j of judges) {
+    const m = judgeMachine(j);
+    const r = edgeLoad(m, blockToPulses(j.body), { ix: j.ix, de: j.de, flag: j.flag, load: j.load !== false, tStateBudget: j.budget });
     j.edge = { ok: r.ok, bytesLoaded: r.bytesLoaded, ram: ramHex(m, j.ix, j.de), tStates: r.tStates };
   }
 
   // 1. ANCHOR — the shipped instantLoad reproduces the real ROM's observable result on every
   //    judge block (well-formed AND the two failure cases). Sentinel-fill so "untouched" counts.
   for (const j of judges) {
-    const m = romMachine(0xee, j.ix, j.de);
-    const r = instantLoad(m, j.body, { ix: j.ix, de: j.de, flag: j.flag });
+    const m = judgeMachine(j);
+    const r = instantLoad(m, j.body, { ix: j.ix, de: j.de, flag: j.flag, load: j.load !== false });
     const ram = ramHex(m, j.ix, j.de);
     assert(r.ok === j.edge.ok, `anchor ${j.name}: instant.ok ${r.ok} != edge.ok ${j.edge.ok}`);
     assert(r.bytesLoaded === j.edge.bytesLoaded, `anchor ${j.name}: instant.bytesLoaded ${r.bytesLoaded} != edge ${j.edge.bytesLoaded}`);
@@ -123,6 +144,23 @@ async function main() {
         breadthCases += 1;
         assert(r.ok === ref.ok && r.bytesLoaded === ref.bytesLoaded && ramHex(m, ix, len) === bytesToHex(refMem.slice(ix, ix + len)),
           `breadth flag=0x${flag.toString(16)} len=${len}: shipped{ok=${r.ok},n=${r.bytesLoaded}} != reference{ok=${ref.ok},n=${ref.bytesLoaded}}`);
+      }
+      // short (DE beyond the block) and long (DE short of the data) variants, and a VERIFY
+      // that differs at the middle byte.
+      for (const [label, de, load, preload] of [
+        ["short", len + 3, true, undefined],
+        ["long", Math.max(0, len - 1), true, undefined],
+        ["verify", len, false, len > 0 ? Uint8Array.from(data, (v, i) => (i === len >> 1 ? v ^ 0x5a : v)) : undefined],
+      ]) {
+        const m = ramMachine();
+        const refMem = new Uint8Array(0x10000);
+        if (preload) { m.memory.set(preload, ix); refMem.set(preload, ix); }
+        const r = instantLoad(m, blk, { ix, de, flag, load });
+        const ref = referenceInstant(refMem, blk, { ix, de, flag, load });
+        breadthCases += 1;
+        const span = len + 4;
+        assert(r.ok === ref.ok && r.bytesLoaded === ref.bytesLoaded && ramHex(m, ix, span) === bytesToHex(refMem.slice(ix, ix + span)),
+          `breadth ${label} flag=0x${flag.toString(16)} len=${len}: shipped{ok=${r.ok},n=${r.bytesLoaded}} != reference{ok=${ref.ok},n=${ref.bytesLoaded}}`);
       }
       // flag-mismatch variant (expected flag differs -> nothing written, fail)
       {
@@ -176,11 +214,25 @@ async function main() {
     },
   };
 
+  // Treats VERIFY as LOAD (stores, never compares) — the pre-2026-11 shipped behaviour.
+  brokenModels["verify-as-load"] = (m, b, { ix, de, flag }) => referenceInstantLoadOnly(m.memory, b, { ix, de, flag });
+  // Stores min(DE, data) bytes and reads a missing checksum as 0 — the pre-2026-11 short block.
+  brokenModels["short-drops-checksum"] = (m, b, { ix, de, flag, load }) => {
+    const a = Array.from(b, (x) => x & 0xff);
+    if ((a[0] ?? -1) !== (flag & 0xff)) return { ok: false, bytesLoaded: 0, tStates: 0 };
+    if (load === false) return { ...referenceInstant(m.memory, b, { ix, de, flag, load }), tStates: 0 };
+    const n = Math.min(de & 0xffff, Math.max(0, a.length - 2));
+    let parity = a[0];
+    for (let i = 0; i < n; i += 1) { m.memory[(ix + i) & 0xffff] = a[1 + i]; parity ^= a[1 + i]; }
+    parity ^= a[1 + (de & 0xffff)] ?? 0;
+    return { ok: (parity & 0xff) === 0, bytesLoaded: n, tStates: 0 };
+  };
+
   for (const [label, model] of Object.entries(brokenModels)) {
     let diverged = false;
     for (const j of judges) {
-      const m = romMachine(0xee, j.ix, j.de);
-      const r = model(m, j.body, { ix: j.ix, de: j.de, flag: j.flag });
+      const m = judgeMachine(j);
+      const r = model(m, j.body, { ix: j.ix, de: j.de, flag: j.flag, load: j.load !== false });
       const ram = ramHex(m, j.ix, j.de);
       if (r.ok !== j.edge.ok || r.bytesLoaded !== j.edge.bytesLoaded || ram !== j.edge.ram) { diverged = true; break; }
     }
@@ -195,7 +247,7 @@ async function main() {
   }
 
   console.log(
-    `Tape instant-load self-test passed: instant == edge through the real ROM on 5 judge blocks (incl. flag-mismatch + corrupt-checksum failure cases); ${breadthCases} reference-battery cases agree across all 256 flags; an ignore-flag-mismatch / skip-checksum / store-flag-and-checksum / wrong-byte-count model each diverge from the real ROM and are rejected; instant load elapses zero machine time.`,
+    `Tape instant-load self-test passed: instant == edge through the real ROM on 7 judge blocks (incl. flag-mismatch, corrupt-checksum, VERIFY-mismatch and short-block failure cases); ${breadthCases} reference-battery cases agree across all 256 flags; an ignore-flag-mismatch / skip-checksum / store-flag-and-checksum / wrong-byte-count / verify-as-load / short-drops-checksum model each diverge from the real ROM and are rejected; instant load elapses zero machine time.`,
   );
 }
 

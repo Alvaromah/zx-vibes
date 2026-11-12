@@ -278,7 +278,25 @@ entirely by agreement with edge loading.
   (carry set) iff the flag matched **and** the final parity is zero, and `bytesLoaded` is the
   number of data bytes stored. For a well-formed block whose `DE` equals the block's data
   length, every data byte reaches RAM byte-identically and the parity is zero, so the load
-  succeeds — exactly the edge-load result.
+  succeeds — exactly the edge-load result. On a machine with a write-protected ROM
+  (machine-execution.md MACHINE-ROM-READONLY-001) a byte whose address falls in
+  `0x0000`–`0x3FFF` is not stored, as the edge load's CPU write is not.
+
+<!-- provenance: hardware -->
+- [id: TAPE-INSTANT-VERIFY-001] With carry **reset** (VERIFY) nothing is stored: each data
+  byte is compared with RAM at `IX + i` as it is read, and the first difference ends the load
+  at once with carry reset and `bytesLoaded = i` (the ROM decrements `DE` only for bytes that
+  matched). If every byte matches, the result is the checksum verdict, as for LOAD. Verified
+  against the real ROM (`instant-load.json` `TAPE-INSTANT-VERIFY-MATCH` / `-MISMATCH`).
+
+<!-- provenance: hardware -->
+- [id: TAPE-INSTANT-SHORT-001] `LD-BYTES` reads the flag, then `DE` data bytes, then one
+  checksum byte. A block with **fewer** bytes than that runs out of tape: every byte after the
+  flag — the block's own checksum byte included — is taken as data (stored on LOAD, compared
+  on VERIFY), then the next read times out and the load fails with carry reset and
+  `bytesLoaded` = the bytes taken. A block with **more** data than `DE` stores `DE` bytes and
+  reads the next data byte as the checksum (normally failing the parity check). Verified
+  against the real ROM (`instant-load.json` `TAPE-INSTANT-SHORT-BLOCK` / `-LONG-BLOCK`).
 
 <!-- provenance: hardware -->
 - [id: TAPE-INSTANT-FLAG-001] The **flag byte is checked first**, before any data is stored: on
@@ -320,10 +338,11 @@ asserts they agree on the observable result **and** that both equal the source b
 (fabrication-free, `expected.ram` **is** the source). Because the slice's content is exactly
 the equivalence to the already-fidelity-verified real ROM, the self-test runs the differential
 at scale — `instant == edge` over a battery of flags (header **and** data, across the
-`0x80` boundary), sizes, and the flag-mismatch rejection — and rejects adversarial broken
-instant models (one that **ignores a flag mismatch**, one that **skips the checksum**, one that
-**stores the flag/checksum**, one that **loads the wrong byte count**): each diverges from the
-real ROM and is caught. Two blind regenerations from this spec agreed with the shipped model
+`0x80` boundary), sizes, short/long blocks, VERIFY, and the flag-mismatch rejection — and
+rejects adversarial broken instant models (one that **ignores a flag mismatch**, one that
+**skips the checksum**, one that **stores the flag/checksum**, one that **loads the wrong
+byte count**, one that **treats VERIFY as LOAD**, one that **drops a short block's checksum
+byte**): each diverges from the real ROM and is caught. Two blind regenerations from this spec agreed with the shipped model
 and the real ROM on every battery case (no DNA gap).
 
 ## Provenance

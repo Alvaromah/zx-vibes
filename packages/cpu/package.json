@@ -44,7 +44,7 @@
   "scripts": {
     "test": "node ../../dna/conformance/cpu/run-fuse-suite.mjs",
     "lint": "eslint src",
-    "types:gen": "tsc src/index.mjs --allowJs --declaration --emitDeclarationOnly --outDir src"
+    "types:gen": "node -e \"const fs=require('node:fs');for(const f of fs.readdirSync('src'))if(f.endsWith('.d.mts'))fs.rmSync('src/'+f)\" && tsc src/index.mjs --allowJs --declaration --emitDeclarationOnly --outDir src"
   },
   "publishConfig": {
     "access": "public"

@@ -1,4 +1,12 @@
-export function createTapeDeck(pulses: any, { clock, startLevel, keyboard }?: {
+/**
+ * @param {ArrayLike<number> | Iterable<number>} pulses
+ * @param {object} [options]
+ * @param {() => number} [options.clock] returns the tape T-state cursor (required)
+ * @param {number} [options.startLevel]
+ * @param {number} [options.keyboard]
+ */
+export function createTapeDeck(pulses: ArrayLike<number> | Iterable<number>, { clock, startLevel, keyboard }?: {
+    clock?: () => number;
     startLevel?: number;
     keyboard?: number;
 }): {
@@ -7,7 +15,21 @@ export function createTapeDeck(pulses: any, { clock, startLevel, keyboard }?: {
     read(port: any): number;
     write(port: any, value: any): void;
 };
-export function edgeLoadWithDeck(machine: any, deck: any, { ix, de, flag, load, tStateBudget, sentinel }?: {
+/**
+ * @param {import("./machine.mjs").Machine} machine
+ * @param {ReturnType<typeof createTapeDeck>} deck
+ * @param {object} [options]
+ * @param {number} [options.ix] LD-BYTES destination address (required)
+ * @param {number} [options.de] LD-BYTES byte count (required)
+ * @param {number} [options.flag] expected flag byte (required)
+ * @param {boolean} [options.load] LOAD (true) or VERIFY (false)
+ * @param {number} [options.tStateBudget]
+ * @param {number} [options.sentinel]
+ */
+export function edgeLoadWithDeck(machine: import("./machine.mjs").Machine, deck: ReturnType<typeof createTapeDeck>, { ix, de, flag, load, tStateBudget, sentinel }?: {
+    ix?: number;
+    de?: number;
+    flag?: number;
     load?: boolean;
     tStateBudget?: number;
     sentinel?: number;
@@ -17,7 +39,24 @@ export function edgeLoadWithDeck(machine: any, deck: any, { ix, de, flag, load, 
     bytesLoaded: number;
     tStates: number;
 };
-export function edgeLoad(machine: any, pulses: any, { ix, de, flag, load, tStateBudget, sentinel, startLevel, keyboard, trailingPulse }?: {
+/**
+ * @param {import("./machine.mjs").Machine} machine
+ * @param {ArrayLike<number> | Iterable<number>} pulses
+ * @param {object} [options]
+ * @param {number} [options.ix] LD-BYTES destination address (required)
+ * @param {number} [options.de] LD-BYTES byte count (required)
+ * @param {number} [options.flag] expected flag byte (required)
+ * @param {boolean} [options.load] LOAD (true) or VERIFY (false)
+ * @param {number} [options.tStateBudget]
+ * @param {number} [options.sentinel]
+ * @param {number} [options.startLevel]
+ * @param {number} [options.keyboard]
+ * @param {number} [options.trailingPulse]
+ */
+export function edgeLoad(machine: import("./machine.mjs").Machine, pulses: ArrayLike<number> | Iterable<number>, { ix, de, flag, load, tStateBudget, sentinel, startLevel, keyboard, trailingPulse }?: {
+    ix?: number;
+    de?: number;
+    flag?: number;
     load?: boolean;
     tStateBudget?: number;
     sentinel?: number;
@@ -30,7 +69,19 @@ export function edgeLoad(machine: any, pulses: any, { ix, de, flag, load, tState
     bytesLoaded: number;
     tStates: number;
 };
-export function instantLoad(machine: any, body: any, { ix, de, flag, load }?: {
+/**
+ * @param {import("./machine.mjs").Machine} machine
+ * @param {ArrayLike<number>} body
+ * @param {object} [options]
+ * @param {number} [options.ix] LD-BYTES destination address (required)
+ * @param {number} [options.de] LD-BYTES byte count (required)
+ * @param {number} [options.flag] expected flag byte (required)
+ * @param {boolean} [options.load] LOAD (true) or VERIFY (false)
+ */
+export function instantLoad(machine: import("./machine.mjs").Machine, body: ArrayLike<number>, { ix, de, flag, load }?: {
+    ix?: number;
+    de?: number;
+    flag?: number;
     load?: boolean;
 }): {
     ok: boolean;

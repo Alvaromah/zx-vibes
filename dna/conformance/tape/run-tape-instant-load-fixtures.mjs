@@ -20,8 +20,15 @@
 //   instantLoad(machine, body, { ix, de, flag }) -> { ok, bytesLoaded, tStates }
 //
 // Fixture shape:
-//   input:    { kind: "tape-instant-load-query", flag, ix, data: "<hex>", tStateBudget }
+//   input:    { kind: "tape-instant-load-query", flag, ix, data: "<hex>", tStateBudget,
+//               de?, load?, preload?: "<hex>", romWriteProtect? }
 //   expected: { ok, bytesLoaded, ram: "<hex>", instantEqualsEdge }
+// The optional fields cover the loads whose result is not simply "the source bytes": a DE
+// that differs from the data length (a short or long block, TAPE-INSTANT-SHORT-001), VERIFY
+// (load: false, TAPE-INSTANT-VERIFY-001) against RAM pre-filled with `preload` at IX, and a
+// machine with a write-protected ROM (MACHINE-ROM-READONLY-001). `expected.ram` is the RAM
+// window starting at IX (its own length). For such a case the recorded expectation must be
+// the REAL ROM's result — the runner checks edge == expected as well as instant == edge.
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -79,10 +86,11 @@ async function collect(target) {
 // Build a 64 KB address space with the opaque ROM mapped at 0x0000-0x3FFF and the rest (RAM)
 // zero. The edge-load half drives the real ROM; the instant half ignores it (it traps the
 // load) but uses an identical machine so the RAM comparison is fair.
-function machineWithRom(model, rom) {
+function machineWithRom(model, rom, { romWriteProtect = false, ix = 0, preload } = {}) {
   const memory = new Uint8Array(0x10000);
   memory.set(rom, 0x0000);
-  return model.createMachine({ memory });
+  if (preload) memory.set(preload, ix);
+  return model.createMachine({ memory, romWriteProtect });
 }
 
 export async function runTapeInstantLoadFixtures(argv = process.argv.slice(2)) {
@@ -117,10 +125,16 @@ export async function runTapeInstantLoadFixtures(argv = process.argv.slice(2)) {
       const flag = input.flag & 0xff;
       const ix = input.ix & 0xffff;
       const budget = input.tStateBudget;
+      const de = input.de ?? data.length;
+      const load = input.load !== false;
+      const preload = input.preload === undefined ? undefined : hexToBytes(input.preload);
+      const romWriteProtect = input.romWriteProtect === true;
+      const plain = input.de === undefined && load && preload === undefined && !romWriteProtect;
+      const window = hexToBytes(expected.ram).length;
 
-      // Fixture honesty: the recorded expected RAM must BE the source bytes (oracle is the
-      // source, never a fabricated constant).
-      if (expected.ram !== input.data) {
+      // Fixture honesty: a plain load's expected RAM must BE the source bytes (oracle is the
+      // source, never a fabricated constant); any other case is held to the real ROM below.
+      if (plain && expected.ram !== input.data) {
         failures.push(`${id}: expected.ram must equal input.data (the source bytes); got ${expected.ram} vs ${input.data}`);
         continue;
       }
@@ -131,15 +145,16 @@ export async function runTapeInstantLoadFixtures(argv = process.argv.slice(2)) {
         const body = Uint8Array.from([flag, ...data, model.tapChecksum(flag, data)]);
 
         // The real ROM edge-load (the fidelity oracle).
-        const edgeMachine = machineWithRom(model, rom);
+        const machineOptions = { romWriteProtect, ix, preload };
+        const edgeMachine = machineWithRom(model, rom, machineOptions);
         const pulses = model.blockToPulses(body);
-        const edgeResult = model.edgeLoad(edgeMachine, pulses, { ix, de: data.length, flag, tStateBudget: budget });
-        edge = { r: edgeResult, ram: bytesToHex(edgeMachine.memory.slice(ix, ix + data.length)) };
+        const edgeResult = model.edgeLoad(edgeMachine, pulses, { ix, de, flag, load, tStateBudget: budget });
+        edge = { r: edgeResult, ram: bytesToHex(edgeMachine.memory.slice(ix, ix + window)) };
 
         // The instant/trap load (no ROM, no pulses).
-        const instantMachine = machineWithRom(model, rom);
-        const instantResult = model.instantLoad(instantMachine, body, { ix, de: data.length, flag });
-        instant = { r: instantResult, ram: bytesToHex(instantMachine.memory.slice(ix, ix + data.length)) };
+        const instantMachine = machineWithRom(model, rom, machineOptions);
+        const instantResult = model.instantLoad(instantMachine, body, { ix, de, flag, load });
+        instant = { r: instantResult, ram: bytesToHex(instantMachine.memory.slice(ix, ix + window)) };
       } catch (error) {
         failures.push(`${id}: load threw: ${error instanceof Error ? error.message : String(error)}`);
         continue;
@@ -148,7 +163,10 @@ export async function runTapeInstantLoadFixtures(argv = process.argv.slice(2)) {
       // 1. The recorded expected result.
       if (instant.r.ok !== expected.ok) failures.push(`${id}: instant ok = ${instant.r.ok}, expected ${expected.ok}`);
       if (instant.r.bytesLoaded !== expected.bytesLoaded) failures.push(`${id}: instant bytesLoaded = ${instant.r.bytesLoaded}, expected ${expected.bytesLoaded}`);
-      if (instant.ram !== expected.ram) failures.push(`${id}: instant RAM ${instant.ram} != source ${expected.ram}`);
+      if (instant.ram !== expected.ram) failures.push(`${id}: instant RAM ${instant.ram} != expected ${expected.ram}`);
+      if (!plain && (edge.r.ok !== expected.ok || edge.r.bytesLoaded !== expected.bytesLoaded || edge.ram !== expected.ram)) {
+        failures.push(`${id}: the recorded expectation must be the real ROM's result; edge gave {ok=${edge.r.ok}, bytesLoaded=${edge.r.bytesLoaded}, ram=${edge.ram}}`);
+      }
 
       // 2. instant is instantaneous (zero machine time).
       if (instant.r.tStates !== 0) failures.push(`${id}: instant tStates = ${instant.r.tStates}, expected 0 (instant load elapses no machine time)`);

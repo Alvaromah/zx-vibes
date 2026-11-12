@@ -50,6 +50,10 @@ export function activeDisplayFetch(t) {
 //       the byte is the ULA-fetched display/attribute byte (ULA-FLOATBUS-FETCH-001),
 //       but the exact T->byte phase mapping is the deferred A5 timing
 //       (ULA-FLOATBUS-DEFER-001) and is NOT pinned — reported unmodelled, not faked.
+/**
+ * @param {number} t frame T-state
+ * @returns {{ value: number | null, modeled: boolean }}
+ */
 export function floatingBusByte(t) {
   if (activeDisplayFetch(t)) {
     return { value: null, modeled: false };

@@ -16,8 +16,7 @@
 // validation, not a CI gate (see ADR-0006 follow-up). --max-instructions bounds
 // a probe run, which reports `not_run` if it stops before completion.
 import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { step } from "../../../packages/cpu/src/z80-step.mjs";
 
