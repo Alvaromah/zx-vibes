@@ -1966,6 +1966,10 @@ things in `run` and `regs`, and screenshots without the border.
    list` shows a project server as pending until it is approved in an interactive
    session, and `codex mcp list` did not show the project's `.codex/config.toml` (an
    untrusted project); both are approvals for the user to give.
+   *Follow-up found by the consumer check:* human-mode `doctor` printed only
+   "Environment check failed: mcp-command", hiding the fix in `checks[].detail`; the
+   error output now prints each failing check with its detail (`output/envelope.ts`,
+   `tests/human-output.test.ts`).
 5. **One meaning for `boot`, and the entry hint in `pc-in-rom`** (FEEDBACK 11 code half,
    13). New claim CLI-PROD-CONV-BOOT-001: `boot.org` is a program's load origin and
    appears only for `build`, `bin` and a CODE `tap`; a `--state` session, a `.z80`

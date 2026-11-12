@@ -189,6 +189,14 @@ function errorDetails(envelope: Record<string, unknown>, indent = '  '): string[
       }
     }
   }
+  // `doctor`: each failing check with its detail — the detail carries the fix.
+  const checks = envelope.checks;
+  if (Array.isArray(checks)) {
+    for (const c of checks as Array<Record<string, unknown>>) {
+      if (c === null || typeof c !== 'object' || c.ok !== false) continue;
+      lines.push(`${indent}FAIL ${String(c.name ?? '?')}: ${String(c.detail ?? '')}`);
+    }
+  }
   const hang = envelope.hang as Record<string, unknown> | undefined;
   if (hang !== null && typeof hang === 'object' && typeof hang.kind === 'string') {
     const pc = typeof hang.pc === 'number' ? ` at PC ${hex(hang.pc, 4)}` : '';

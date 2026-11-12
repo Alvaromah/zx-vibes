@@ -172,3 +172,15 @@ describe('run: the frame budget names the late frames', () => {
     expect(out).toMatch(/frameBudget=\{measured=40 overruns=2 frames=10,21 worst=\d+T@21\}/);
   });
 });
+
+describe('doctor: a failing check explains itself', () => {
+  it('prints each failing check with its detail (the fix)', async () => {
+    // A registration only npx's PATH could start (CLI-PROD-DOCTOR-003).
+    writeFileSync(join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { 'zx-vibes': { command: 'zxs-mcp-missing' } } }));
+    const { code, err } = await human(['doctor']);
+    expect(code).toBe(3);
+    expect(err).toMatch(/^error: Environment check failed: mcp-command/);
+    expect(err).toContain('FAIL mcp-command: .mcp.json starts zx-vibes with `zxs-mcp-missing`');
+    expect(err).toContain('zxs setup --agent claude --force');
+  });
+});

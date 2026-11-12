@@ -19,3 +19,5 @@ registration that cannot.
   against the PATH an agent sees (without npx's `node_modules/.bin`) and fails with the
   fix, `zxs setup --agent <agent> --force`. A project with no registration passes.
   Before, `npx zxs doctor` passed while the agent could not start `zxs-mcp`.
+- `zxs doctor` without `--json` prints each failing check with its detail (the fix);
+  it used to print only the failing check names.
