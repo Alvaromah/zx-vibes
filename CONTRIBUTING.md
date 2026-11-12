@@ -22,6 +22,11 @@ conformance suite (`dna/`), build, typecheck, lint, and tests. CI runs the same
 gate on Ubuntu, macOS, and Windows across Node 20 and 22 — if `verify` is green
 locally, CI should be green too.
 
+A clone has no root `AGENTS.md`, and `.harness/` holds only `decisions.md` (the
+ADR log that `decision:` provenance cites). The maintainer's agent instructions
+and the rest of `.harness/` are local and not tracked (see `.gitignore`). Start
+with this file and [`dna/README.md`](dna/README.md).
+
 ## Making changes
 
 - **Behavior is pinned by `dna/`.** The conformance suite is the source of

@@ -60,13 +60,17 @@ and the canvas size are a rendering choice. It is the domain oracle for
 
 <!-- provenance: decision:ADR-0016 -->
 - [id: RASTER-SAVE-PP-001] During tape output (`SAVE`) the ROM toggles the border
-  between **red (2)** and **cyan (5)** at the tape bit-rate, so a saved frame's border
-  is a stack of red/cyan bands. The acceptance: rendering a SAVE frame's border event
-  stream and sampling the canvas **border** pixels yields **both** red `(205,0,0)` and
-  cyan `(0,205,205)`. A renderer that collapses the frame's border writes to one final
-  colour shows no bands and **fails** — the exact host-visible defect the core
-  CPU/ULA/machine gate did not catch (a shell passed the gate while rendering
-  `SAVE "pp"` with no tape bands).
+  at the tape bit-rate, so a saved frame's border is a stack of bands. While a block's
+  pilot (leader) tone goes out the pair is **red (2)** and **cyan (5)**; while its data
+  bits go out it is **blue (1)** and **yellow (6)**. (Measured on the demos' bundle with
+  `SAVE "test" CODE 0,1024`: about 5.0 s red/cyan for the header's pilot, 0.08 s
+  blue/yellow for the header's data, a 1 s pause, 2.0 s red/cyan, then 5.9 s
+  blue/yellow for the 1024 data bytes.) The acceptance: rendering a pilot-tone frame's
+  border event stream and sampling the canvas **border** pixels yields **both** red
+  `(205,0,0)` and cyan `(0,205,205)`. A renderer that collapses the frame's border
+  writes to one final colour shows no bands and **fails** — the exact host-visible
+  defect the core CPU/ULA/machine gate did not catch (a shell passed the gate while
+  rendering `SAVE "pp"` with no tape bands).
 
 ## Acceptance criteria
 
@@ -78,6 +82,6 @@ A gallery raster renderer satisfies this policy iff, through
   dimensions, the border-pixel classification, and the `pixelTState` mapping at sample
   points (e.g. `(32,24)→14335`, `(0,24)→14319`, `(160,120)→35903`); the self-test
   rejects a wrong visible geometry.
-- `raster-save-pp.json` (RASTER-SAVE-PP-001) — a SAVE border stream's sampled border
-  pixels contain exactly red `(205,0,0)` and cyan `(0,205,205)`; the self-test rejects
-  a collapse-to-one-colour border (no tape bands).
+- `raster-save-pp.json` (RASTER-SAVE-PP-001) — a SAVE pilot-tone border stream's
+  sampled border pixels contain exactly red `(205,0,0)` and cyan `(0,205,205)`; the
+  self-test rejects a collapse-to-one-colour border (no tape bands).

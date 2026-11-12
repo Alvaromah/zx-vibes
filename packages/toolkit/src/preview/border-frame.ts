@@ -1,7 +1,8 @@
 // The preview player's 320×240 bordered frame — raster-border.md geometry
 // (RASTER-GEOMETRY-001) with a per-scanline border colour derived from the
 // frame's chronological port-0xFE border events, so tape SAVE/LOAD paints its
-// red/cyan bands (RASTER-SAVE-PP-001) instead of a whole-frame flicker.
+// bands (red/cyan for a pilot tone, blue/yellow for data; RASTER-SAVE-PP-001)
+// instead of a whole-frame flicker.
 //
 // Pure and DOM-free: the player writes into an ImageData buffer it owns. The
 // per-SCANLINE colour is the row-granular reading of RASTER-TSTATE-PIXEL-001 —

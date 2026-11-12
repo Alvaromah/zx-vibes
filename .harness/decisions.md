@@ -1857,3 +1857,57 @@ its fixture and self-test, the DNA table and the demo bundle; the TZX runner and
 self-test, the fixture-schema check, provenance, coverage, the knowledge-pack drift check,
 the preview tests and the demo tests were re-run green, and a `.tzx` (archive info, text,
 custom info, two data blocks) loaded end to end in `zxs preview` and in `full.html`.
+
+### ADR-0031 — Clean-room consumer feedback (2026-11-12): docs, human output, frame-budget diagnostics, local installs, entry state
+
+**Status:** applied on the branch `feedback/clean-room-consumer` at the owner's request
+("run all the steps in the recommended order"), taking the default answer to each of the
+five questions below; ratified on merge. Each work package lands as its own commit and
+adds its item here.
+
+**Context.** A clean-room consumer test of `main` at 325992e cloned the repo, ran
+`pnpm install`, `build` and `pack`, installed the six tarballs into a fresh project with
+one `npm install`, scaffolded with `zxs new`, ran `zxs setup --agent claude`, and built an
+original 48K game until `zxs verify` passed. It logged 13 findings: documentation gaps (no
+root `AGENTS.md` in a clone, the all-local install route, `zxs new` writing no
+`package.json`, what `frameBudget` measures, how a program is entered, the SAVE border
+colours), human output printing counts instead of lists, overruns reported only as a
+count plus the worst frame, `run --frames` silently extended by a longer key plan, no
+input for `trace`, an MCP registration that a project-local install cannot start, a
+`pc-in-rom` verdict that misses the usual cause at entry, `boot.org` meaning different
+things in `run` and `regs`, and screenshots without the border.
+
+**Decisions** (the owner's five questions, default answers):
+- **D1. No tracked root `AGENTS.md`.** The root file and `.harness/` (except this log)
+  stay local and gitignored; `CONTRIBUTING.md` says so and points to itself and
+  `dna/README.md`. *Rejected:* a public `AGENTS.md`, which would collide with the
+  maintainer's local one.
+- **D2. A project-local install is first-class.** The README documents the six-tarball
+  install, and `setup`/`doctor` handle the MCP registration it needs. `zxs new` still
+  writes no `package.json`.
+- **D3. An explicit `zxs run --frames N` is a hard stop.** A key/joy plan that runs past
+  N is cut there, and the report says so. Every other caller keeps extending the budget
+  to the end of its plan.
+- **D4. Border screenshots are built last,** after the other work packages, as an opt-in
+  scoped to `run` and `verify`; default screenshots stay 256×192.
+- **D5. The toolkit does not run the ROM's start-up.** The entry state is documented
+  instead. *Rejected:* running it before every program, which would change every
+  program's starting memory and timing.
+
+**Items.**
+1. **Docs and doc claims** (FEEDBACK 1, 2, 6, 7, 11 doc half, 12). New contract claim
+   RT-PROD-ENTRY-001 (a built program starts at its load origin from the power-on
+   state; the ROM's start-up never runs, so the system variables are zero), pinned by
+   `packages/toolkit/tests/entry-state.test.ts` (`regs` after `state reset`, FRAMES = 50
+   but ERR_NR and FLAGS zero after 50 frames, the preview's `.bin` boot). Wording added
+   to RT-PROD-RUN-FRAME-BUDGET-001 and ASSERT-PROD-FRAME-BUDGET-001 (one-off work after
+   the first interrupt-resumed `HALT` counts; a `waitFor` warm-up is not measured), and
+   RASTER-SAVE-PP-001 now separates the pilot tone (red/cyan) from the data (blue/
+   yellow); its fixture still pins a pilot-tone frame. Skills `seeing-and-proving` and
+   `interrupts-im1-im2`, the `PLAYBOOK` that `zxs new`/`setup` write and both starter
+   playbooks say the same; README covers the six-tarball install and why `zxs new`
+   writes no `package.json`; CONTRIBUTING covers D1. *Gotcha:* the ROM keyboard at entry
+   is not simply dead. KSTATE starts at zero, so both key slots count down from 0 and
+   free themselves after 256 frames; from then on a held key registers, decoded in
+   keyword mode (`A` arrives in `LAST_K` as `0xE6`, `NEW`). Probes of 40 frames had
+   suggested it never registers; 300- and 600-frame runs showed otherwise.

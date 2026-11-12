@@ -23,7 +23,10 @@ zxs run --bin build/main.bin --org 0x8000 --frames 300 --json
 ```
 
 Read the JSON. `status` must be `"ok"`, `haltSynced` must be `true`, and
-`frameBudget.overrunFrames` must be `0`.
+`frameBudget.overrunFrames` must be `0`. Measurement starts at the first `HALT`
+that an interrupt resumes, and every later frame boundary counts, one-off work
+such as drawing a title or building a level included: do slow set-up before
+your first `HALT`, split it across frames, or anchor a spec with `waitFor`.
 Then LOOK at the result: `zxs state reset`, `zxs run --state .zxs/state.zxstate`, then `zxs screen --text --state .zxs/state.zxstate` (free) or
 `zxs run ... --screenshot s.png` and view the PNG. **Never report success
 without having run and looked.** Exit codes: 0 ok · 1 build error ·
@@ -66,6 +69,11 @@ preview after source changes.
   the asset.
 - Every routine documents in/out/clobbers in a comment.
 - Controls: QAOP + Space unless told otherwise.
+- The program starts at its `ORG` from the power-on state, without the ROM's
+  start-up. The system variables are zero, so the ROM's keyboard scan is
+  unusable (no key for the first 256 frames, then wrong codes), and ROM
+  routines that need the system variables (`rst 0x10` printing) crash. Read
+  the keyboard ports (`lib/keys.asm`) and print with your own routine.
 
 ## Finish line
 

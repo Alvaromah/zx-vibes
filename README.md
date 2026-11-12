@@ -247,10 +247,24 @@ Tips for testing a local clone:
 - To use it from anywhere, alias the built entry point —
   `alias zxs="node /path/to/zx-vibes/packages/toolkit/bin/zxs.js"` — then
   `zxs new` / `zxs verify` in a scratch directory as if installed globally.
-- `pnpm run pack` writes tarballs to `.packs/`, but installing only the
-  umbrella tarball is not an all-local install: packed `workspace:*`
-  dependencies resolve to published versions. Use the alias workflow above,
-  or a local registry when testing unpublished package metadata together.
+- To test the checkout the way a consumer installs it, run `pnpm run pack`
+  (tarballs land in `.packs/`) and install **all six** tarballs in **one**
+  `npm install`, from a project directory outside the repo. npm then
+  resolves each packed `workspace:*` dependency to its sibling tarball.
+  Installing only the umbrella tarball is not all-local: its dependencies
+  come from the registry.
+
+  ```bash
+  npm install ../zx-vibes/.packs/*.tgz                           # bash
+  npm install (Get-ChildItem ..\zx-vibes\.packs\*.tgz).FullName  # PowerShell
+  npx zxs --version
+  ```
+
+  Then check `package-lock.json`: `zx-vibes` and every `@zx-vibes/*`
+  package must resolve to a `file:` tarball, with no `registry.npmjs.org`
+  entry. An unreleased checkout can carry the same version number as the
+  npm release, so `zxs --version` can't tell them apart, but the lockfile
+  can. The bins live in `node_modules/.bin`, so run the CLI as `npx zxs`.
 - Iterate on one package with `pnpm --filter @zx-vibes/toolkit test` (same
   for `asm`, `machine`, …).
 - The scaffold templates are generated from `starters/` — edit a starter,
@@ -279,7 +293,11 @@ on npm — `zxs new` and the emulator core packages replace them.
 
 Each starter under `starters/` pins a `zx-vibes` dev dependency floor of
 `^0.8.0`, kept in sync with the umbrella package version by
-`pnpm run check:versions`.
+`pnpm run check:versions`. That `package.json` (and the `Makefile`) apply
+only when you copy a starter directory: `zxs new` writes neither, because it
+runs from a `zxs` that is already installed. To pin the toolkit in a
+scaffolded project, install it there (see the local-clone tips above); npm
+then creates the `package.json`.
 
 ## CI and releases
 
