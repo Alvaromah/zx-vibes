@@ -31,7 +31,7 @@ import {
   join,
   resolve,
 } from 'node:path';
-import { assembleFile } from '@zx-vibes/asm';
+import { assemble } from '@zx-vibes/asm';
 import type { Command } from 'commander';
 import {
   resolveConfig,
@@ -96,11 +96,29 @@ function nodeMajor(version: string): number {
   return Number.isFinite(major) ? major : 0;
 }
 
-/** Default `@zx-vibes/asm` probe: the package resolved and the core export is present. */
-function defaultAsmImportable(): boolean {
-  // A static import at module load already guarantees the package resolved; this
-  // confirms the documented entry point exists (a smoke-level importability check).
-  return typeof assembleFile === 'function';
+/** The probe program and the bytes the embedded assembler must produce for it. */
+const ASM_PROBE_SOURCE = '    ORG 0x8000\n    ld a, 1\n    ret\n';
+const ASM_PROBE_BYTES = [0x3e, 0x01, 0xc9];
+
+/**
+ * Default `@zx-vibes/asm` probe: the embedded assembler resolved AND works — it assembles
+ * a known program to the known bytes at the known origin. The old check (`typeof
+ * assembleFile === 'function'` on a static import) could never fail: a missing package
+ * stops the CLI before `doctor` runs, so it always reported ok. A broken or mismatched
+ * build (one that throws, or emits the wrong bytes) is what doctor can still catch.
+ */
+export function defaultAsmImportable(): boolean {
+  try {
+    const result = assemble(ASM_PROBE_SOURCE);
+    return (
+      result.ok &&
+      result.origin === 0x8000 &&
+      result.bytes.length === ASM_PROBE_BYTES.length &&
+      ASM_PROBE_BYTES.every((byte, i) => result.bytes[i] === byte)
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Default `sjasmplus` probe: is the external binary invocable on PATH? */
@@ -384,8 +402,8 @@ export function runDoctor(options: DoctorOptions = {}): DoctorEnvelope {
       name: 'asm',
       ok: asmOk,
       detail: asmOk
-        ? 'Embedded @zx-vibes/asm is importable'
-        : 'Embedded @zx-vibes/asm could not be imported',
+        ? 'Embedded @zx-vibes/asm is importable and assembles a known program'
+        : 'Embedded @zx-vibes/asm failed to assemble a known program (`ld a,1 / ret` at 0x8000 → 3E 01 C9): reinstall or rebuild it',
     });
   }
 

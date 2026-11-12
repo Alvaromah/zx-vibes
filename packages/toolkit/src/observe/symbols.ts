@@ -13,7 +13,9 @@ import type { CommandContext } from '../registry.js';
 import {
   resolveObserveMachine,
   addSnapshotSourceFlags,
+  addStateSessionFlags,
   snapshotSourceFlags,
+  stateSessionFlags,
   type SymbolDef,
 } from './source.js';
 
@@ -30,6 +32,11 @@ export type SymbolsEnvelope = SymbolsDumpEnvelope | SymbolsGetEnvelope;
 
 export interface SymbolsOptions {
   cwd?: string | undefined;
+  /**
+   * `--state <file>`: a session has no SLD of its own; it reports the configured entry's
+   * (the symbols that label it), and the file must exist. Never written.
+   */
+  state?: string | undefined;
   bin?: string | undefined;
   z80?: string | undefined;
   tap?: string | undefined;
@@ -48,12 +55,14 @@ function toEntry(sym: SymbolDef): SymbolEntry {
 export function runSymbols(options: SymbolsOptions = {}): SymbolsEnvelope {
   const { symbols } = resolveObserveMachine({
     cwd: options.cwd,
+    state: options.state,
     bin: options.bin,
     z80: options.z80,
     tap: options.tap,
     sna: options.sna,
     org: options.org,
     stage: 'symbols',
+    stateSymbols: 'required',
   });
   const entries = symbols
     .map(toEntry)
@@ -70,12 +79,14 @@ export function runSymbols(options: SymbolsOptions = {}): SymbolsEnvelope {
 /** Map the CLI context onto the `symbols` service. */
 export function symbolsCommand(context: CommandContext): SymbolsEnvelope {
   const options = context.options as Record<string, unknown>;
+  const state = stateSessionFlags(options).state;
   // `symbols get <name>`.
   if (context.args[0] === 'get') {
     const name = context.args[1];
     if (name === undefined) throw userError('symbols get requires a <name>', 'symbols');
     return runSymbols({
       cwd: process.cwd(),
+      state,
       org: options.org as string | undefined,
       bin: options.bin as string | undefined,
       ...snapshotSourceFlags(options),
@@ -84,6 +95,7 @@ export function symbolsCommand(context: CommandContext): SymbolsEnvelope {
   }
   return runSymbols({
     cwd: process.cwd(),
+    state,
     org: options.org as string | undefined,
     bin: options.bin as string | undefined,
     ...snapshotSourceFlags(options),
@@ -92,7 +104,7 @@ export function symbolsCommand(context: CommandContext): SymbolsEnvelope {
 
 /** Declare the `symbols` command's argument / flags (CLI-PROD-SYMBOLS-001). */
 export function configureSymbolsCommand(command: Command): void {
-  addSnapshotSourceFlags(command)
+  addStateSessionFlags(addSnapshotSourceFlags(command), 'read')
     .description('Dump the SLD symbol table as JSON (or `get <name>` for one entry)')
     .argument('[args...]', '`get <name>` to report a single symbol')
     .option('--bin <file>', 'source a raw binary loaded at --org (no SLD symbols)')

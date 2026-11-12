@@ -22,7 +22,7 @@ import {
   type Envelope,
 } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
-import { loadBytesMachine } from '../runtime/session.js';
+import { DEFAULT_BIN_ORG, loadBytesMachine, programLoadOrigin } from '../runtime/session.js';
 import { runProgram } from '../runtime/run.js';
 import { HostIo } from '../runtime/io-device.js';
 import { readRegisters } from '../observe/registers.js';
@@ -278,9 +278,11 @@ export function runSpec(specFile: string, cwd: string): SpecResult {
     }
 
     const symbols = new Map<string, number>(asm.symbols.map((s) => [s.name, s.value]));
+    // An explicit spec `org` wins; otherwise the program loads where it was assembled to
+    // run — its ORG, else 0x8000 (CLI-PROD-CONV-ORIGIN-001, REC-PROD-SPEC-003's default).
     const loadOrg =
       parsed.org === undefined
-        ? asm.origin
+        ? programLoadOrigin(asm.origin, DEFAULT_BIN_ORG)
         : typeof parsed.org === 'number'
           ? parsed.org & 0xffff
           : parseAddress(parsed.org, 'test');

@@ -13,7 +13,7 @@ import type { Command } from 'commander';
 import type { Machine } from '@zx-vibes/machine';
 import { userError } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
-import { parseNumber } from '../util/address.js';
+import { hexSuffixHint, parseNumber } from '../util/address.js';
 import { openSession } from '../state/persist.js';
 import { readRegisters, type RegisterSnapshot } from './registers.js';
 import {
@@ -179,7 +179,10 @@ export function regsCommand(context: CommandContext): RegsEnvelope | RegsSetEnve
     }
     const value = parseNumber(rawValue);
     if (value === undefined) {
-      throw userError(`Invalid value: "${rawValue}" (use 0x1F, $1F, 1Fh, or decimal)`, 'regs');
+      throw userError(
+        `Invalid value: "${rawValue}" (use 0x1F, $1F, 01Fh, or decimal${hexSuffixHint(rawValue)})`,
+        'regs',
+      );
     }
     return runRegsSet({
       cwd: process.cwd(),

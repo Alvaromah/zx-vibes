@@ -26,6 +26,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { ensurePackageBuilt } from '../package-build.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..', '..');
@@ -75,10 +76,15 @@ function parseJson(text) {
 }
 
 async function main() {
-  if (!existsSync(join(TOOLKIT, 'dist', 'cli.js'))) {
-    console.log('  building @zx-vibes/toolkit (dist missing) ...');
-    execFileSync('pnpm', ['--filter', '@zx-vibes/toolkit', 'run', 'build'], { cwd: REPO_ROOT, stdio: 'inherit' });
-  }
+  // Build the toolkit when its dist is missing or stale (shared helper: no corepack,
+  // and `pnpm` resolved through a shell on Windows, where it is a .cmd shim).
+  ensurePackageBuilt({
+    root: REPO_ROOT,
+    packageDir: join('packages', 'toolkit'),
+    packageName: '@zx-vibes/toolkit',
+    artifact: join('dist', 'cli.js'),
+    label: 'the reveng self-test',
+  });
 
   const { writeZ80 } = await import(pathToFileURL(MACHINE).href);
   const dir = mkdtempSync(join(tmpdir(), 'zxs-reveng-selftest-'));

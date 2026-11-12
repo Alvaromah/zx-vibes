@@ -59,6 +59,11 @@ export interface FormatsContext {
   binPath: string;
   /** The assembler result (bytes, origin, symbols, sld). */
   result: AssembleResult;
+  /**
+   * Where the program loads (CLI-PROD-CONV-ORIGIN-001): the assembled origin, or the
+   * configured `org` for a source without ORG. Defaults to `result.origin` when absent.
+   */
+  loadOrigin?: number | undefined;
 }
 
 /**
@@ -197,7 +202,7 @@ function formatTargetPath(
 /**
  * The real loadable-format emitter (RT-PROD-FORMATS-001): supports `tap`/`scr`/`z80`,
  * all produced from the build's assembled bytes. `.scr`/`.z80` are taken from a machine
- * with the program loaded at its origin (PC = origin) — the same `loadBytesMachine`
+ * with the program loaded at its load origin (PC = origin, CLI-PROD-CONV-ORIGIN-001) — the same `loadBytesMachine`
  * boot every observe command uses — so the `.z80` carries RAM + PC and the `.scr`
  * captures the program's screen memory. `.tap` wraps the bytes as a CODE tape. Each
  * artifact is written to disk and returned with its absolute path; the build service
@@ -210,9 +215,8 @@ export const realFormatsEmitter: FormatsEmitter = {
     if (wanted.length === 0) return [];
     // Only build the machine when a machine-backed format (.scr/.z80) is requested.
     const needsMachine = wanted.includes('scr') || wanted.includes('z80');
-    const machine = needsMachine
-      ? loadBytesMachine(context.result.bytes, context.result.origin)
-      : undefined;
+    const loadOrigin = context.loadOrigin ?? context.result.origin;
+    const machine = needsMachine ? loadBytesMachine(context.result.bytes, loadOrigin) : undefined;
     const name = tapeName(context.entry);
 
     const artifacts: FormatArtifact[] = [];
@@ -222,7 +226,7 @@ export const realFormatsEmitter: FormatsEmitter = {
         case 'tap':
           bytes = tapImageBytes({
             bytes: context.result.bytes,
-            loadAddress: context.result.origin,
+            loadAddress: loadOrigin,
             name,
           });
           break;

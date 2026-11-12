@@ -99,7 +99,8 @@
 
     // ---- controls ------------------------------------------------------------
     const soundBtn = document.getElementById('sound');
-    document.getElementById('reset').onclick = () => { zx.reset(); zx.start(); setTapeStatus('No tape inserted.', 0); };
+    // A reset reboots the machine; the cassette stays in the deck (rewound), as on hardware.
+    document.getElementById('reset').onclick = () => { zx.reset(); zx.start(); setTapeStatus(deckStatus(), 0); };
     soundBtn.onclick = () => { soundOn = !soundOn; zx.setSound(soundOn); soundBtn.textContent = soundOn ? '🔊 Sound: on' : '🔇 Sound: off'; };
 
     // ---- tape ----------------------------------------------------------------
@@ -124,14 +125,22 @@
         await sleep(150);
       }
     }
-    // Reset, boot to the BASIC prompt, type LOAD "", then insert + play — exactly the
-    // sequence the headless load test verifies against the real ROM.
+    // Insert the tape, reset, boot to the BASIC prompt, type LOAD "", then play — exactly
+    // the sequence the headless load test verifies against the real ROM. Inserting first
+    // means a file that is not a tape fails before the machine is rebooted.
+    // A tape that cannot be parsed must say so, not leave the status on 'Typing LOAD ""…'.
+    function showTapeError(name, error) {
+      setTapeStatus('Could not load "' + name + '": ' + ((error && error.message) || error), 0);
+    }
+    // Resolves true when the tape was inserted and started, false otherwise.
     async function loadAndRun(bytes, name) {
-      if (busy) return;
+      if (busy) return false;
       busy = true; setButtons(false);
       try {
         kickAudio();
-        zx.reset(); zx.start();
+        zx.insertTape(bytes, { name });                    // throws on a bad file
+        currentTape = { bytes, name };                     // it is in the deck now
+        zx.reset(); zx.start();                            // the tape stays inserted
         setTapeStatus('Booting…', 0);
         await sleep(2000);                                 // wait for the © prompt
         setTapeStatus('Typing LOAD ""…', 0);
@@ -139,20 +148,28 @@
         // with a harmless CAPS SHIFT tap (types nothing) to absorb it before LOAD "".
         await typeSteps([['CAPS']]);
         await typeSteps([['J'], ['SYM', 'P'], ['SYM', 'P'], ['ENTER']]);
-        zx.insertTape(bytes, { name });
         zx.playTape();
         setTapeStatus('Loading "' + name + '"…', 0);
+        return true;
+      } catch (error) {
+        showTapeError(name, error);
+        return false;
       } finally {
         busy = false; setButtons(true);                    // never leave the buttons stuck
       }
     }
+    // Load / Fast load need a tape in the deck; everything else just waits for `busy`.
     function setButtons(on) {
       for (const id of ['loadSample', 'fast', 'openFile', 'eject', 'reset']) document.getElementById(id).disabled = !on;
+      if (!currentTape) for (const id of ['loadSample', 'fast', 'eject']) document.getElementById(id).disabled = true;
     }
 
     // The tape currently in the deck — Load / Fast load both act on it. Defaults to the
-    // built-in sample; opening a .tap/.tzx replaces it.
+    // built-in sample; opening a .tap/.tzx replaces it; Eject empties the deck.
     let currentTape = { bytes: b64ToBytes(SAMPLE_B64), name: 'zx vibes' };
+    function deckStatus() {
+      return currentTape ? 'Tape ready: “' + currentTape.name + '”.' : 'No tape inserted.';
+    }
 
     // Fast (flash) load — no real-time wait. fastLoadTape is async: it fast-forwards in
     // chunks and yields between them, so the screen and the progress ticker (below) keep
@@ -165,13 +182,21 @@
         setTapeStatus('Fast loading "' + name + '"…', 0);
         await zx.fastLoadTape(bytes, { name });
         setTapeStatus('Loaded "' + name + '" — running.', 1);
+      } catch (error) {
+        showTapeError(name, error);
       } finally {
         busy = false; setButtons(true);                    // never leave the buttons stuck
       }
     }
 
-    document.getElementById('loadSample').onclick = () => loadAndRun(currentTape.bytes, currentTape.name);
-    document.getElementById('fast').onclick = () => fastLoad(currentTape.bytes, currentTape.name);
+    document.getElementById('loadSample').onclick = () => {
+      if (currentTape) loadAndRun(currentTape.bytes, currentTape.name);
+      else setTapeStatus('No tape inserted — use Open… to insert one.', 0);
+    };
+    document.getElementById('fast').onclick = () => {
+      if (currentTape) fastLoad(currentTape.bytes, currentTape.name);
+      else setTapeStatus('No tape inserted — use Open… to insert one.', 0);
+    };
     const fileInput = document.getElementById('file');
     document.getElementById('openFile').onclick = () => fileInput.click();
     fileInput.onchange = async () => {
@@ -183,14 +208,25 @@
       if (/\.z80$/i.test(f.name)) {
         // A .z80 snapshot restores the whole machine instantly — no LOAD "" needed.
         kickAudio();
-        zx.loadSnapshot(buf); zx.start();
-        setTapeStatus('Snapshot "' + name + '" restored — running.', 1);
+        try {
+          zx.loadSnapshot(buf); zx.start();
+          setTapeStatus('Snapshot "' + name + '" restored — running.', 1);
+        } catch (error) {
+          showTapeError(name, error);
+        }
       } else {
-        currentTape = { bytes: buf, name };
-        loadAndRun(buf, name);                     // real-time (you hear it load)
+        // Real-time (you hear it load). It becomes the deck's tape — reused by Load /
+        // Fast load — only once it was accepted; a bad file leaves the old one in place.
+        await loadAndRun(buf, name);
       }
     };
-    document.getElementById('eject').onclick = () => { zx.ejectTape(); setTapeStatus('Tape ejected.', 0); };
+    // Eject empties the deck: Load / Fast load have nothing to play until Open… inserts one.
+    document.getElementById('eject').onclick = () => {
+      zx.ejectTape();
+      currentTape = null;
+      setButtons(!busy);
+      setTapeStatus('Tape ejected — use Open… to insert another.', 0);
+    };
 
     // ---- Kempston joystick ---------------------------------------------------
     const joy = { up: false, down: false, left: false, right: false, fire: false };

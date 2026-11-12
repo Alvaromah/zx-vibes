@@ -55,8 +55,10 @@ pnpm --filter zx-vibes lint
 pnpm --filter zx-vibes test
 ```
 
-The package has a prepack build smoke path so publishing catches broken shims or
-metadata before npm packing.
+`pnpm --filter zx-vibes test` runs a smoke check: the exported `name` and
+`version` match `package.json`, and `bin/zx-vibes.js --version` exits 0. It
+does not exercise the `zxs`, `zxs-mcp` or `zxasm` shims; `prepack` only rebuilds
+`dist/`.
 
 ## License
 

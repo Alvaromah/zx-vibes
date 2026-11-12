@@ -12,7 +12,7 @@
 import type { Command } from 'commander';
 import { envError, userError } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
-import { parseNumber, parseRange } from '../util/address.js';
+import { hexSuffixHint, parseNumber, parseRange } from '../util/address.js';
 import { READ_WATCH_UNAVAILABLE } from '../runtime/run.js';
 import { resolveObserveMachine } from '../observe/source.js';
 import {
@@ -56,7 +56,9 @@ function sameFile(mapped: string, given: string): boolean {
 /**
  * Resolve a `break add` spec to a 16-bit address: a raw address resolves with no
  * build (CLI-PROD-EDGE-002); a label / `file.asm:line` is looked up in the built
- * entry's SLD (assembled in memory by the observe sourcer).
+ * entry's SLD (assembled in memory by the observe sourcer). Numbers come first, which
+ * cannot shadow a label: a number never starts with a letter (CLI-PROD-CONV-ADDR-002),
+ * so a word such as `each` is always looked up as a label.
  */
 export function resolveBreakSpec(spec: string, cwd: string): number {
   const s = spec.trim();
@@ -78,7 +80,7 @@ export function resolveBreakSpec(spec: string, cwd: string): number {
   }
   throw userError(
     `break: cannot resolve "${spec}" (use an address, a label, or file.asm:line; ` +
-      'label/file:line need symbols from a prior `zxs build`)',
+      `label/file:line need symbols from a prior \`zxs build\`${hexSuffixHint(s)})`,
     'break',
   );
 }

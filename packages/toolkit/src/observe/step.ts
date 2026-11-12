@@ -1,13 +1,14 @@
 // `zxs step [n]` — single-step `n` instructions and report the resulting state
 // (cli.md CLI-PROD-STEP-001, RT-PROD-OBSERVE-001).
 //
-// Sources a machine (built entry / `--bin` / fresh, PC at the entry), installs the
-// observable `HostIo` (so an `OUT (0xFE),A` during stepping is absorbed, not a crash),
-// and executes exactly `n` CPU instructions via the core's `stepInstruction` — classic
-// debugger stepping (no interrupt injection). `--over` steps OVER a `CALL`/`RST`: it runs
-// the called routine to completion (bounded) and stops at the return address, so a single
-// step doesn't disappear into a subroutine. Read-only in Slice 7a: the machine is sourced,
-// stepped, and reported; nothing is persisted (the persistent session is Slice 7b).
+// Sources a machine (built entry / `--bin` / fresh, PC at the entry, or a `--state`
+// session wherever it paused), installs the observable `HostIo` (so an `OUT (0xFE),A`
+// during stepping is absorbed, not a crash), and executes exactly `n` CPU instructions
+// via the core's `stepInstruction` — classic debugger stepping (no interrupt injection).
+// `--over` steps OVER a `CALL`/`RST`: it runs the called routine to completion (bounded)
+// and stops at the return address, so a single step doesn't disappear into a subroutine.
+// Stateless by default; with `--state` the stepped session is saved back (like
+// `run --state`) unless `--no-save`/`--read-only`.
 
 import type { Command } from 'commander';
 import { disassembleOne } from '@zx-vibes/asm';
@@ -15,11 +16,14 @@ import type { Machine } from '@zx-vibes/machine';
 import { userError } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
 import { HostIo } from '../runtime/io-device.js';
+import { persistStateSession } from '../state/persist.js';
 import { readRegisters, type RegisterSnapshot } from './registers.js';
 import {
   resolveObserveMachine,
   addSnapshotSourceFlags,
+  addStateSessionFlags,
   snapshotSourceFlags,
+  stateSessionFlags,
   type ObserveBoot,
 } from './source.js';
 
@@ -50,10 +54,16 @@ export type StepEnvelope = {
   /** The stepped instructions, in order (a step-over lists the call line, not the routine body). */
   instructions: StepEntry[];
   registers: RegisterSnapshot;
+  /** With `--state`: whether the advanced session was saved back (false under `--no-save`). */
+  persisted?: boolean;
 };
 
 export interface StepOptions {
   cwd?: string | undefined;
+  /** `--state <file>`: step an opt-in persistent session and save it back. */
+  state?: string | undefined;
+  /** `--no-save` / `--read-only`: step the session without saving it back. */
+  noSave?: boolean | undefined;
   bin?: string | undefined;
   z80?: string | undefined;
   tap?: string | undefined;
@@ -82,8 +92,9 @@ function runUntilReturn(machine: Machine, returnAddr: number, spBefore: number):
 export function runStep(options: StepOptions = {}): StepEnvelope {
   const steps = options.steps ?? DEFAULT_STEPS;
   const over = options.over ?? false;
-  const { machine, boot } = resolveObserveMachine({
+  const { machine, boot, border } = resolveObserveMachine({
     cwd: options.cwd,
+    state: options.state,
     bin: options.bin,
     z80: options.z80,
     tap: options.tap,
@@ -91,7 +102,9 @@ export function runStep(options: StepOptions = {}): StepEnvelope {
     org: options.org,
     stage: 'step',
   });
-  machine.io = new HostIo();
+  // Seed the border in effect so a session saved back keeps it (not the power-on 7).
+  const io = new HostIo(border);
+  machine.io = io;
 
   const from = machine.registers.pc & 0xffff;
   const read = (a: number): number => machine.memory[a & 0xffff] ?? 0;
@@ -114,7 +127,7 @@ export function runStep(options: StepOptions = {}): StepEnvelope {
     }
   }
 
-  return {
+  const envelope: StepEnvelope = {
     ok: true,
     stage: 'step',
     boot,
@@ -125,6 +138,18 @@ export function runStep(options: StepOptions = {}): StepEnvelope {
     instructions,
     registers: readRegisters(machine),
   };
+  if (options.state !== undefined) {
+    // "executes `n` instructions in the session" (CLI-PROD-STEP-001): save it back like
+    // `run --state` unless `--no-save`/`--read-only` (CLI-PROD-RULE-SESSION-001).
+    envelope.persisted = persistStateSession(
+      options.state,
+      options.noSave ?? false,
+      machine,
+      io.borderColor(),
+      options.cwd ?? process.cwd(),
+    );
+  }
+  return envelope;
 }
 
 /** Map the CLI context onto the `step` service. */
@@ -133,6 +158,7 @@ export function stepCommand(context: CommandContext): StepEnvelope {
   const raw = context.args[0];
   return runStep({
     cwd: process.cwd(),
+    ...stateSessionFlags(options),
     bin: options.bin as string | undefined,
     org: options.org as string | undefined,
     ...snapshotSourceFlags(options),
@@ -151,7 +177,7 @@ function parseSteps(input: string): number {
 
 /** Declare the `step` command's argument / flags (CLI-PROD-STEP-001). */
 export function configureStepCommand(command: Command): void {
-  addSnapshotSourceFlags(command)
+  addStateSessionFlags(addSnapshotSourceFlags(command), 'execute')
     .description('Execute n instructions and report the resulting state')
     .argument('[n]', `instructions to step (default ${DEFAULT_STEPS})`)
     .option('--bin <file>', 'step a raw binary loaded at --org')

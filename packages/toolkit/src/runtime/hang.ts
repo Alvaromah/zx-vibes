@@ -5,7 +5,9 @@
 // Incidental heuristics (ERR-PROD-HANG-HEUR-001). The two `definite` kinds
 // (`di-halt`, `rom-error`) are tested per-instruction and stop the run immediately;
 // the three `probable` kinds (`pc-in-rom`, `sp-corrupt`, `tight-loop`) are decided at
-// frame-budget exhaustion from per-frame progress statistics.
+// frame-budget exhaustion from per-frame progress statistics. The ROM idling with the
+// frame interrupt serviced (BASIC waiting for a key) and the ROM's own power-on boot are
+// not hangs; a program that resets the machine is (ERR-PROD-HANG-IDLE-001).
 
 import type { Machine } from '@zx-vibes/machine';
 
@@ -25,6 +27,12 @@ export interface HangVerdict {
 export const RAM_BASE = 0x4000;
 /** The ROM error restart (RST $08, ERROR-1) — reaching it means the program faulted into the ROM. */
 export const ROM_ERROR_VECTOR = 0x0008;
+/**
+ * The reset vector. The 48K ROM's START (`DI`, then the RAM test that fills and clears
+ * all RAM, then the copyright and the BASIC editor) runs from here: a power-on boot, or —
+ * when a program jumps here — a reset that wipes the program.
+ */
+export const RESET_VECTOR = 0x0000;
 
 // Incidental heuristic thresholds (ERR-PROD-HANG-HEUR-001).
 const STATIC_FRAMES = 50; // ≈ 1 emulated second of zero progress before a probable verdict
@@ -38,6 +46,15 @@ export interface HangStats {
   pcMax: number; // max frame-boundary PC over the static window
   romFrames: number; // consecutive frames RESIDENT in ROM (no RAM PC all frame)
   started: boolean;
+  /**
+   * The machine is in the ROM's reset sequence and has run no RAM code since: `boot` when
+   * the run itself entered at the reset vector (a power-on boot — there is no program to
+   * have left), `reset` when the program jumped to {@link RESET_VECTOR} during the run (it
+   * reset the 48K, whose RAM test wipes the program). Cleared when RAM code runs.
+   */
+  sinceReset?: 'boot' | 'reset' | undefined;
+  /** 1-based frame in which the program reset the machine (`sinceReset === 'reset'`). */
+  resetFrame?: number | undefined;
 }
 
 /**
@@ -118,6 +135,16 @@ export interface HangFrameObservation {
    * callers), the frame-edge PC alone decides, as before.
    */
   sawRamPc?: boolean;
+  /**
+   * Whether this frame's maskable interrupt was accepted. A ROM-resident frame that took
+   * it is the ROM IDLING, not stuck (ERR-PROD-HANG-IDLE-001): interrupts are enabled and
+   * the IM 1 handler scans the keyboard every frame, which is the BASIC editor, `INPUT`,
+   * `PAUSE` or `INKEY$` waiting for a key, or a BASIC program running. That loop busy-polls
+   * with a frozen fingerprint, so without this it read as both `pc-in-rom` and
+   * `tight-loop`. It exempts ROM-resident frames only: an `EI` busy loop in RAM keeps its
+   * verdict, and a `DI` machine never takes the interrupt.
+   */
+  interruptAccepted?: boolean;
 }
 
 /** Fold one frame-boundary observation into the progress statistics. */
@@ -131,7 +158,12 @@ export function updateHangStats(
     typeof observation === 'boolean' ? { haltResumed: observation } : observation;
   const pc = (machine.registers.pc as number) & 0xffff;
   const fp = fingerprint(machine, obs.io);
-  if (!obs.haltResumed && stats.started && fp === stats.fingerprint) {
+  // ROM residence: the frame ended in ROM AND (when observed) never executed a RAM
+  // instruction — see HangFrameObservation.sawRamPc. A resident frame that accepted the
+  // frame interrupt is the ROM idling on its keyboard loop: progress, not a hang.
+  const romResident = pc < RAM_BASE && obs.sawRamPc !== true;
+  const romIdle = romResident && obs.interruptAccepted === true;
+  if (!obs.haltResumed && !romIdle && stats.started && fp === stats.fingerprint) {
     stats.staticFrames += 1;
     stats.pcMin = Math.min(stats.pcMin, pc);
     stats.pcMax = Math.max(stats.pcMax, pc);
@@ -142,17 +174,57 @@ export function updateHangStats(
   }
   stats.fingerprint = fp;
   stats.started = true;
-  // ROM residence: the frame counts only when it ended in ROM AND (when observed)
-  // never executed a RAM instruction — see HangFrameObservation.sawRamPc.
-  const romResident = pc < RAM_BASE && obs.sawRamPc !== true;
-  stats.romFrames = romResident ? stats.romFrames + 1 : 0;
+  // While the ROM's reset sequence runs (a boot, or after the program reset the machine)
+  // residence is the reset's business, decided by `sinceReset`, not frame counting.
+  stats.romFrames =
+    romResident && !romIdle && stats.sinceReset === undefined ? stats.romFrames + 1 : 0;
+}
+
+/**
+ * Per-instruction reset tracking (see {@link HangStats.sinceReset}), called with the PC
+ * after each executed instruction. Reaching {@link RESET_VECTOR} marks a reset (unless the
+ * run is still the ROM's own boot); any RAM PC means a program runs again and clears it.
+ */
+export function noteInstructionPc(stats: HangStats, pc: number, frame: number): void {
+  if (pc === RESET_VECTOR) {
+    if (stats.sinceReset === undefined) {
+      stats.sinceReset = 'reset';
+      stats.resetFrame = frame;
+    }
+  } else if (pc >= RAM_BASE && stats.sinceReset !== undefined) {
+    stats.sinceReset = undefined;
+    stats.resetFrame = undefined;
+  }
+}
+
+/** Whether the opcode at `op` (then `next`) returns: RET, RET cc, or ED RETN/RETI. */
+export function isReturnOpcode(op: number, next: number): boolean {
+  return op === 0xc9 || (op & 0xc7) === 0xc0 || (op === 0xed && (next & 0xc7) === 0x45);
+}
+
+/**
+ * Mark a run that ENTERS at the reset vector as the ROM's power-on boot: no program is
+ * loaded yet, so its ROM residence (the `DI` RAM test, then the editor) is not a program
+ * that left into ROM. Cleared by the first RAM instruction, like a reset.
+ */
+export function noteBootEntry(stats: HangStats, entryPc: number): void {
+  if ((entryPc & 0xffff) === RESET_VECTOR) stats.sinceReset = 'boot';
 }
 
 /**
  * A `definite` hang at the current instruction boundary, or `undefined`. Checked
  * after every instruction; a hit stops the run immediately (ERR-PROD-HANG-KINDS-001).
+ *
+ * `fromProgram` says whether reaching the ROM error restart now is the PROGRAM's doing:
+ * the step ran RAM code, or ROM code the program called or jumped into and has not
+ * returned from. When BASIC itself reports an error (`2 Variable not found` typed in the
+ * editor, a BASIC `STOP`), that is ordinary BASIC, not a crash (ERR-PROD-HANG-IDLE-001).
  */
-export function definiteHang(machine: Machine, org: number): HangVerdict | undefined {
+export function definiteHang(
+  machine: Machine,
+  org: number,
+  fromProgram = true,
+): HangVerdict | undefined {
   const pc = (machine.registers.pc as number) & 0xffff;
   if (machine.halted && !machine.registers.iff1) {
     return {
@@ -163,7 +235,7 @@ export function definiteHang(machine: Machine, org: number): HangVerdict | undef
       likelyCause: 'The CPU halted with interrupts disabled; no interrupt can ever resume it',
     };
   }
-  if (org >= RAM_BASE && pc === ROM_ERROR_VECTOR) {
+  if (org >= RAM_BASE && pc === ROM_ERROR_VECTOR && fromProgram) {
     return {
       kind: 'rom-error',
       pc,
@@ -182,6 +254,20 @@ export function definiteHang(machine: Machine, org: number): HangVerdict | undef
 export function probableHang(machine: Machine, org: number, stats: HangStats): HangVerdict | undefined {
   const pc = (machine.registers.pc as number) & 0xffff;
   const sp = (machine.registers.sp as number) & 0xffff;
+
+  // The program reset the machine and never ran again. Once the ROM's RAM test has
+  // wiped it, the 48K sits idle in BASIC (which on its own is not a hang,
+  // ERR-PROD-HANG-IDLE-001), so this is the only trace of the crash.
+  if (org >= RAM_BASE && stats.sinceReset === 'reset') {
+    return {
+      kind: 'pc-in-rom',
+      pc,
+      detail: `The program jumped to 0x0000 in frame ${stats.resetFrame ?? 0}, resetting the machine, and never ran RAM code again`,
+      confidence: 'probable',
+      likelyCause:
+        'A jump or return to 0x0000 (a corrupt stack, or running off the end of the code) reset the 48K; the ROM cleared RAM and is in BASIC',
+    };
+  }
 
   // Execution left the program and is stuck in ROM (only meaningful for a RAM program).
   if (org >= RAM_BASE && stats.romFrames >= STATIC_FRAMES) {

@@ -32,7 +32,7 @@ is in `cli.md`, the project-config schema in `config-schema.md`.
 
 ## Verify pipeline
 
-- [id: RT-PROD-VERIFY-001] The verify pipeline runs, in order: (1) load project config (entry, outDir, org) — failing as a user error if required config is missing; (2) build; (3) if the build succeeded, **invoke the real `run` service** (fresh boot, load at the configured origin, 300 frames under the hang watchdog) and use its full report + a captured screenshot — not a trimmed inline re-implementation (ADR-0027); (4) if a `tests/` directory exists, run the test suite. [provenance: contract]
+- [id: RT-PROD-VERIFY-001] The verify pipeline runs, in order: (1) load project config (entry, outDir, org) — failing as a user error if required config is missing; (2) build; (3) if the build succeeded, **invoke the real `run` service** (fresh boot, load at the program's load origin — its `ORG`, else the configured origin, cli.md CLI-PROD-CONV-ORIGIN-001 — 300 frames under the hang watchdog) and use its full report + a captured screenshot — not a trimmed inline re-implementation (ADR-0027); (4) if a `tests/` directory exists, run the test suite. [provenance: contract]
 - [id: RT-PROD-VERIFY-002] The verify result `ok` is true iff `build.ok` AND `run.ok` AND (no tests ran OR `tests.failed === 0`); the service exits 0 when `ok` and 1 otherwise. [provenance: contract]
 - [id: RT-PROD-VERIFY-003] Verify is the single project acceptance gate: any failing stage makes the whole pipeline fail (non-zero exit). [provenance: contract]
 

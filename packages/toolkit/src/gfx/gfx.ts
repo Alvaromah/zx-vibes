@@ -492,7 +492,7 @@ export function gfxCommand(context: CommandContext): GfxEnvelope | RevengGfxEnve
 export function configureGfxCommand(command: Command): void {
   command
     .description('Decode the agent\'s own Spectrum graphics data to PNG (linear | attrs)')
-    .argument('[args...]', '`linear` or `attrs` (reveng `find`/`blit-linear` = Slice 11b add-on)')
+    .argument('[args...]', '`linear` or `attrs` (`find`/`blit-linear` need ZXS_REVENG=on)')
     .option('--bin <file>', 'source binary loaded at --org (else the configured entry / fresh boot)')
     .option('--state <file>', 'read from an opt-in persistent session (.zxstate)')
     .option('--org <addr>', 'load origin for --bin (default 0x8000)')

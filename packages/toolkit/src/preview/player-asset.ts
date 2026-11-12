@@ -58,7 +58,8 @@ export function playerBundleExists(): boolean {
  * The minimal HTML page served at `/`. It hosts the 320x240 bordered <canvas>
  * (RASTER-GEOMETRY-001: the 256x192 display inset in the visible raster border,
  * CSS-scaled with pixelated rendering) and loads the bundled player ES module, which
- * fetches the program + ROM and runs the reconstructed machine. The `label` is a
+ * fetches the program + ROM and runs the reconstructed machine. The `#error` box shows
+ * a program that cannot be decoded or a failed `--watch` rebuild. The `label` is a
  * short Incidental caption.
  */
 export function playerHtml(label: string): string {
@@ -77,10 +78,14 @@ export function playerHtml(label: string): string {
   #screen { width: 640px; height: 480px; image-rendering: pixelated; display: block; }
   .meta { opacity: 0.75; }
   code { color: #9cf; }
+  #error { margin: 0; max-width: 640px; white-space: pre-wrap; color: #f88; background: #2a1414;
+           border: 1px solid #633; border-radius: 4px; padding: 8px 10px; font: 12px/1.4 ui-monospace, monospace; }
+  #error[hidden] { display: none; }
 </style>
 </head>
 <body>
   <div class="meta">zxs preview · <span id="status">loading…</span></div>
+  <pre id="error" hidden></pre>
   <div id="frame"><canvas id="screen" width="320" height="240"></canvas></div>
   <div class="meta">${caption} — host keys drive the 48K matrix; <code>--watch</code> live-reloads.</div>
   <script type="module" src="player.js"></script>

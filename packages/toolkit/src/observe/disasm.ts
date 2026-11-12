@@ -1,23 +1,26 @@
 // `zxs disasm <spec>` — disassemble from an address / label / `file.asm:line` / PC
 // (cli.md CLI-PROD-DISASM-001, RT-PROD-OBSERVE-001).
 //
-// Sources a machine (built entry / `--bin` / fresh), resolves the start `<spec>`, and
-// decodes `--count` instructions (default 16) through the SOLE embedded disassembler
-// (`@zx-vibes/asm` `disassemble`, the same decoder behind the assembler round-trip), then
-// annotates each line with the SLD label that lands on it. Label / `file.asm:line`
-// resolution comes from the in-memory assemble of the configured entry (`source.ts`):
-// `--bin`/fresh have no symbols, so only numeric / `PC` specs resolve there.
+// Sources a machine (built entry / `--bin` / fresh / a `--state` session), resolves the
+// start `<spec>`, and decodes `--count` instructions (default 16) through the SOLE embedded
+// disassembler (`@zx-vibes/asm` `disassemble`, the same decoder behind the assembler
+// round-trip), then annotates each line with the SLD label that lands on it. Label /
+// `file.asm:line` resolution comes from the in-memory assemble of the configured entry
+// (`source.ts`) — a `--state` session borrows it, as `break add` does; `--bin`/fresh have
+// no symbols, so only numeric / `PC` specs resolve there.
 
 import type { Command } from 'commander';
 import { disassemble, type DisasmLine } from '@zx-vibes/asm';
 import type { Machine } from '@zx-vibes/machine';
 import { userError } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
-import { parseNumber } from '../util/address.js';
+import { hexSuffixHint, parseNumber } from '../util/address.js';
 import {
   resolveObserveMachine,
   addSnapshotSourceFlags,
+  addStateSessionFlags,
   snapshotSourceFlags,
+  stateSessionFlags,
   type ObserveBoot,
   type SourceMapEntry,
   type SymbolDef,
@@ -48,6 +51,8 @@ export type DisasmEnvelope = {
 
 export interface DisasmOptions {
   cwd?: string | undefined;
+  /** `--state <file>`: disassemble an opt-in persistent session's memory (never written). */
+  state?: string | undefined;
   bin?: string | undefined;
   z80?: string | undefined;
   tap?: string | undefined;
@@ -85,9 +90,15 @@ export function resolveDisasmSpec(
   const n = parseNumber(s);
   if (n !== undefined && n >= 0 && n <= 0xffff) return n;
   throw userError(
-    `disasm: cannot resolve "${spec}" (use an address, a label, file.asm:line, or PC)`,
+    `disasm: cannot resolve "${spec}" (use an address, a label, file.asm:line, or PC${hexSuffixHint(s)})`,
     'disasm',
   );
+}
+
+/** Whether a spec names an address directly (`PC` or a number), needing no symbols. */
+function isAddressSpec(spec: string): boolean {
+  const s = spec.trim();
+  return s.toUpperCase() === 'PC' || parseNumber(s) !== undefined;
 }
 
 /** Whether a source-map file path matches a user-given (possibly bare) file name. */
@@ -103,12 +114,16 @@ export function runDisasm(options: DisasmOptions): DisasmEnvelope {
   const count = options.count !== undefined ? parseCount(options.count) : DEFAULT_DISASM_COUNT;
   const { machine, boot, symbols, sourceMap } = resolveObserveMachine({
     cwd: options.cwd,
+    state: options.state,
     bin: options.bin,
     z80: options.z80,
     tap: options.tap,
     sna: options.sna,
     org: options.org,
     stage: 'disasm',
+    // A session borrows the entry's SLD: a label / `file.asm:line` spec cannot resolve
+    // without it, while `PC` / an address only uses it to annotate lines.
+    stateSymbols: isAddressSpec(options.spec) ? 'best-effort' : 'required',
   });
   const addr = resolveDisasmSpec(options.spec, machine, symbols, sourceMap);
 
@@ -144,6 +159,7 @@ export function disasmCommand(context: CommandContext): DisasmEnvelope {
   const options = context.options as Record<string, unknown>;
   return runDisasm({
     cwd: process.cwd(),
+    state: stateSessionFlags(options).state,
     bin: options.bin as string | undefined,
     org: options.org as string | undefined,
     ...snapshotSourceFlags(options),
@@ -154,7 +170,7 @@ export function disasmCommand(context: CommandContext): DisasmEnvelope {
 
 /** Declare the `disasm` command's argument / flags (CLI-PROD-DISASM-001). */
 export function configureDisasmCommand(command: Command): void {
-  addSnapshotSourceFlags(command)
+  addStateSessionFlags(addSnapshotSourceFlags(command), 'read')
     .description('Disassemble from an address / label / file.asm:line / PC')
     .argument('[spec]', 'start: an address, a label, file.asm:line, or PC')
     .option('--bin <file>', 'disassemble a raw binary loaded at --org')

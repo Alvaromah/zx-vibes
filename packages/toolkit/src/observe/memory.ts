@@ -1,13 +1,11 @@
 // `zxs mem` — read / dump session memory (cli.md CLI-PROD-MEM-001,
 // RT-PROD-OBSERVE-001).
 //
-// Slice 7a implements the READ-ONLY half: `mem read <addr> [--len n]` and
-// `mem dump --range <from-to> [--out <file>]`. Both source a machine (built entry /
-// `--bin` / fresh) and read its address space — a classic hexdump view (raw bytes +
-// 2-hex + printable-ASCII). The mutating half — `mem load <addr> --bin <file>` and
-// `mem write <addr> <hexBytes>` — writes the session and lands with the persistent-debug
-// cluster (Slice 7b); invoking it now is recognized and rejected, not silently ignored
-// (ERR-PROD-NOSILENT-001).
+// The read half — `mem read <addr> [--len n]` and `mem dump --range <from-to>
+// [--out <file>]` — sources a machine (built entry / `--bin` / fresh / `--state`) and
+// reads its address space as a classic hexdump view (raw bytes + 2-hex +
+// printable-ASCII). The mutating half — `mem load <addr> --bin <file>` and
+// `mem write <addr> <hexBytes>` — writes into the session and persists it.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';

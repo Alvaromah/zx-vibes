@@ -5,12 +5,13 @@ the `@zx-vibes` assembler and emulator cores, for ZX Spectrum **48K** projects.
 
 Current package version in this repository: `0.8.0`.
 
-> **Regeneration status — core surface complete (through Slice 11a).**
+> **Regeneration status — core surface complete.**
 > This package is regenerated from its DNA product specs
 > (`dna/product/cli.md`, `errors.md`, `config-schema.md`, `toolkit-runtime.md`).
 > Every core verb is implemented; no deferred stubs remain in the command
-> registry. The `create-zx-vibes` standalone generator and the generated
-> knowledge pack for `setup` are the main deferred slices.
+> registry. `zxs setup` installs the generated knowledge pack (reference docs,
+> skills, recipes); only its worked examples are still deferred. `zxs new`
+> replaces the retired `create-zx-vibes` generator.
 
 ## What's implemented
 
@@ -22,7 +23,11 @@ Current package version in this repository: `0.8.0`.
   `builtin`, `outDir` `build`; `spectral` → `builtin`).
 - **Sessions** (`src/runtime/session.ts`) — a fresh-by-default clean-ROM boot
   over `@zx-vibes/machine`, plus the opt-in persistent `.zxstate` session
-  (`--state`) shared with the MCP server.
+  (`--state`) shared with the MCP server. Every observe verb reads a session
+  with `--state` (so `run --state f` then `screen --state f` shows that run);
+  `step`/`trace`/`coverage` save the advanced session back unless `--no-save`.
+  A built entry always loads at its own `ORG` (the config `org` only places a
+  source without one).
 - **Timing + scenarios** — every run exposes missed-frame/idle telemetry;
   declarative specs can assert `frameBudget`, inject RAM with `setup`, and anchor
   input/baselines to `waitFor` readiness. `trace --profile` reports contended
@@ -69,7 +74,9 @@ snapshot codec (`@zx-vibes/machine` `writeZ80`/`readZ80`):
   "machine": {
     "z80": "<base64 of writeZ80({ registers, memory, border })>",  // regs + 48K RAM + border
     "halted": false,                // NOT carried by .z80 — preserved here
-    "memptr": 0                     // the WZ register, likewise
+    "memptr": 0,                    // the WZ register, likewise
+    "clock": 0,                     // frame T-state 0..69887 (optional; absent ⇒ 0)
+    "eiDelay": 0                    // 1 = an EI just ran, holding off the next interrupt (optional)
   },
   "debug": {                        // the break/watch store rides along (MCP handoff)
     "breakpoints": [ { "id": 1, "addr": 32771, "spec": "0x8003" } ],

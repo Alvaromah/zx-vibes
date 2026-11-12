@@ -7,7 +7,8 @@
 //   1. load project config (entry, outDir, org) — missing required config is a USER_ERROR;
 //   2. build via the SOLE build service (`runBuild`, the same `zxs build` uses);
 //   3. if the build succeeded, invoke the REAL run service (fresh boot, load the produced
-//      binary at the configured origin, 300 frames under the hang watchdog) and compose its
+//      program at its load origin — its ORG, else the configured `org`, CLI-PROD-CONV-ORIGIN-001 —
+//      300 frames under the hang watchdog) and compose its
 //      FULL report verbatim — `runProgram` + `buildRunEnvelope`, the exact shape `run --json`
 //      emits (CLI-PROD-RULE-VERIFY-001: NOT a trimmed inline re-implementation);
 //   4. capture a screenshot of the post-run screen to a PNG (the one encoder,
@@ -30,8 +31,8 @@ import { resolveConfig } from '../config/config.js';
 import { ExitCode, userError, type Envelope } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
 import { parseAddress } from '../util/address.js';
-import { runBuild, type BuildEnvelope } from '../build/build.js';
-import { loadBinMachine } from '../runtime/session.js';
+import { buildProject, type BuildEnvelope } from '../build/build.js';
+import { loadBytesMachine, programLoadOrigin } from '../runtime/session.js';
 import {
   DEFAULT_FRAMES,
   buildRunEnvelope,
@@ -98,7 +99,7 @@ export function runVerify(options: VerifyOptions = {}): VerifyEnvelope {
   const org = parseAddress(resolved.org, 'verify');
 
   // Stage 2 — build (the sole build service; CLI-PROD-RULE-VERIFY-001).
-  const build = runBuild({ cwd, outDir: resolved.outDir });
+  const { envelope: build, program } = buildProject({ cwd, outDir: resolved.outDir });
   if (!build.ok) {
     // Build failure short-circuits: no run, no screenshot, no tests (step 3 gate).
     return {
@@ -109,15 +110,16 @@ export function runVerify(options: VerifyOptions = {}): VerifyEnvelope {
   }
 
   // Stage 3 — invoke the REAL run service and compose its full report verbatim
-  // (CLI-PROD-RULE-VERIFY-001): fresh boot, load the built binary at `org`, 300 frames
+  // (CLI-PROD-RULE-VERIFY-001): fresh boot, load the built program where it was assembled
+  // to run (its ORG, else the configured `org` — CLI-PROD-CONV-ORIGIN-001), 300 frames
   // under the hang watchdog — exactly what `zxs run` (no source) does.
-  const binPath = build.outputs.bin;
-  if (binPath === null) {
+  if (build.outputs.bin === null || program === undefined) {
     throw userError('verify: the build reported success but produced no binary', 'verify');
   }
-  const machine = loadBinMachine(resolve(cwd, binPath), org);
-  const result = runProgram(machine, org, { frames: DEFAULT_FRAMES, detectHangs: true });
-  const boot: RunBoot = { source: 'build', org, entry: build.entry };
+  const loadOrigin = programLoadOrigin(program.origin, org);
+  const machine = loadBytesMachine(program.bytes, loadOrigin);
+  const result = runProgram(machine, loadOrigin, { frames: DEFAULT_FRAMES, detectHangs: true });
+  const boot: RunBoot = { source: 'build', org: loadOrigin, entry: build.entry };
   const run = buildRunEnvelope(result, boot);
 
   // Stage 4 — screenshot the post-run screen to a PNG (the one encoder; default

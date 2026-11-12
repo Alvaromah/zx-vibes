@@ -48,11 +48,15 @@ The demos embed the original 16 KB Sinclair 48K ROM — © Amstrad plc, redistri
 by permission (see [`NOTICE`](./NOTICE)). To supply your own, rebuild the bundle
 (below) after replacing `tooling/48k.rom`.
 
-## Rebuilding the bundle (optional)
+## Rebuilding the bundle
 
-Only needed if you change the emulator source under `tooling/`:
+`zxspectrum.js` is a build output that inlines its sources, so it has to be rebuilt
+(and committed) whenever any of them changes — the demo host code under `tooling/`
+**and** the emulator cores it bundles (`@zx-vibes/machine`, `@zx-vibes/ula`,
+`@zx-vibes/cpu`). Nothing rebuilds it automatically: a core fix reaches the demos only
+once the bundle is regenerated.
 
 ```
 pnpm --filter @zx-vibes-examples/tooling run bundle   # regenerates zxspectrum.js
-pnpm --filter @zx-vibes-examples/tooling test         # headless boot smoke
+pnpm --filter @zx-vibes-examples/tooling test         # headless tests (ROM boot, tape, keyboard, audio, pages)
 ```

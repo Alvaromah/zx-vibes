@@ -8,10 +8,14 @@
 //     bounded number of attempts; `--strict-port` fails instead.
 //   - the bundled-player routes: `/` (HTML), `/player.js` (the browser bundle), `/rom`
 //     (the 48K ROM the player boots), `/program.json` + `/program.bin` (the served program).
-//   - the `--watch` SSE stream (RT-PROD-PREVIEW-005): `/events` pushes a `reload` event on a
-//     source change.
-//   - the ownership-token control endpoint (RT-PROD-PREVIEW-004): `/control/ping` (liveness)
-//     and `/control/stop` (token-gated shutdown — a foreign token is HTTP 403).
+//   - the `--watch` SSE stream (RT-PROD-PREVIEW-005): `/events` pushes a `reload` event
+//     after a source change rebuilds cleanly, and a `build-error` event (with the build's
+//     message) when the rebuild fails — the previous program keeps being served, the
+//     failure is logged, and the error is replayed to every page that (re)connects until
+//     the next good build. The event names are Incidental (RT-PROD-FREE-001).
+//   - the ownership-token control endpoint (RT-PROD-PREVIEW-004): `/control/ping` (liveness,
+//     answering the PREVIEW_OWNER marker) and `/control/stop` (token-gated shutdown — a
+//     foreign token is HTTP 403).
 //
 // The server is created in-process and is fully testable (no spawn); the CLI `--detach`
 // path runs this same server in a detached child (preview-command.ts).
@@ -22,7 +26,7 @@ import { loadRom } from '../runtime/rom.js';
 import { userError } from '../output/envelope.js';
 import { programMeta, type PreviewProgram } from './program.js';
 import { playerBundleExists, playerHtml, readPlayerBundle } from './player-asset.js';
-import { baseUrlFor } from './lifecycle.js';
+import { baseUrlFor, PREVIEW_OWNER } from './lifecycle.js';
 import { SourceWatcher } from './watch.js';
 
 /** Default preview port (CLI-PROD-PREVIEW-002). */
@@ -50,9 +54,18 @@ export interface PreviewServerOptions {
   /**
    * Optional rebuild hook run before a reload broadcast (default mode rebuilds the project).
    * Returning a fresh {@link PreviewProgram} swaps what the server serves, so the player's
-   * post-reload `/program.*` fetch reflects the rebuilt bytes.
+   * post-reload `/program.*` fetch reflects the rebuilt bytes. Throwing keeps the previous
+   * program and broadcasts a `build-error` event carrying the error's message instead.
    */
   rebuild?: (() => PreviewProgram | void) | undefined;
+  /**
+   * Recompute the watched set after each rebuild (the build's dependencies can change: a
+   * new INCLUDE). After a failed rebuild the result is ADDED to the current set, never
+   * replacing it, so a broken build cannot shrink what is watched.
+   */
+  refreshWatchPaths?: (() => string[]) | undefined;
+  /** Where rebuild failures are logged (default: stderr). */
+  log?: ((line: string) => void) | undefined;
   /** Invoked when a token-verified `/control/stop` arrives (e.g. remove the record + exit). */
   onStop?: (() => void) | undefined;
 }
@@ -66,8 +79,13 @@ export interface PreviewServer {
   readonly token: string;
   /** Number of connected SSE clients (test/diagnostic). */
   sseClientCount(): number;
-  /** Force a reload broadcast (rebuild first if a hook was set) — what `--watch` calls. */
+  /**
+   * What `--watch` calls on a source change: rebuild (if a hook was set), refresh the
+   * watched set, then broadcast `reload` — or `build-error` when the rebuild threw.
+   */
   broadcastReload(): void;
+  /** The message of the failed rebuild still in effect, or undefined after a good build. */
+  buildError(): string | undefined;
   /** Stop the server, the watcher, and all SSE streams (no leaked handles). */
   close(): Promise<void>;
 }
@@ -96,6 +114,9 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   let watcher: SourceWatcher | undefined;
   let keepAlive: ReturnType<typeof setInterval> | undefined;
   let closed = false;
+  // The failed rebuild still in effect (replayed to pages that connect while it lasts).
+  let lastBuildError: string | undefined;
+  const log = options.log ?? ((line: string): void => void process.stderr.write(line));
 
   const server = createServer((req, res) => {
     handleRequest(req, res, {
@@ -103,6 +124,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
       romBytes,
       token: options.token,
       sseClients,
+      buildError: () => lastBuildError,
       onStop: () => {
         // Token-verified stop: let the owner react (remove record / exit), then close.
         options.onStop?.();
@@ -128,18 +150,34 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
   }
 
   const broadcastReload = (): void => {
+    let failure: string | undefined;
     if (options.rebuild) {
       try {
         const next = options.rebuild();
         if (next) holder.program = next; // serve the rebuilt bytes after reload
-      } catch {
-        // A failed rebuild still reloads the page (the player surfaces the error state).
+      } catch (error) {
+        failure = error instanceof Error ? error.message : String(error);
       }
     }
-    for (const client of sseClients) {
-      client.write('event: reload\n');
-      client.write(`data: ${JSON.stringify({ at: Date.now() })}\n\n`);
+    if (watcher && options.refreshWatchPaths) {
+      let fresh: string[] = [];
+      try {
+        fresh = options.refreshWatchPaths();
+      } catch {
+        /* keep the current set */
+      }
+      watcher.setPaths(failure === undefined ? fresh : [...watcher.watchedPaths(), ...fresh]);
     }
+    if (failure !== undefined) {
+      // Keep serving the last good program; tell the open pages why nothing changed.
+      lastBuildError = failure;
+      log(`preview: rebuild failed — still serving the previous program.\n${failure}\n`);
+      broadcast(sseClients, 'build-error', { message: failure, at: Date.now() });
+      return;
+    }
+    if (lastBuildError !== undefined) log('preview: rebuild succeeded — reloading.\n');
+    lastBuildError = undefined;
+    broadcast(sseClients, 'reload', { at: Date.now() });
   };
 
   if (options.watchPaths && options.watchPaths.length > 0) {
@@ -152,6 +190,7 @@ export async function createPreviewServer(options: PreviewServerOptions): Promis
     token: options.token,
     sseClientCount: () => sseClients.size,
     broadcastReload,
+    buildError: () => lastBuildError,
     close: () =>
       new Promise<void>((resolve) => {
         if (closed) {
@@ -182,7 +221,19 @@ interface RequestContext {
   romBytes: Uint8Array;
   token: string;
   sseClients: Set<ServerResponse>;
+  /** The failed rebuild in effect, replayed to a page that connects meanwhile. */
+  buildError: () => string | undefined;
   onStop: () => void;
+}
+
+/** Write one named SSE event with a JSON payload to every connected page. */
+function broadcast(clients: Set<ServerResponse>, event: string, data: unknown): void {
+  for (const client of clients) sendEvent(client, event, data);
+}
+
+function sendEvent(client: ServerResponse, event: string, data: unknown): void {
+  client.write(`event: ${event}\n`);
+  client.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): void {
@@ -212,10 +263,10 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: RequestCo
     return sendBytes(res, 200, 'application/octet-stream', program.bytes);
   }
   if (method === 'GET' && path === '/events') {
-    return openSseStream(req, res, ctx.sseClients);
+    return openSseStream(req, res, ctx.sseClients, ctx.buildError());
   }
   if (method === 'GET' && path === '/control/ping') {
-    return sendJson(res, 200, { ok: true, owner: 'zx-vibes-preview' });
+    return sendJson(res, 200, { ok: true, owner: PREVIEW_OWNER });
   }
   if (method === 'POST' && path === '/control/stop') {
     return handleStop(req, res, ctx);
@@ -243,8 +294,17 @@ function handleStop(req: IncomingMessage, res: ServerResponse, ctx: RequestConte
     .catch(() => sendJson(res, 400, { ok: false, error: 'bad request' }));
 }
 
-/** Open an SSE stream and register the client; deregister on close. */
-function openSseStream(req: IncomingMessage, res: ServerResponse, clients: Set<ServerResponse>): void {
+/**
+ * Open an SSE stream and register the client; deregister on close. A rebuild failure
+ * still in effect is replayed at once, so a page opened (or reloaded, or reconnected)
+ * while the source is broken shows the error instead of a silently stale program.
+ */
+function openSseStream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  clients: Set<ServerResponse>,
+  pendingBuildError: string | undefined,
+): void {
   res.writeHead(200, {
     'content-type': 'text/event-stream',
     'cache-control': 'no-cache, no-transform',
@@ -253,6 +313,9 @@ function openSseStream(req: IncomingMessage, res: ServerResponse, clients: Set<S
   });
   res.write('retry: 1000\n');
   res.write(': connected\n\n');
+  if (pendingBuildError !== undefined) {
+    sendEvent(res, 'build-error', { message: pendingBuildError, at: Date.now() });
+  }
   clients.add(res);
   const drop = (): void => {
     clients.delete(res);

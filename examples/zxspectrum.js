@@ -21,6 +21,7 @@ var ZXSpectrum = (() => {
   // examples/tooling/browser-entry.mjs
   var browser_entry_exports = {};
   __export(browser_entry_exports, {
+    MAX_TAPE_PULSES: () => MAX_TAPE_PULSES,
     Spectrum: () => Spectrum,
     create: () => create
   });
@@ -135,7 +136,7 @@ var ZXSpectrum = (() => {
     }
     return { res, f: sz53p(res) | carry };
   }
-  function step({ registers: reg, memory, io, clock }) {
+  function step({ registers: reg, memory, io, clock, romTop = 0 }) {
     const onCycle = clock ? (a, t) => {
       const m = a & 65535;
       if (clock.access) clock.access(m);
@@ -149,7 +150,8 @@ var ZXSpectrum = (() => {
       return v;
     };
     const wr = (a, v, t = 3) => {
-      memory[a & 65535] = v & 255;
+      const m = a & 65535;
+      if (m >= romTop) memory[m] = v & 255;
       if (onCycle) onCycle(a, t);
     };
     let pc = reg.pc & 65535;
@@ -294,9 +296,9 @@ var ZXSpectrum = (() => {
     };
     let tStates = 4;
     const t4 = idx ? 4 : 0;
-    if (x === 1 && y === 6 && zc === 6 && !idx) {
+    if (x === 1 && y === 6 && zc === 6) {
       reg.pc = pc - 1 & 65535;
-      return { registers: reg, tStates: 4 };
+      return { registers: reg, tStates: 4 + t4 };
     } else if (x === 1) {
       set8(y, get8(zc));
       tStates = y === 6 || zc === 6 ? idx ? 19 : 7 : idx ? 8 : 4;
@@ -913,7 +915,13 @@ var ZXSpectrum = (() => {
   var INT_DATA_BUS = 255;
   var IM01_T_STATES = 13;
   var IM2_T_STATES = 19;
-  function acceptInterrupt({ registers, memory, halted = false, dataBus = INT_DATA_BUS }) {
+  function pushWord(memory, sp, value, romTop) {
+    const lo = sp & 65535;
+    const hi = sp + 1 & 65535;
+    if (lo >= romTop) memory[lo] = value & 255;
+    if (hi >= romTop) memory[hi] = value >> 8 & 255;
+  }
+  function acceptInterrupt({ registers, memory, halted = false, dataBus = INT_DATA_BUS, romTop = 0 }) {
     const reg = registers;
     if (!reg.iff1) {
       return { registers: reg, tStates: 0, accepted: false, halted };
@@ -924,8 +932,7 @@ var ZXSpectrum = (() => {
     reg.iff2 = 0;
     reg.r = reg.r & 128 | reg.r + 1 & 127;
     const sp = reg.sp - 2 & 65535;
-    memory[sp] = pc & 255;
-    memory[sp + 1 & 65535] = pc >> 8 & 255;
+    pushWord(memory, sp, pc, romTop);
     reg.sp = sp;
     let tStates;
     if (reg.im === 2) {
@@ -971,6 +978,7 @@ var ZXSpectrum = (() => {
     "iyl"
   ];
   var HALT_OPCODE = 118;
+  var ROM_TOP = 16384;
   var EI_OPCODE = 251;
   var RESET_REGISTERS = Object.freeze({
     a: 255,
@@ -1033,16 +1041,30 @@ var ZXSpectrum = (() => {
     return new Machine(options);
   }
   var Machine = class {
-    constructor({ registers, memory, io, clock = 0, exactContention = false } = {}) {
+    /**
+     * @param {object} [options]
+     * @param {Record<string, number>} [options.registers] initial register file (8-bit halves; unknown names are ignored, missing ones are 0)
+     * @param {Uint8Array | Record<string, ArrayLike<number>>} [options.memory] a 64 KB image used as-is, or { address: bytes } chunks copied into zeroed RAM
+     * @param {{ read(port: number): number, write(port: number, value: number): void }} [options.io] port I/O (default: reads float 0xFF, writes are dropped)
+     * @param {number} [options.clock] initial frame T-state (taken modulo FRAME_T_STATES)
+     * @param {boolean} [options.exactContention] select the M-cycle-exact contention model
+     * @param {boolean} [options.romWriteProtect] ignore writes to 0x0000-0x3FFF, as the 48K ROM does (MACHINE-ROM-READONLY-001); off by default
+     */
+    constructor({ registers, memory, io, clock = 0, exactContention = false, romWriteProtect = false } = {}) {
       this.registers = buildRegisters(registers);
       this.memory = buildMemory(memory);
       this.io = io ?? defaultIo();
       this.clock = (clock % FRAME_T_STATES + FRAME_T_STATES) % FRAME_T_STATES;
       this.exactContention = Boolean(exactContention);
+      this.romWriteProtect = Boolean(romWriteProtect);
       this.halted = false;
       this.eiDelay = 0;
       this.tStatesTotal = 0;
       this.frames = 0;
+    }
+    /** The first writable address: 0x4000 when the ROM is write-protected, else 0. */
+    romTop() {
+      return this.romWriteProtect ? ROM_TOP : 0;
     }
     // Power-on / reset: restore the documented reset state (MACHINE-RESET-001) —
     // the Z80 control registers cleared, the rest of the register file all-bits-set,
@@ -1127,13 +1149,14 @@ var ZXSpectrum = (() => {
       const pcBefore = reg.pc & 65535;
       const opcode = this.memory[pcBefore];
       const clock = this.exactContention ? this._exactClock(this.clock) : this._contentionClock(this.clock);
-      const result = step({ registers: reg, memory: this.memory, io: this.io, clock });
+      const result = step({ registers: reg, memory: this.memory, io: this.io, clock, romTop: this.romTop() });
       this.registers = result.registers;
       const contention = this.exactContention ? clock.total() : clock.extra;
       const tStates = result.tStates + contention;
       this.clock = (this.clock + tStates) % FRAME_T_STATES;
       this.tStatesTotal += tStates;
-      this.halted = opcode === HALT_OPCODE && (this.registers.pc & 65535) === pcBefore;
+      const pcAfter = this.registers.pc & 65535;
+      this.halted = opcode === HALT_OPCODE && pcAfter === pcBefore || (opcode === 221 || opcode === 253) && pcAfter === (pcBefore + 1 & 65535) && this.memory[pcAfter] === HALT_OPCODE;
       return { tStates, contention, halted: this.halted };
     }
     // Accept the pending maskable interrupt (caller has verified the conditions).
@@ -1142,7 +1165,8 @@ var ZXSpectrum = (() => {
         registers: this.registers,
         memory: this.memory,
         halted: this.halted,
-        dataBus
+        dataBus,
+        romTop: this.romTop()
       });
       this.registers = result.registers;
       this.halted = false;
@@ -1188,6 +1212,11 @@ var ZXSpectrum = (() => {
 
   // packages/machine/src/snapshot-z80.mjs
   var PAGE_TO_BASE = { 8: 16384, 4: 32768, 5: 49152 };
+  var BASE_TO_PAGE = [[16384, 8], [32768, 4], [49152, 5]];
+  var HEADER_LENGTH = 30;
+  var RAM_48K = 49152;
+  var PAGE_SIZE = 16384;
+  var MAX_48K_MODE = { 2: 2, 3: 3 };
   function decompressZ80(bytes, expectedLength) {
     const out = [];
     let i = 0;
@@ -1205,8 +1234,15 @@ var ZXSpectrum = (() => {
     return Uint8Array.from(out);
   }
   var word = (lo, hi) => lo & 255 | (hi & 255) << 8;
+  function reject(reason) {
+    throw new Error(`readZ80: ${reason}`);
+  }
   function readZ80(bytes) {
     const b = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
+    if (b.length < HEADER_LENGTH) {
+      reject(`${b.length} byte(s) is smaller than the ${HEADER_LENGTH}-byte .z80 header`);
+    }
+    const flags = b[12] === 255 ? 1 : b[12];
     const registers = {
       a: b[0],
       f: b[1],
@@ -1216,7 +1252,7 @@ var ZXSpectrum = (() => {
       h: b[5],
       sp: word(b[8], b[9]),
       i: b[10],
-      r: b[11] & 127 | (b[12] & 1) << 7,
+      r: b[11] & 127 | (flags & 1) << 7,
       e: b[13],
       d: b[14],
       c_: b[15],
@@ -1235,33 +1271,63 @@ var ZXSpectrum = (() => {
       iff2: b[28] ? 1 : 0,
       im: b[29] & 3
     };
-    const border = b[12] >> 1 & 7;
+    const border = flags >> 1 & 7;
     const memory = new Uint8Array(65536);
     const v1pc = word(b[6], b[7]);
     if (v1pc !== 0) {
       registers.pc = v1pc;
-      const compressed = ((b[12] === 255 ? 1 : b[12]) & 32) !== 0;
-      const body = b.subarray(30);
-      const ram = compressed ? decompressZ80(stripV1End(body), 49152) : body.subarray(0, 49152);
-      memory.set(ram.subarray(0, 49152), 16384);
+      const body = b.subarray(HEADER_LENGTH);
+      let ram;
+      if ((flags & 32) !== 0) {
+        ram = decompressZ80(stripV1End(body), RAM_48K);
+        if (ram.length < RAM_48K) {
+          reject(`the version 1 RAM image decompresses to ${ram.length} of ${RAM_48K} bytes`);
+        }
+      } else {
+        if (body.length < RAM_48K) {
+          reject(`the version 1 RAM image is truncated (${body.length} of ${RAM_48K} bytes)`);
+        }
+        ram = body;
+      }
+      memory.set(ram.subarray(0, RAM_48K), 16384);
       return { registers, memory, border, version: 1 };
     }
+    if (b.length < HEADER_LENGTH + 2) reject("the version 2/3 header is truncated");
     const extraLen = word(b[30], b[31]);
-    registers.pc = word(b[32], b[33]);
+    if (extraLen !== 23 && extraLen !== 54 && extraLen !== 55) {
+      reject(`unknown version 2/3 header length ${extraLen} (expected 23, 54 or 55)`);
+    }
+    let off = HEADER_LENGTH + 2 + extraLen;
+    if (b.length < off) reject("the version 2/3 header is truncated");
     const version = extraLen === 23 ? 2 : 3;
-    let off = 30 + 2 + extraLen;
+    registers.pc = word(b[32], b[33]);
+    const mode = b[34];
+    if (mode > MAX_48K_MODE[version]) {
+      reject(`hardware mode ${mode} is not a 48K Spectrum (only 48K snapshots are supported)`);
+    }
+    const loaded = /* @__PURE__ */ new Set();
     while (off + 3 <= b.length) {
       const len = word(b[off], b[off + 1]);
       const page = b[off + 2];
       off += 3;
-      const base = PAGE_TO_BASE[page];
       const uncompressed = len === 65535;
-      const blockLen = uncompressed ? 16384 : len;
+      const blockLen = uncompressed ? PAGE_SIZE : len;
+      if (off + blockLen > b.length) reject(`memory page ${page} is truncated`);
       const slice = b.subarray(off, off + blockLen);
       off += blockLen;
+      const base = PAGE_TO_BASE[page];
       if (base === void 0) continue;
-      const ram = uncompressed ? slice : decompressZ80(slice, 16384);
-      memory.set(ram.subarray(0, 16384), base);
+      const ram = uncompressed ? slice : decompressZ80(slice, PAGE_SIZE);
+      if (ram.length < PAGE_SIZE) {
+        reject(`memory page ${page} decompresses to ${ram.length} of ${PAGE_SIZE} bytes`);
+      }
+      memory.set(ram.subarray(0, PAGE_SIZE), base);
+      loaded.add(page);
+    }
+    const missing = BASE_TO_PAGE.map(([, page]) => page).filter((page) => !loaded.has(page));
+    if (missing.length > 0) {
+      const sixteenK = (b[37] & 128) !== 0 && mode <= 1 ? " (a 16K Spectrum snapshot)" : "";
+      reject(`48K memory page(s) ${missing.join(", ")} missing${sixteenK}`);
     }
     return { registers, memory, border, version };
   }
@@ -1415,8 +1481,11 @@ var ZXSpectrum = (() => {
   var OUT_WIDTH = FRAME_WIDTH + BORDER_X * 2;
   var OUT_HEIGHT = FRAME_HEIGHT + BORDER_Y * 2;
   var T_PER_LINE = 224;
-  var DISPLAY_START_T = 14336;
-  var BORDER_TOP_T = DISPLAY_START_T - BORDER_Y * T_PER_LINE;
+  var DISPLAY_START_T = 14335;
+  var BORDER_TOP_T = DISPLAY_START_T - BORDER_X / 2 - BORDER_Y * T_PER_LINE;
+  function scanlineStartT(y) {
+    return BORDER_TOP_T + y * T_PER_LINE;
+  }
   function displayOffset(x, y) {
     return ((y & 192) << 5) + ((y & 7) << 8) + ((y & 56) << 2) + (x >> 3);
   }
@@ -1442,7 +1511,7 @@ var ZXSpectrum = (() => {
     let cursor = 0;
     let colour = carryIn & 7;
     for (let y = 0; y < OUT_HEIGHT; y += 1) {
-      const rowStart = BORDER_TOP_T + y * T_PER_LINE;
+      const rowStart = scanlineStartT(y);
       while (cursor + 1 < log.length && log[cursor] <= rowStart) {
         colour = log[cursor + 1] & 7;
         cursor += 2;
@@ -1522,16 +1591,87 @@ var ZXSpectrum = (() => {
     N: [7, 3],
     B: [7, 4]
   };
-  function keyboardMatrixByte(pressed, highByte) {
-    let result = 31;
-    for (const key of pressed) {
-      const cell = KEY_MATRIX[key];
-      if (!cell) continue;
-      const [row, bit] = cell;
-      if ((highByte >> row & 1) === 0) result &= ~(1 << bit) & 31;
+  var PressedKeys = class extends Set {
+    constructor() {
+      super();
+      this._taps = /* @__PURE__ */ new Set();
+      this._scanTaps = /* @__PURE__ */ new Set();
+      this._scanFrame = void 0;
+      this._masks = new Uint8Array(8).fill(31);
+      this._dirty = true;
     }
-    return result;
-  }
+    /** Press `key`: held from now on, and latched for the next scan (a quick tap). */
+    add(key) {
+      if (!this.has(key)) {
+        super.add(key);
+        if (this._taps) this._taps.add(key);
+        this._dirty = true;
+      }
+      return this;
+    }
+    /**
+     * Hold `key` WITHOUT latching it: for a modifier a host key contributes only as a
+     * side effect (the CAPS SHIFT from a host Shift), whose sub-frame pulses are not
+     * taps — latching one next to a symbol chord would read as EXTENDED mode.
+     */
+    hold(key) {
+      if (!this.has(key)) {
+        super.add(key);
+        this._dirty = true;
+      }
+      return this;
+    }
+    delete(key) {
+      const had = super.delete(key);
+      if (had) this._dirty = true;
+      return had;
+    }
+    clear() {
+      if (this.size > 0) this._dirty = true;
+      super.clear();
+    }
+    /** Forget everything, latched taps included (a machine reset / snapshot load). */
+    reset() {
+      this.clear();
+      this._taps.clear();
+      this._scanTaps.clear();
+      this._dirty = true;
+    }
+    /** The keys the scan of `frame` sees: held now, plus the taps it latched. */
+    visible(frame) {
+      this._sync(frame);
+      return /* @__PURE__ */ new Set([...this, ...this._scanTaps]);
+    }
+    /** Key bits (b0..b4) of an IN (0xFE) with port high byte `highByte` during `frame`. */
+    keyBits(highByte, frame) {
+      this._sync(frame);
+      if (this._dirty) {
+        this._masks.fill(31);
+        for (const set of [this, this._scanTaps]) {
+          for (const key of set) {
+            const cell = KEY_MATRIX[key];
+            if (cell) this._masks[cell[0]] &= ~(1 << cell[1]) & 31;
+          }
+        }
+        this._dirty = false;
+      }
+      let bits = 31;
+      for (let row = 0; row < 8; row += 1) {
+        if ((highByte >> row & 1) === 0) bits &= this._masks[row];
+      }
+      return bits;
+    }
+    /** A read in a new frame starts a new scan: its taps become the scan's, the old retire. */
+    _sync(frame) {
+      if (frame === this._scanFrame) return;
+      this._scanFrame = frame;
+      const retired = this._scanTaps;
+      this._scanTaps = this._taps;
+      this._taps = retired;
+      this._taps.clear();
+      this._dirty = true;
+    }
+  };
   var SYMBOL_KEYS = {
     "!": ["SYM", "1"],
     "@": ["SYM", "2"],
@@ -1572,12 +1712,18 @@ var ZXSpectrum = (() => {
     ControlRight: ["SYM"],
     AltRight: ["SYM"],
     Backspace: ["CAPS", "0"],
+    Delete: ["CAPS", "0"],
     // DELETE
+    Escape: ["CAPS", "SPACE"],
+    // BREAK
     ArrowLeft: ["CAPS", "5"],
     ArrowDown: ["CAPS", "6"],
     ArrowUp: ["CAPS", "7"],
     ArrowRight: ["CAPS", "8"]
   };
+  function isShiftCode(code) {
+    return code === "ShiftLeft" || code === "ShiftRight";
+  }
   function browserCodeToKeys(code) {
     if (CODE_MAP[code]) return CODE_MAP[code];
     const letter = /^Key([A-Z])$/.exec(code);
@@ -1586,7 +1732,7 @@ var ZXSpectrum = (() => {
     if (digit) return [digit[1]];
     return null;
   }
-  function resolveMatrix(held) {
+  function resolveMatrix(held, stickyShiftCodes) {
     const set = /* @__PURE__ */ new Set();
     const entries = [...held];
     let symbolActive = false;
@@ -1601,7 +1747,7 @@ var ZXSpectrum = (() => {
       const byCode = browserCodeToKeys(code);
       if (!byCode) continue;
       for (const k of byCode) {
-        if (k === "CAPS" && symbolActive && (code === "ShiftLeft" || code === "ShiftRight")) continue;
+        if (k === "CAPS" && isShiftCode(code) && (symbolActive || stickyShiftCodes?.has(code))) continue;
         set.add(k);
       }
     }
@@ -1610,35 +1756,67 @@ var ZXSpectrum = (() => {
 
   // examples/tooling/audio.mjs
   var FRAME_T_STATES2 = 69888;
-  function beeperSamples(log, carryLevel = 0, count = 882, amp = 0.18, out) {
-    const data = out ?? new Float32Array(count);
-    const span = FRAME_T_STATES2 / count;
+  var CPU_HZ = 35e5;
+  var FRAME_MS = FRAME_T_STATES2 * 1e3 / CPU_HZ;
+  function samplesPerFrame(sampleRate) {
+    return sampleRate * FRAME_T_STATES2 / CPU_HZ;
+  }
+  function createBeeperStream(level = 0) {
+    return { level, partialT: 0, partialArea: 0 };
+  }
+  function renderBeeperSpan(stream, log, spanT, sampleT, amp, out) {
+    let level = stream.level;
+    let covered = stream.partialT;
+    let area = stream.partialArea;
     let cursor = 0;
-    let level = carryLevel || 0;
-    for (let i = 0; i < count; i += 1) {
-      const w0 = i * span;
-      const w1 = w0 + span;
-      let pos = w0;
-      let high = 0;
-      while (cursor + 1 < log.length && log[cursor] < w1) {
-        const edgeT = log[cursor];
-        if (edgeT > pos) {
-          high += level * (edgeT - pos);
-          pos = edgeT;
-        }
-        level = log[cursor + 1];
-        cursor += 2;
+    let next = 0;
+    let written = 0;
+    const integrateTo = (t) => {
+      while (next + 1 < log.length && log[next] <= t) {
+        const edgeT = Math.max(cursor, log[next]);
+        area += level * (edgeT - cursor);
+        covered += edgeT - cursor;
+        cursor = edgeT;
+        level = log[next + 1];
+        next += 2;
       }
-      high += level * (w1 - pos);
-      data[i] = amp * (2 * (high / span) - 1);
+      area += level * (t - cursor);
+      covered += t - cursor;
+      cursor = t;
+    };
+    for (; ; ) {
+      const sampleEnd = cursor + (sampleT - covered);
+      if (sampleEnd > spanT) break;
+      integrateTo(sampleEnd);
+      out[written] = amp * (2 * (area / sampleT) - 1);
+      written += 1;
+      covered = 0;
+      area = 0;
     }
-    return data;
+    integrateTo(spanT);
+    while (next + 1 < log.length) {
+      level = log[next + 1];
+      next += 2;
+    }
+    stream.level = level;
+    stream.partialT = covered;
+    stream.partialArea = area;
+    return written;
   }
 
   // examples/tooling/browser-entry.mjs
   var T_PER_MS = 3500;
   var GAP_T = 1e3 * T_PER_MS;
+  var MAX_TAPE_PULSES = 1 << 23;
+  function reserve(pulses, n) {
+    if (pulses.length + n > MAX_TAPE_PULSES) {
+      throw new Error(
+        `tape too long: it expands to more than ${MAX_TAPE_PULSES} pulses (a malformed or endlessly looping tape?) \u2014 not loaded`
+      );
+    }
+  }
   function pushBits(out, data, zeroLen, oneLen, usedBits) {
+    if (data.length > 0) reserve(out, 2 * (8 * (data.length - 1) + (usedBits || 8)));
     for (let i = 0; i < data.length; i += 1) {
       const byte = data[i] & 255;
       const bits = i === data.length - 1 && usedBits ? usedBits : 8;
@@ -1652,7 +1830,9 @@ var ZXSpectrum = (() => {
     const pulses = [GAP_T];
     for (const { flag, data } of parseTap(bytes)) {
       const body = Uint8Array.from([flag, ...data, tapChecksum(flag, data)]);
-      for (const p of blockToPulses(body)) pulses.push(p);
+      const block = blockToPulses(body);
+      reserve(pulses, block.length + 1);
+      for (const p of block) pulses.push(p);
       pulses.push(GAP_T);
     }
     return pulses;
@@ -1663,7 +1843,10 @@ var ZXSpectrum = (() => {
     const u24 = (o) => bytes[o] | bytes[o + 1] << 8 | bytes[o + 2] << 16;
     const u32 = (o) => (bytes[o] | bytes[o + 1] << 8 | bytes[o + 2] << 16 | bytes[o + 3] << 24) >>> 0;
     const pulses = [GAP_T];
-    const pausePulse = (ms) => pulses.push(Math.max(ms, 1) * T_PER_MS);
+    const pausePulse = (ms) => {
+      reserve(pulses, 1);
+      pulses.push(Math.max(ms, 1) * T_PER_MS);
+    };
     let i = 10;
     let loopStart = -1;
     let loopLeft = 0;
@@ -1674,7 +1857,9 @@ var ZXSpectrum = (() => {
         case 16: {
           const pause = u16(i);
           const len = u16(i + 2);
-          for (const p of blockToPulses(bytes.subarray(i + 4, i + 4 + len))) pulses.push(p);
+          const block = blockToPulses(bytes.subarray(i + 4, i + 4 + len));
+          reserve(pulses, block.length);
+          for (const p of block) pulses.push(p);
           i += 4 + len;
           pausePulse(pause);
           break;
@@ -1683,6 +1868,7 @@ var ZXSpectrum = (() => {
           const pilot = u16(i), sync1 = u16(i + 2), sync2 = u16(i + 4);
           const zero = u16(i + 6), one = u16(i + 8), pilotPulses = u16(i + 10);
           const usedBits = u8(i + 12), pause = u16(i + 13), len = u24(i + 15);
+          reserve(pulses, pilotPulses + 2);
           for (let p = 0; p < pilotPulses; p += 1) pulses.push(pilot);
           pulses.push(sync1, sync2);
           pushBits(pulses, bytes.subarray(i + 18, i + 18 + len), zero, one, usedBits);
@@ -1692,12 +1878,14 @@ var ZXSpectrum = (() => {
         }
         case 18: {
           const len = u16(i), count = u16(i + 2);
+          reserve(pulses, count);
           for (let p = 0; p < count; p += 1) pulses.push(len);
           i += 4;
           break;
         }
         case 19: {
           const count = u8(i);
+          reserve(pulses, count);
           for (let p = 0; p < count; p += 1) pulses.push(u16(i + 1 + 2 * p));
           i += 1 + 2 * count;
           break;
@@ -1720,18 +1908,25 @@ var ZXSpectrum = (() => {
             const bit = data[b >> 3] >> 7 - (b & 7) & 1;
             if (bit === prev) run += 1;
             else {
-              if (run) pulses.push(run * tps);
+              if (run) {
+                reserve(pulses, 1);
+                pulses.push(run * tps);
+              }
               prev = bit;
               run = 1;
             }
           }
-          if (run) pulses.push(run * tps);
+          if (run) {
+            reserve(pulses, 1);
+            pulses.push(run * tps);
+          }
           pausePulse(pause);
           break;
         }
         case 32: {
           const pause = u16(i);
           i += 2;
+          reserve(pulses, 1);
           pulses.push(pause > 0 ? pause * T_PER_MS : GAP_T);
           break;
         }
@@ -1879,7 +2074,7 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
   }
   var Spectrum = class {
     constructor() {
-      this.pressed = /* @__PURE__ */ new Set();
+      this.pressed = new PressedKeys();
       this.border = 7;
       this.earLevel = 0;
       this.frames = 0;
@@ -1889,7 +2084,9 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       this._borderRows = new Uint8Array(OUT_HEIGHT);
       this._beeperLog = [];
       this._audioLevel = 0;
+      this._beeperStream = createBeeperStream(0);
       this._held = /* @__PURE__ */ new Map();
+      this._stickyShift = /* @__PURE__ */ new Set();
       this._audioCtx = null;
       this._node = null;
       this._sound = true;
@@ -1914,7 +2111,7 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
         read: (port) => {
           if (kempstonDecodes(port)) return kempstonByte(this._joy);
           if ((port & 1) === 0) {
-            const keys = keyboardMatrixByte(this.pressed, port >> 8 & 255);
+            const keys = this.pressed.keyBits(port >> 8 & 255, this.machine.frames);
             let earBit = this.earLevel ? 64 : 0;
             if (this._tapePlaying && this._tapeDeck) {
               const t = this.machine.tStatesTotal - this._tapeStartT;
@@ -1945,7 +2142,8 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       this.machine = createMachine({
         memory: romBootMemory(),
         registers: { ...RESET_REGISTERS },
-        io
+        io,
+        romWriteProtect: true
       });
     }
     // What an IN from a port nobody decodes actually reads: the data bus is left
@@ -1971,14 +2169,16 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
     /** Restart from a clean power-on. */
     reset() {
       this.stop();
-      this.pressed.clear();
+      this.pressed.reset();
       this._held.clear();
+      this._stickyShift.clear();
       this.frames = 0;
       this.border = 7;
       this.earLevel = 0;
       this._audioLevel = 0;
       this._borderLog.length = 0;
       this._beeperLog.length = 0;
+      this._resetBeeperStream();
       this._tapePlaying = false;
       this._joy = { up: false, down: false, left: false, right: false, fire: false };
       if (this._node) this._primeRing(0);
@@ -1986,15 +2186,19 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       this.machine.registers = { ...RESET_REGISTERS };
       this.machine.clock = 0;
       this.machine.halted = false;
+      this.machine.eiDelay = 0;
       return this;
     }
     /**
      * Insert a `.tap` or `.tzx` image (container auto-detected). Builds its EAR pulse
-     * stream; call `playTape()` to start it, then LOAD "" on the machine.
+     * stream; call `playTape()` to start it, then LOAD "" on the machine. Throws — with
+     * the machine and any inserted tape untouched — when the file is not a playable tape.
      */
     insertTape(bytes, { name = "" } = {}) {
       const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-      const pulses = tapeFileToPulses(arr);
+      return this._insertPulses(tapeFileToPulses(arr), name);
+    }
+    _insertPulses(pulses, name) {
       this._tapeDeck = createTapeDeck(pulses, { clock: () => 0 });
       this._tapeTotal = this._tapeDeck.total;
       this._tapePlaying = false;
@@ -2056,15 +2260,18 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       this.machine.registers = { ...snap.registers };
       this.machine.clock = 0;
       this.machine.halted = false;
+      this.machine.eiDelay = 0;
       this.border = snap.border;
       this.earLevel = 0;
       this._audioLevel = 0;
       this._borderLog.length = 0;
       this._beeperLog.length = 0;
+      this._resetBeeperStream();
       this._borderRows.fill(snap.border);
       this._tapePlaying = false;
-      this.pressed.clear();
+      this.pressed.reset();
       this._held.clear();
+      this._stickyShift.clear();
       if (this._node) this._primeRing(0);
       return this;
     }
@@ -2076,6 +2283,8 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
      * when the load is done. Use for `.tap`/`.tzx`.
      */
     async fastLoadTape(bytes, { name = "" } = {}) {
+      const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      const pulses = tapeFileToPulses(arr);
       const wasRunning = Boolean(this._raf);
       this.stop();
       this.reset();
@@ -2092,7 +2301,7 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       step2(100);
       tap(["CAPS"]);
       for (const k of [["J"], ["SYM", "P"], ["SYM", "P"], ["ENTER"]]) tap(k);
-      this.insertTape(bytes, { name });
+      this._insertPulses(pulses, name);
       this.playTape();
       const budget = Math.ceil(this._tapeTotal / FRAME_T_STATES2) + 500;
       let done = 0;
@@ -2131,11 +2340,25 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
     }
     // Rebuild the pressed-key set from all currently-held host keys. Doing this on
     // every event (rather than add/remove per key) keeps symbol chords and the two
-    // shift keys correct no matter what order modifiers go up and down.
+    // shift keys correct no matter what order modifiers go up and down. Only real
+    // changes reach `pressed`, so a key held throughout is not re-latched as a tap.
+    //
+    // A CAPS SHIFT that exists only because a host Shift is held is a modifier side
+    // effect, not a typed key: it is held but never latched (PressedKeys.hold). A quick
+    // `"` typed as Shift+2 therefore reaches the next scan as exactly SYMBOL SHIFT + P —
+    // a latched CAPS beside it would read as EXTENDED mode.
     _recompute() {
-      const next = resolveMatrix(this._held);
-      this.pressed.clear();
-      for (const k of next) this.pressed.add(k);
+      const next = resolveMatrix(this._held, this._stickyShift);
+      const sansShift = resolveMatrix(
+        [...this._held].filter(([code]) => !isShiftCode(code)),
+        this._stickyShift
+      );
+      for (const k of [...this.pressed]) if (!next.has(k)) this.pressed.delete(k);
+      for (const k of next) {
+        if (this.pressed.has(k)) continue;
+        if (k === "CAPS" && !sansShift.has("CAPS")) this.pressed.hold(k);
+        else this.pressed.add(k);
+      }
     }
     // Does this host key reach the Spectrum's matrix at all? Only claimed keys are
     // preventDefault'ed: function keys (F12 = DevTools, F5 = reload), OS chords, and
@@ -2151,26 +2374,29 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       if (!this._claims(event)) return;
       if (this._sound) this._enableAudio();
       this._held.set(event.code, event.key);
+      if (event.key && event.key.length === 1 && charToKeys(event.key)) {
+        for (const code of this._held.keys()) if (isShiftCode(code)) this._stickyShift.add(code);
+      }
       this._recompute();
       event.preventDefault();
     }
     _keyUp(event) {
+      if (isShiftCode(event.code)) this._stickyShift.delete(event.code);
       if (!this._held.delete(event.code)) return;
       this._recompute();
       event.preventDefault();
     }
-    // Run exactly one 50 Hz ZX frame: emulate it, collapse this frame's border log
-    // to scanline colours, and push its beeper edges to the audio timeline.
+    // Run exactly one ZX frame: emulate it, collapse this frame's border log to
+    // scanline colours, and push its beeper edges to the audio timeline.
     _advance() {
       const borderCarry = this.border;
-      const beeperCarry = this._audioLevel;
       this._borderLog.length = 0;
       this._beeperLog.length = 0;
       this._frameT0 = this.machine.tStatesTotal;
       this.machine.runFrame();
       this.frames += 1;
       borderRowsFromLog(this._borderLog, borderCarry, this._borderRows);
-      this._pumpAudio(beeperCarry);
+      this._pumpAudio(this.machine.tStatesTotal - this._frameT0);
     }
     // Run one frame without touching audio. Used by fastLoadTape's fast-forward, whose
     // frames arrive far faster than the audio clock can consume — feeding them to the ring
@@ -2184,6 +2410,16 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       this.machine.runFrame();
       this.frames += 1;
       borderRowsFromLog(this._borderLog, borderCarry, this._borderRows);
+      this._resetBeeperStream();
+    }
+    // Restart the audio sample grid at the speaker level in force now: whenever no audio
+    // is being produced, so the next audible frame starts clean instead of finishing a
+    // sample begun before the gap.
+    _resetBeeperStream() {
+      const stream = this._beeperStream;
+      stream.level = this._audioLevel;
+      stream.partialT = 0;
+      stream.partialArea = 0;
     }
     // Blit the current screen + border to the canvas.
     _present() {
@@ -2191,16 +2427,16 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       renderWithBorderRows(screen, this._borderRows, this.frames, this.image.data);
       this.ctx.putImageData(this.image, 0, 0);
     }
-    // Drive the machine at a true 50 Hz off wall-clock time (rAF fires at the
-    // display rate, usually 60 Hz), catching up whole frames as real time elapses.
-    // This keeps emulation speed — and therefore beeper pitch — correct.
+    // Drive the machine at its true frame rate off wall-clock time — one 48K frame is
+    // 69888 T-states at 3.5 MHz = 19.968 ms (≈ 50.08 Hz), not a rounded 20 ms — while
+    // rAF fires at the display rate (usually 60 Hz), catching up whole frames as real
+    // time elapses. This keeps emulation speed — and therefore beeper pitch — correct.
     _frameStep(now) {
       if (!this._lastTime) this._lastTime = now;
       let dt = now - this._lastTime;
       this._lastTime = now;
       if (dt > 100) dt = 100;
       this._acc += dt;
-      const FRAME_MS = 1e3 / 50;
       if (this._starved && this._sound) {
         this._topUpRing(Math.min(Math.floor(this._acc / FRAME_MS), 6));
       }
@@ -2214,7 +2450,7 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
           break;
         }
       }
-      if (ran > 0) this._present();
+      if (ran > 0 && this.ctx) this._present();
       this._raf = requestAnimationFrame((t) => this._frameStep(t));
     }
     // Create the AudioContext on demand (first user gesture) and resume it if the
@@ -2350,6 +2586,7 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
     // every audio start.
     _primeRing(level) {
       const value = AMP * (2 * level - 1);
+      this._beeperStream = createBeeperStream(level);
       if (this._worklet) {
         this._worklet.port.postMessage({ flush: true, level: value });
         const pad = new Float32Array(this._audioTarget).fill(value);
@@ -2371,7 +2608,7 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       this._starved = false;
       const ctx = this._audioCtx;
       if (!this._node || !ctx) return;
-      const padTo = this._audioTarget - Math.round(pending * (ctx.sampleRate / 50));
+      const padTo = this._audioTarget - Math.round(pending * samplesPerFrame(ctx.sampleRate));
       const missing = padTo - this._fillNow();
       if (missing > 0) {
         const pad = new Float32Array(missing).fill(AMP * (2 * this._audioLevel - 1));
@@ -2380,33 +2617,41 @@ registerProcessor('zx-beeper', ZXBeeperProcessor);
       this._fillAvg = this._audioTarget;
     }
     // Resample this frame's beeper edges into the ring buffer, rate-matched to the
-    // audio clock. The producer here runs on the system clock (rAF), the consumer
-    // (onaudioprocess) on the audio hardware clock; the two are never exactly equal,
-    // so a fixed samples-per-frame would let the ring fill drift to an edge and
-    // glitch over minutes. A deadband controller corrects that — but it must watch
-    // a *smoothed* fill, not the raw one: the consumer drains a whole
+    // audio clock. The samples come off ONE continuous grid (audio.mjs
+    // renderBeeperSpan, BEEPER-PCM-FRACTIONAL-001): a 48K frame spans a fractional
+    // ≈958.46 samples at 48 kHz, and the partly filled sample at the end of a frame
+    // carries into the next, so frames alternate 958/959 samples with no rounding
+    // drift and no seam. The producer here runs on the system clock (rAF), the
+    // consumer (onaudioprocess) on the audio hardware clock; the two are never
+    // exactly equal, so even the exact count would let the ring fill drift to an edge
+    // and glitch over minutes. A deadband controller corrects that — but it must
+    // watch a *smoothed* fill, not the raw one: the consumer drains a whole
     // ScriptProcessor buffer (4096 samples) at a time, so the instantaneous fill
     // sawtooths with drain phase, and reacting to it would resample — i.e.
     // pitch-shift — frames constantly. The ~1 s EMA erases that sawtooth, so the
-    // controller sees only the mean: while the mean sits inside the deadband we
-    // emit exactly the nominal count (no resampling, clean tone), and only genuine
-    // long-run clock drift walks it past the band, where a gentle trim/pad clamped
-    // to ±3 % steers it back.
-    _pumpAudio(carryLevel) {
+    // controller sees only the mean: while the mean sits inside the deadband the grid
+    // runs at exactly the hardware rate (no resampling, clean tone), and only genuine
+    // long-run clock drift walks it past the band, where a gentle trim/pad clamped to
+    // ±3 % stretches or squeezes the grid's sample width to steer it back.
+    _pumpAudio(spanT) {
       const ctx = this._audioCtx;
-      if (!this._node || !ctx || ctx.state !== "running") return;
-      const nominal = ctx.sampleRate / 50;
-      const maxDev = Math.round(nominal * 0.03);
-      let count = Math.round(nominal);
-      const deadband = Math.round(this._chunk / 2 + nominal);
-      const err = this._fillAvg - this._audioTarget;
-      if (err > deadband) count -= Math.round(Math.min((err - deadband) * 0.05, maxDev));
-      else if (err < -deadband) count -= Math.round(Math.max((err + deadband) * 0.05, -maxDev));
-      if (count < 1) count = 1;
-      if (!this._scratch || this._scratch.length < count) {
-        this._scratch = new Float32Array(Math.ceil(nominal) + maxDev + 2);
+      if (!this._sound || !this._node || !ctx || ctx.state !== "running") {
+        this._resetBeeperStream();
+        return;
       }
-      const samples = beeperSamples(this._beeperLog, carryLevel, count, AMP, this._scratch);
+      const nominal = samplesPerFrame(ctx.sampleRate);
+      const maxDev = nominal * 0.03;
+      const deadband = this._chunk / 2 + nominal;
+      const err = this._fillAvg - this._audioTarget;
+      let trim = 0;
+      if (err > deadband) trim = -Math.min((err - deadband) * 0.05, maxDev);
+      else if (err < -deadband) trim = Math.min((-deadband - err) * 0.05, maxDev);
+      const sampleT = CPU_HZ / ctx.sampleRate * (nominal / (nominal + trim));
+      const room = Math.ceil(spanT / sampleT) + 2;
+      if (!this._scratch || this._scratch.length < room) this._scratch = new Float32Array(room + 64);
+      const samples = this._scratch;
+      const count = renderBeeperSpan(this._beeperStream, this._beeperLog, spanT, sampleT, AMP, samples);
+      if (count === 0) return;
       if (this._tapePlaying && this._tapeDeck) this._mixTapeAudio(samples, count);
       this._push(samples, count);
       this._fillAvg += (this._fillNow() - this._fillAvg) * 0.02;

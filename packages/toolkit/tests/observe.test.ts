@@ -452,6 +452,21 @@ describe('coverage (CLI-PROD-COVERAGE-001)', () => {
     expect(env.reachedCount).toBe(env.routines.filter((r) => r.reached).length);
     expect(env.reachedCount).toBeLessThan(env.totalSymbols); // `unreached` is not reached
   });
+
+  it('counts code labels only — an EQU constant is not a routine', () => {
+    // LOOPAT equals the address of `loop`, so it would read as "reached" by coincidence.
+    project(['    ORG 0x8000', 'SPEED   EQU 2', 'LOOPAT  EQU 0x8001', 'start:', '    nop', 'loop:', '    jr loop', ''].join('\n'));
+    const env = runCoverage({ cwd: dir, frames: 2 });
+    expect(env.routines.map((r) => r.name).sort()).toEqual(['loop', 'start']);
+    expect(env.totalSymbols).toBe(2);
+  });
+});
+
+describe('trace --last (CLI-PROD-TRACE-001)', () => {
+  it('honours --last 0 (no recent instructions)', () => {
+    project(COVER);
+    expect(runTrace({ cwd: dir, frames: 1, last: 0 }).last).toEqual([]);
+  });
 });
 
 // =========================================================================

@@ -1,7 +1,8 @@
 // `zxs trace` — run with per-instruction execution tracing
 // (cli.md CLI-PROD-TRACE-001, RT-PROD-OBSERVE-001).
 //
-// Sources a machine (built entry / `--bin` / fresh) and runs a bounded budget
+// Sources a machine (built entry / `--bin` / fresh / a `--state` session, saved back
+// afterwards unless `--no-save`/`--read-only`) and runs a bounded budget
 // (`--frames`, default 5) on the REAL run engine (`runProgram` + its new per-instruction
 // `onStep` hook), recording every executed instruction. From that it reports the two
 // complementary views a trace is for: `--top` hot-spots (the addresses by execution count)
@@ -19,10 +20,15 @@ import type { Machine } from '@zx-vibes/machine';
 import { userError } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
 import { runProgram } from '../runtime/run.js';
+import { RAM_BASE } from '../runtime/session.js';
+import { persistStateSession } from '../state/persist.js';
 import {
   resolveObserveMachine,
   addSnapshotSourceFlags,
+  addStateSessionFlags,
   snapshotSourceFlags,
+  stateSessionFlags,
+  type AddressExtent,
   type ObserveBoot,
 } from './source.js';
 
@@ -104,10 +110,16 @@ export type TraceEnvelope = {
   out?: string;
   /** Actual T-state profile (`--profile`), separate from execution-count hot-spots. */
   profile?: TraceProfile;
+  /** With `--state`: whether the advanced session was saved back (false under `--no-save`). */
+  persisted?: boolean;
 };
 
 export interface TraceOptions {
   cwd?: string | undefined;
+  /** `--state <file>`: trace an opt-in persistent session and save it back. */
+  state?: string | undefined;
+  /** `--no-save` / `--read-only`: trace the session without saving it back. */
+  noSave?: boolean | undefined;
   bin?: string | undefined;
   z80?: string | undefined;
   tap?: string | undefined;
@@ -127,15 +139,19 @@ export function runTrace(options: TraceOptions = {}): TraceEnvelope {
   const lastN = options.last ?? DEFAULT_TRACE_LAST;
   const wantFull = options.out !== undefined;
 
-  const { machine, org, boot, length, symbols } = resolveObserveMachine({
+  const { machine, org, boot, border, extent, symbols } = resolveObserveMachine({
     cwd: options.cwd,
+    state: options.state,
     bin: options.bin,
     z80: options.z80,
     tap: options.tap,
     sna: options.sna,
     org: options.org,
     stage: 'trace',
+    // `--profile` attributes time to SLD routines; a session borrows the entry's.
+    stateSymbols: options.profile ? 'required' : undefined,
   });
+  const resumed = boot.source === 'state';
 
   const counts = new Map<number, number>();
   const lastRing = new Array<number>(Math.max(1, lastN));
@@ -145,9 +161,13 @@ export function runTrace(options: TraceOptions = {}): TraceEnvelope {
   let idleTStates = 0;
   let total = 0;
 
-  const result = runProgram(machine, org, {
+  // A resumed session continues like `run --state`: its border carries over and it lives
+  // in RAM (the RAM floor, not wherever it paused).
+  const result = runProgram(machine, resumed ? RAM_BASE : org, {
     frames,
     detectHangs: false,
+    border,
+    resume: resumed,
     onStep: (m: Machine) => {
       const pc = m.registers.pc & 0xffff;
       counts.set(pc, (counts.get(pc) ?? 0) + 1);
@@ -177,7 +197,9 @@ export function runTrace(options: TraceOptions = {}): TraceEnvelope {
     .slice(0, Math.max(0, topN))
     .map(([addr, count]) => ({ addr, count, text: decode(addr) }));
 
-  const last: TraceLine[] = recentAddresses(lastRing, lastCursor).map((addr) => {
+  // The ring keeps at least one slot, so `--last 0` must be honoured here.
+  const recent = lastN > 0 ? recentAddresses(lastRing, lastCursor) : [];
+  const last: TraceLine[] = recent.map((addr) => {
     const line = disassembleOne(read, addr);
     return { addr, bytes: line.bytes, text: line.text };
   });
@@ -210,10 +232,21 @@ export function runTrace(options: TraceOptions = {}): TraceEnvelope {
       frameTStates: result.frameBudget.frameTStates,
       framesRun: result.framesRun,
       topN,
-      org,
-      length,
+      extent,
       symbols,
     });
+  }
+
+  if (options.state !== undefined) {
+    // Save the traced session back like `run --state` (CLI-PROD-RULE-SESSION-001); the
+    // DNA's `trace --no-save` (CLI-PROD-TRACE-001) is the opt-out.
+    envelope.persisted = persistStateSession(
+      options.state,
+      options.noSave ?? false,
+      result.machine,
+      result.io.borderColor(),
+      options.cwd ?? process.cwd(),
+    );
   }
 
   return envelope;
@@ -226,18 +259,19 @@ interface TraceProfileBuild {
   frameTStates: number;
   framesRun: number;
   topN: number;
-  org: number;
-  length: number;
+  /** The program's address range: only code inside it is attributed to a label. */
+  extent: AddressExtent;
   symbols: Array<{ name: string; value: number; kind: 'F' | 'D' }>;
 }
 
 /** Aggregate real instruction timings into heuristic routine buckets. */
 function buildTraceProfile(input: TraceProfileBuild): TraceProfile {
-  const imageEnd = input.org + input.length;
+  const imageStart = input.extent.from;
+  const imageEnd = input.extent.to;
   const labels = input.symbols
     .filter(
       (symbol) =>
-        symbol.kind === 'F' && symbol.value >= input.org && symbol.value < imageEnd,
+        symbol.kind === 'F' && symbol.value >= imageStart && symbol.value < imageEnd,
     )
     .sort((a, b) => a.value - b.value || a.name.localeCompare(b.name));
 
@@ -247,7 +281,7 @@ function buildTraceProfile(input: TraceProfileBuild): TraceProfile {
   >();
   for (const [pc, sample] of input.timing) {
     const label =
-      pc >= input.org && pc < imageEnd ? nearestPrecedingLabel(labels, pc) : undefined;
+      pc >= imageStart && pc < imageEnd ? nearestPrecedingLabel(labels, pc) : undefined;
     const key = label ? `${label.value}:${label.name}` : '<unmapped>';
     const bucket = grouped.get(key) ?? {
       symbol: label?.name ?? '<unmapped>',
@@ -330,6 +364,7 @@ export function traceCommand(context: CommandContext): TraceEnvelope {
   const options = context.options as Record<string, unknown>;
   return runTrace({
     cwd: process.cwd(),
+    ...stateSessionFlags(options),
     bin: options.bin as string | undefined,
     org: options.org as string | undefined,
     ...snapshotSourceFlags(options),
@@ -359,7 +394,7 @@ function parseNonNegative(input: string, flag: string): number {
 
 /** Declare the `trace` command's flags (CLI-PROD-TRACE-001). */
 export function configureTraceCommand(command: Command): void {
-  addSnapshotSourceFlags(command)
+  addStateSessionFlags(addSnapshotSourceFlags(command), 'execute')
     .description('Run with per-instruction execution tracing')
     .option('--bin <file>', 'trace a raw binary loaded at --org')
     .option('--org <addr>', 'load origin for --bin (default 0x8000)')
@@ -371,6 +406,5 @@ export function configureTraceCommand(command: Command): void {
       '--profile',
       'report actual T-states by nearest preceding SLD function label (heuristic)',
     )
-    .option('--no-save', 'do not persist the session (no-op under the stateless default)')
     .option('--json', 'emit a single machine-readable JSON envelope');
 }

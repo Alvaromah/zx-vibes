@@ -453,8 +453,9 @@ export {
 
 // Project scaffold command group (Slice 9) — cli.md CLI-PROD-NEW-001 / INIT-001 / CLEAN-001,
 // CLI-PROD-OUT-NEW-001, CLI-PROD-EDGE-004; config-schema.md CFG-PROD-*; knowledge-pack.md
-// KP-PROD-CONTENT-PLAYBOOK-001. Emits a MINIMAL verify-passing project; the rich starter
-// templates + SCAFFOLD-VERIFY-001 belong to W5 (`create-zx-vibes` / `starters/`).
+// KP-PROD-CONTENT-PLAYBOOK-001. `new` emits a playable, verify-passing game from the
+// `starters/` templates (embedded in `scaffold/templates.ts`); `init` adds only the
+// toolkit contract to an existing directory.
 export {
   runNew,
   runInit,

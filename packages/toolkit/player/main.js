@@ -1,8 +1,9 @@
 // Bundled CORE preview player — the D4 in-browser runner (cli.md CLI-PROD-PREVIEW-001,
 // toolkit-runtime.md RT-PROD-PREVIEW-001). It runs the RECONSTRUCTED @zx-vibes/machine
-// (NOT the legacy @zx-vibes/emulator) in the browser: it boots a clean 48K ROM machine,
-// loads the program the preview server serves, targets the exact 48K frame cadence
-// on a visibility-independent clock, renders separately, and
+// (NOT the legacy @zx-vibes/emulator) in the browser: it boots a clean 48K ROM machine
+// (ROM write-protected, MACHINE-ROM-READONLY-001), loads the program the preview server
+// serves, targets the exact 48K frame cadence on a visibility-independent clock, renders
+// separately, and
 //   - renders the 320x240 bordered frame (RT-PROD-PREVIEW-008): the 256x192
 //     framebuffer via the EXACT screen-render.md (SCREEN-FRAMEBUFFER-001) decode +
 //     palette.yaml (SCREEN-PALETTE-001), inset in the raster-border.md
@@ -13,32 +14,24 @@
 //     SYMBOL SHIFT chords, and
 //   - renders the weighted EAR+MIC speaker mix (BEEPER-PCM-MIX-001) through a
 //     continuous Web Audio stream after a browser user gesture — so a MIC-only
-//     ROM SAVE is audible, soft, exactly as on hardware.
+//     ROM SAVE is audible, soft, exactly as on hardware, and
+//   - autoloads a BASIC-loader tape by typing `LOAD ""` on the real ROM and trapping
+//     LD-BYTES (../src/preview/autoload.ts), and shows any decode or `--watch` build
+//     error on the page instead of hanging on "loading…".
 //
 // This file is authored in browser JS and bundled by tsup (tsup.player.config.ts,
 // platform:browser, noExternal @zx-vibes/*) into assets/preview/player.js, so the
-// reconstructed cores are inlined and run client-side. It imports ONLY the public core
-// packages — never the toolkit's node-only modules and never the legacy emulator.
+// reconstructed cores are inlined and run client-side. It imports the public core
+// packages and the DOM-free modules under ../src/preview/ — never the toolkit's
+// node-only modules and never the legacy emulator.
 
 import {
-  createMachine,
-  RESET_REGISTERS,
-  acceptInterrupt,
-  INT_DATA_BUS,
-  readZ80,
-  parseTap,
-  parseTzx,
-  instantLoad,
-  LD_BYTES_ENTRY,
-} from '@zx-vibes/machine';
-import {
   FRAME_T_STATES,
-  interruptActive,
   displayByteAddress,
   attributeAddress,
-  DISPLAY_FILE_BASE,
   pixelColorIndex,
   flashPhase,
+  kempstonDecodes,
 } from '@zx-vibes/ula';
 import {
   createPreviewBeeperState,
@@ -63,6 +56,10 @@ import {
   borderRowsFromLog,
   fillBorderRows,
 } from '../src/preview/border-frame.ts';
+import { KEY_NAMES, PreviewKeyLatch } from '../src/preview/key-latch.ts';
+import { createLdBytesTrap, scheduledKeys } from '../src/preview/autoload.ts';
+import { stepFrame } from '../src/preview/frame-step.ts';
+import { bootPreviewProgram } from '../src/preview/player-boot.ts';
 
 // ---------------------------------------------------------------------------
 // Palette — palette.yaml / screen-render.md SCREEN-PALETTE-001 (the exact shared
@@ -78,97 +75,38 @@ const PALETTE_RGB = [
 const FRAME_WIDTH = 256;
 const FRAME_HEIGHT = 192;
 
-// ---------------------------------------------------------------------------
-// Keyboard — the 48K matrix (KBD-MATRIX-001) + the browser-key map (KBD-BROWSERMAP-001)
-// + the quick-tap latch (KBD-LATCH-001). Mirrors the toolkit's schedule.ts so the host
-// player and the headless `--keys` model read the same matrix.
-// ---------------------------------------------------------------------------
-const KEY_MATRIX = {
-  CAPS_SHIFT: [0, 0], Z: [0, 1], X: [0, 2], C: [0, 3], V: [0, 4],
-  A: [1, 0], S: [1, 1], D: [1, 2], F: [1, 3], G: [1, 4],
-  Q: [2, 0], W: [2, 1], E: [2, 2], R: [2, 3], T: [2, 4],
-  1: [3, 0], 2: [3, 1], 3: [3, 2], 4: [3, 3], 5: [3, 4],
-  0: [4, 0], 9: [4, 1], 8: [4, 2], 7: [4, 3], 6: [4, 4],
-  P: [5, 0], O: [5, 1], I: [5, 2], U: [5, 3], Y: [5, 4],
-  ENTER: [6, 0], L: [6, 1], K: [6, 2], J: [6, 3], H: [6, 4],
-  SPACE: [7, 0], SYMBOL_SHIFT: [7, 1], M: [7, 2], N: [7, 3], B: [7, 4],
-};
-
-// The browser-key → matrix mapping (KBD-BROWSERMAP-001/-002) lives in
-// ../src/preview/host-keys.ts — resolveHeldMatrix recomputes the whole pressed
-// set from the held host keys, which is what keeps SYMBOL SHIFT chords correct
-// when modifiers are released asymmetrically.
-
-/** IN (0xFE) byte for a pressed-key set + a port high byte (KBD-MATRIX-001). */
-function keyboardByte(pressed, highByte, earLevel) {
-  let keyBits = 0x1f;
-  for (let row = 0; row < 8; row += 1) {
-    if ((highByte & (1 << row)) !== 0) continue;
-    let rowMask = 0x1f;
-    for (const k of pressed) {
-      const cell = KEY_MATRIX[k];
-      if (cell && cell[0] === row) rowMask &= ~(1 << cell[1]) & 0x1f;
-    }
-    keyBits &= rowMask;
-  }
-  return (keyBits & 0x1f) | 0x20 | 0x80 | (earLevel ? 0x40 : 0);
+/** A thrown value's message, for the status line. */
+function errorText(err) {
+  return (err && err.message) || String(err);
 }
 
-/**
- * Host keyboard state with the quick-tap latch (KBD-LATCH-001): a key pressed
- * and released before any matrix scan observed it stays visible for exactly one
- * subsequent scan; a key held across a scan releases at the scan boundary; a
- * key-up with no matching live key-down registers no phantom press.
- *
- * The SCAN is the 50 Hz FRAME, not one IN read. The ROM keyboard interrupt
- * reads all EIGHT half-rows per frame; treating each read as "the scan" (and
- * clearing a latch at the first one) would hide a latched key from every
- * half-row the ROM reads after row 0 — a quick tap on B/N/M/SPACE (row 7, read
- * last) would vanish before the ROM reached its row. So `beginScan()` — called
- * once per emulated frame, before the frame runs — freezes the frame's visible
- * set: the live keys plus the taps buffered since the previous freeze (via
- * `tap()`, the latch), which are then retired — visible for exactly one scan.
- */
+// ---------------------------------------------------------------------------
+// Keyboard + port 0xFE — the 48K matrix (KBD-MATRIX-001) with the quick-tap latch
+// (KBD-LATCH-001) lives in ../src/preview/key-latch.ts; the browser-key → matrix
+// mapping (KBD-BROWSERMAP-001/-002) in ../src/preview/host-keys.ts. The latch
+// freezes each frame's visible keys once, so the ROM's many IN (0xFE) reads per
+// frame allocate nothing.
+// ---------------------------------------------------------------------------
+
+/** The machine's port device: keyboard + Kempston reads, border + speaker writes. */
 class HostKeyboard {
-  constructor() {
-    this.live = new Set();        // physically down now
-    this.pendingTaps = new Set(); // pressed since the last freeze (one-scan latch)
-    this.scanSet = new Set();     // the frozen visible set for the current frame
-    this.border = 7;
+  constructor(border) {
+    this.keys = new PreviewKeyLatch();
+    this.border = border & 0x07;
     this.earLevel = 0;          // last b4 written — the IN bit-6 EAR echo (issue-3)
     this.audioLevel = 0;        // weighted EAR+MIC speaker drive (BEEPER-PCM-MIX-001)
-  }
-  down(spectrumKey) {
-    if (!(spectrumKey in KEY_MATRIX)) return;
-    this.live.add(spectrumKey);
-  }
-  up(spectrumKey) {
-    this.live.delete(spectrumKey); // releasing a key never pressed is a no-op
-  }
-  /** Latch a key for the next frame's scan (only real presses reach here). */
-  tap(spectrumKey) {
-    if (!(spectrumKey in KEY_MATRIX)) return;
-    this.pendingTaps.add(spectrumKey);
-  }
-  /** Start the next frame's scan: freeze live + buffered taps, retire the taps. */
-  beginScan() {
-    this.scanSet = new Set(this.live);
-    for (const k of this.pendingTaps) this.scanSet.add(k);
-    this.pendingTaps.clear();
-  }
-  pressedSet() {
-    // The frame's frozen set plus keys pressed mid-frame (the live matrix): a
-    // latched tap stays visible to every half-row read of exactly one frame.
-    const s = new Set(this.scanSet);
-    for (const k of this.live) s.add(k);
-    return s;
   }
   // The machine `io` contract.
   read(port) {
     if ((port & 0x01) === 0) {
-      return keyboardByte(this.pressedSet(), (port >> 8) & 0xff, this.earLevel);
+      return this.keys.keyBits((port >> 8) & 0xff) | 0x20 | 0x80 | (this.earLevel ? 0x40 : 0);
     }
-    return 0xff; // undriven odd ports float idle high (no Kempston bound to the host here)
+    // A fitted Kempston answers port low byte 0x1F, as on the machine `zxs run`/`test`
+    // and the examples emulate (JOY-KEMPSTON-READ-001). The player maps no host
+    // joystick, so it reads idle (0x00: no direction, no fire); reading 0xFF here made
+    // a Kempston game that passed its tests move and fire non-stop in preview.
+    if (kempstonDecodes(port)) return 0x00;
+    return 0xff; // other undriven odd ports float idle high
   }
   write(port, value) {
     if ((port & 0x01) !== 0) return;
@@ -360,47 +298,10 @@ class Beeper {
 }
 
 // ---------------------------------------------------------------------------
-// Frame stepper — mirrors Machine.runFrame (machine-execution.md MACHINE-FRAME-LOOP-001):
-// the once-per-frame INT sampled at instruction boundaries with the post-EI delay, but
-// with an optional per-instruction trap (used by the tape autoloader). For the normal
-// running path the trap is null and this is byte-equivalent to machine.runFrame().
+// The emulation clock. The frame stepper itself (Machine.runFrame plus an
+// optional per-instruction trap for the tape autoloader) is stepFrame in
+// ../src/preview/frame-step.ts.
 // ---------------------------------------------------------------------------
-const EI_OPCODE = 0xfb;
-
-function stepFrame(m, trap) {
-  // Run to the frame boundary (not a fixed quantum): any overrun carried in from
-  // the previous frame's final instruction shortens this frame, mirroring
-  // Machine.runFrame. This pins the render point (renderInto samples memory
-  // between stepFrame calls) at the top of the frame — a drifting sample point
-  // catches HALT-synced games mid-erase and sprites visibly dissolve.
-  const budget = FRAME_T_STATES - m.clock;
-  let elapsed = 0;
-  let intTaken = false;
-  while (elapsed < budget) {
-    if (!intTaken && Boolean(m.registers.iff1) && m.eiDelay === 0 && interruptActive(m.clock)) {
-      const before = m.tStatesTotal;
-      const r = acceptInterrupt({
-        registers: m.registers, memory: m.memory, halted: m.halted, dataBus: INT_DATA_BUS,
-      });
-      m.registers = r.registers;
-      m.halted = false;
-      m.eiDelay = 0;
-      m.clock = (m.clock + r.tStates) % FRAME_T_STATES;
-      m.tStatesTotal += r.tStates;
-      elapsed += m.tStatesTotal - before;
-      intTaken = true;
-      continue;
-    }
-    if (trap) trap(m);
-    const wasEi = m.memory[m.registers.pc & 0xffff] === EI_OPCODE;
-    if (m.eiDelay > 0) m.eiDelay -= 1;
-    const before = m.tStatesTotal;
-    m.stepInstruction();
-    elapsed += m.tStatesTotal - before;
-    if (wasEi) m.eiDelay = 1;
-  }
-  m.frames += 1;
-}
 
 // A Worker pulse keeps emulation advancing while rAF is suspended in a hidden
 // tab. Rendering remains on rAF and can pause independently.
@@ -466,9 +367,10 @@ function startEmulationClock(onPulse) {
 // ---------------------------------------------------------------------------
 // Renderer — screen-render.md SCREEN-FRAMEBUFFER-001: extract the bitmap bit (MSB
 // leftmost), decode the attribute through @zx-vibes/ula pixelColorIndex with the FLASH
-// phase, map the index through the palette, write RGBA. Reads the live machine memory.
-// The 256x192 display content is written inset by the visible border margins into the
-// 320x240 bordered frame (RASTER-GEOMETRY-001); the caller paints the border rows first.
+// phase, map the index through the palette, write RGBA. Reads the live machine memory
+// (displayByteAddress/attributeAddress return absolute 0x4000+ addresses). The 256x192
+// display content is written inset by the visible border margins into the 320x240
+// bordered frame (RASTER-GEOMETRY-001); the caller paints the border rows first.
 // ---------------------------------------------------------------------------
 function renderInto(imageData, memory, frame) {
   const data = imageData.data;
@@ -489,79 +391,29 @@ function renderInto(imageData, memory, frame) {
     }
   }
 }
-// displayByteAddress/attributeAddress return absolute 0x4000+ addresses; index memory
-// directly (DISPLAY_FILE_BASE is exported for reference / parity with screen.ts).
-void DISPLAY_FILE_BASE;
 
 // ---------------------------------------------------------------------------
-// Program loading — boots the reconstructed machine and applies the served program
-// (blank / built .bin at org / .z80 snapshot / .tap or .tzx tape image).
+// Live reload over SSE (preview --watch, RT-PROD-PREVIEW-005): `reload` after a
+// clean rebuild; `build-error` (replayed on connect) while the source is broken —
+// the server keeps serving the last good program and the page says why.
 // ---------------------------------------------------------------------------
-
-/** A clean 64 KB power-on image: ROM at 0x0000-0x3FFF, RAM zeroed. */
-function bootMemory(rom) {
-  const mem = new Uint8Array(0x10000);
-  mem.set(rom.subarray(0, 0x4000), 0x0000);
-  return mem;
-}
-
-/** Tape blocks (tap/tzx) as a list of raw bodies [flag, ...data, checksum] (instantLoad input). */
-function tapeBlocks(kind, bytes) {
-  if (kind === 'tap') {
-    return parseTap(bytes).map((b) => Uint8Array.of(b.flag & 0xff, ...b.data, b.checksum & 0xff));
+function connectLiveReload(onBuildError) {
+  if (typeof EventSource === 'undefined') return;
+  try {
+    const es = new EventSource('events');
+    es.addEventListener('reload', () => window.location.reload());
+    es.addEventListener('build-error', (event) => {
+      let message = '';
+      try {
+        message = JSON.parse(event.data).message || '';
+      } catch {
+        message = String(event.data || '');
+      }
+      onBuildError(message);
+    });
+  } catch {
+    /* SSE unavailable — the player still runs, just without live reload. */
   }
-  // tzx: the standard-speed / turbo / pure-data blocks carry a `.data` body
-  // [flag, ...data, checksum]; the pure-tone/pause/text blocks have none.
-  return parseTzx(bytes).blocks
-    .filter((b) => b.data && b.data.length >= 2)
-    .map((b) => (b.data instanceof Uint8Array ? b.data : Uint8Array.from(b.data)));
-}
-
-/** A standard 17-byte tape header → { type, length, param1 } (file-formats FMT-TAP / tapeCodeHeader). */
-function parseStandardHeader(body) {
-  // body = [flag(0x00)][type][name x10][len LE][p1 LE][p2 LE][checksum] = 19 bytes.
-  if (body.length < 19 || (body[0] & 0xff) !== 0x00) return null;
-  const d = body.subarray(1); // the 17 header data bytes
-  return {
-    type: d[0] & 0xff,
-    length: (d[11] & 0xff) | ((d[12] & 0xff) << 8),
-    param1: (d[13] & 0xff) | ((d[14] & 0xff) << 8),
-  };
-}
-
-/**
- * Restore the LD-BYTES caller contract after an instant-loaded block: advance IX by the
- * bytes loaded, set DE to the remainder, set CARRY = ok, then execute the routine's RET
- * (pop the return address). This reproduces the OBSERVABLE result of the real ROM LD-BYTES
- * (0x0556) for the block, using the documented `instantLoad` seam (whose correctness is
- * `instant == edge`) — no ROM bytes are fabricated.
- */
-function ldBytesReturn(m, res, ix, de) {
-  const loaded = res.bytesLoaded | 0;
-  const newIx = (ix + loaded) & 0xffff;
-  m.registers.ixh = (newIx >> 8) & 0xff;
-  m.registers.ixl = newIx & 0xff;
-  const newDe = (de - loaded) & 0xffff;
-  m.registers.d = (newDe >> 8) & 0xff;
-  m.registers.e = newDe & 0xff;
-  m.registers.f = (m.registers.f & ~0x01) | (res.ok ? 0x01 : 0x00);
-  const sp = m.registers.sp & 0xffff;
-  const lo = m.memory[sp] & 0xff;
-  const hi = m.memory[(sp + 1) & 0xffff] & 0xff;
-  m.registers.pc = (hi << 8) | lo;
-  m.registers.sp = (sp + 2) & 0xffff;
-}
-
-/** The autotype schedule that drives the ROM `LOAD ""` for a BASIC-loader tape (KBD-LATCH-001-paced). */
-function loadTypeSchedule() {
-  // K-cursor: J -> "LOAD ", then " (SYMBOL SHIFT+P) twice, then ENTER. Each key is held
-  // several frames (so a 50 Hz scan always sees it) with gaps so repeats are distinct.
-  return [
-    { from: 40, to: 48, keys: ['J'] },
-    { from: 60, to: 68, keys: ['SYMBOL_SHIFT', 'P'] },
-    { from: 80, to: 88, keys: ['SYMBOL_SHIFT', 'P'] },
-    { from: 100, to: 108, keys: ['ENTER'] },
-  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -569,64 +421,47 @@ function loadTypeSchedule() {
 // ---------------------------------------------------------------------------
 async function boot() {
   const status = document.getElementById('status');
+  const errorBox = document.getElementById('error');
   const setStatus = (t) => { if (status) status.textContent = t; };
+  const showError = (text) => {
+    if (!errorBox) return;
+    errorBox.textContent = text || '';
+    errorBox.hidden = !text;
+  };
+
+  // Listen before decoding: a program that fails to load still reloads once fixed.
+  connectLiveReload((message) => {
+    setStatus('build failed — still running the previous build (fix the source to reload)');
+    showError(message || 'the rebuild failed');
+  });
 
   let meta, programBytes, rom;
   try {
     const [metaRes, romRes] = await Promise.all([fetch('program.json'), fetch('rom')]);
     meta = await metaRes.json();
     rom = new Uint8Array(await romRes.arrayBuffer());
-    if (meta.kind !== 'blank') {
-      programBytes = new Uint8Array(await (await fetch('program.bin')).arrayBuffer());
-    }
+    programBytes = meta.kind === 'blank'
+      ? new Uint8Array(0)
+      : new Uint8Array(await (await fetch('program.bin')).arrayBuffer());
   } catch (err) {
-    setStatus('preview: failed to load program from server: ' + (err && err.message));
+    setStatus('preview: failed to load program from server: ' + errorText(err));
     return;
   }
 
-  const keyboard = new HostKeyboard();
-  let machine;
-  let autoload = null; // { blocks, next } when a ROM LOAD"" autoload is in progress
-
-  if (meta.kind === 'blank') {
-    machine = createMachine({ memory: bootMemory(rom), registers: { ...RESET_REGISTERS } });
-    setStatus('blank 48K');
-  } else if (meta.kind === 'bin') {
-    const mem = bootMemory(rom);
-    mem.set(programBytes, meta.org & 0xffff);
-    machine = createMachine({ memory: mem, registers: { ...RESET_REGISTERS } });
-    machine.registers.pc = meta.org & 0xffff;
-    setStatus('program @ 0x' + (meta.org & 0xffff).toString(16).toUpperCase());
-  } else if (meta.kind === 'z80') {
-    const snap = readZ80(programBytes);
-    const mem = snap.memory;
-    mem.set(rom.subarray(0, 0x4000), 0x0000); // overlay the ROM the snapshot omits
-    machine = createMachine({ memory: mem, registers: snap.registers });
-    keyboard.border = snap.border & 0x07;
-    setStatus('.z80 snapshot (v' + snap.version + ')');
-  } else if (meta.kind === 'tap' || meta.kind === 'tzx') {
-    const blocks = tapeBlocks(meta.kind, programBytes);
-    const header = blocks.length > 0 ? parseStandardHeader(blocks[0]) : null;
-    machine = createMachine({ memory: bootMemory(rom), registers: { ...RESET_REGISTERS } });
-    if (header && header.type === 3 && blocks.length >= 2) {
-      // CODE tape (e.g. the toolkit's own `build --tap`): instant-load the data block to
-      // its declared address and enter it — the same convention as `run --bin`/preview bin.
-      const data = blocks[1];
-      const dest = header.param1 & 0xffff;
-      instantLoad(machine, data, { ix: dest, de: header.length & 0xffff, flag: 0xff, load: true });
-      machine.registers.pc = dest;
-      setStatus('.' + meta.kind + ' CODE @ 0x' + dest.toString(16).toUpperCase());
-    } else {
-      // A BASIC-loader / multi-block tape: drive the REAL ROM `LOAD ""` (autotype) and trap
-      // LD-BYTES (0x0556) to instant-load each block in tape order — the faithful general path.
-      autoload = { blocks, next: 0 };
-      setStatus('.' + meta.kind + ' — LOAD "" (autoloading)');
-    }
-  } else {
-    setStatus('preview: unsupported program kind "' + meta.kind + '"');
+  // Decode exactly as the server validated it (../src/preview/player-boot.ts). A file
+  // the codecs reject says so here instead of leaving the page on "loading…".
+  let booted;
+  try {
+    booted = bootPreviewProgram(meta.kind, programBytes, meta.org ?? 0, rom);
+  } catch (err) {
+    setStatus('preview: cannot load ' + (meta.label || 'the program'));
+    showError(errorText(err));
     return;
   }
+  const machine = booted.machine;
+  setStatus(booted.status);
 
+  const keyboard = new HostKeyboard(booted.border);
   machine.io = keyboard;
 
   // ---- beeper + border event capture ---------------------------------------
@@ -670,93 +505,27 @@ async function boot() {
     paintSound();
   }, { once: true });
 
-  // The LD-BYTES trap for the ROM-autoload path.
-  const schedule = loadTypeSchedule();
-  let autoFrame = 0;
-  const trap = autoload
-    ? (m) => {
-        if ((m.registers.pc & 0xffff) !== LD_BYTES_ENTRY) return;
-        const ix = ((m.registers.ixh & 0xff) << 8) | (m.registers.ixl & 0xff);
-        const de = ((m.registers.d & 0xff) << 8) | (m.registers.e & 0xff);
-        const expectFlag = m.registers.a & 0xff;
-        const load = (m.registers.f & 0x01) === 0x01;
-        if (autoload.next >= autoload.blocks.length) {
-          ldBytesReturn(m, { ok: false, bytesLoaded: 0 }, ix, de); // no more tape → load error
-          return;
+  // ---- tape: the LD-BYTES trap + the `LOAD ""` typing -----------------------
+  // Two separate lifetimes (../src/preview/autoload.ts): the trap serves blocks for as
+  // long as the tape has any — a loader asks for its later blocks long after the
+  // typing — while the typing owns the keyboard only until `LOAD ""` + ENTER have been
+  // typed and released (~3 s after power-on), then hands it back to the host.
+  const tape = booted.tape;
+  const trap = tape
+    ? createLdBytesTrap(tape, ({ ok, remaining }) => {
+        const done = tape.blocks.length - remaining;
+        if (remaining > 0) {
+          setStatus('.' + meta.kind + ' — loading block ' + done + ' of ' + tape.blocks.length);
+        } else {
+          // The last block: a failure here is the program's/ROM's to report (e.g. "R Tape
+          // loading error"), so the status says the tape ran out rather than "running".
+          setStatus(ok
+            ? '.' + meta.kind + ' loaded — running'
+            : '.' + meta.kind + ' — tape ended; its last block did not load');
         }
-        const body = autoload.blocks[autoload.next];
-        // Serve the next block only if its flag matches what the ROM expects; otherwise
-        // report a flag mismatch (nothing written) and keep it for the next request.
-        if ((body[0] & 0xff) !== expectFlag) {
-          ldBytesReturn(m, { ok: false, bytesLoaded: 0 }, ix, de);
-          return;
-        }
-        autoload.next += 1;
-        const res = instantLoad(m, body, { ix, de, flag: expectFlag, load });
-        ldBytesReturn(m, res, ix, de);
-        if (autoload.next >= autoload.blocks.length) setStatus('.' + meta.kind + ' loaded — running');
-      }
+      })
     : null;
-
-  // ---- the 50.08 Hz emulation clock + independently throttled renderer -----
-  const canvas = document.getElementById('screen');
-  canvas.width = OUT_WIDTH;
-  canvas.height = OUT_HEIGHT;
-  const ctx = canvas.getContext('2d');
-  const image = ctx.createImageData(OUT_WIDTH, OUT_HEIGHT);
-  let frameCounter = 0;
-
-  function applyAutotype() {
-    // Inject the LOAD"" keystrokes (host policy) while the autoload is active.
-    if (!autoload) return;
-    const held = new Set();
-    for (const ev of schedule) {
-      if (autoFrame >= ev.from && autoFrame < ev.to) for (const k of ev.keys) held.add(k);
-    }
-    // Drive the host keyboard: press the scheduled keys, release the rest.
-    for (const k of Object.keys(KEY_MATRIX)) {
-      if (held.has(k)) keyboard.down(k);
-      else keyboard.up(k);
-    }
-    autoFrame += 1;
-  }
-
-  let clockState = createPreviewFrameClock(performance.now());
-  function advanceEmulation(now) {
-    const advanced = advancePreviewFrameClock(clockState, now, {
-      frameDurationMs: FRAME_MS,
-      maxCatchUpFrames: MAX_CATCH_UP_FRAMES,
-    });
-    clockState = advanced.state;
-    for (let step = 0; step < advanced.frames; step += 1) {
-      applyAutotype();
-      keyboard.beginScan(); // freeze this frame's visible key set (KBD-LATCH-001)
-      emulatedFrameStartTStates = machine.tStatesTotal;
-      // The colour in force at the top of this frame is whatever the previous
-      // frame left behind; the log then collects this frame's changes.
-      const borderCarry = keyboard.border;
-      borderLog.length = 0;
-      stepFrame(machine, trap);
-      beeper.endFrame();   // one frame of speaker edges -> one buffer of samples
-      borderRowsFromLog(borderLog, borderCarry, borderRows); // -> scanline colours
-      frameCounter += 1;
-    }
-  }
-  const stopEmulationClock = startEmulationClock(advanceEmulation);
-  window.addEventListener('pagehide', (event) => {
-    // A page kept in the back/forward cache can resume; let its Worker survive.
-    if (!event.persisted) stopEmulationClock();
-  }, { once: true });
-
-  function render() {
-    // Border rows first (the in-canvas raster border), then the display content
-    // inset over it — the border is real pixels now, not page CSS.
-    fillBorderRows(image.data, borderRows, PALETTE_RGB);
-    renderInto(image, machine.memory, frameCounter);
-    ctx.putImageData(image, 0, 0);
-    requestAnimationFrame(render);
-  }
-  requestAnimationFrame(render);
+  let autotype = booted.autotype; // the `LOAD ""` schedule; null once it has been typed
 
   // ---- host keyboard wiring (real interactive input) -----------------------
   // Held host keys, event.code -> event.key AT KEYDOWN. The full matrix set is
@@ -771,9 +540,9 @@ async function boot() {
   //     suppressed until it is physically released (host-keys.ts), so the
   //     few-millisecond gap where the Shift outlives its symbol key cannot
   //     pulse CAPS into the same scan as the latched chord (= EXTENDED mode).
-  //   - keyboard.tap(): every key that APPEARS in the resolved set is buffered
-  //     for the next frame's scan (KBD-LATCH-001, scan = frame) — except a
-  //     CAPS that exists only because a host Shift is held, whose sub-frame
+  //   - keyboard.keys.tap(): every key that APPEARS in the resolved set is
+  //     buffered for the next frame's scan (KBD-LATCH-001, scan = frame) — except
+  //     a CAPS that exists only because a host Shift is held, whose sub-frame
   //     pulses are resolution artifacts, not user taps (a bare-CAPS tap types
   //     nothing on the machine; combo CAPS — arrows, DELETE — arrives with its
   //     partner from the same named mapping and is buffered with it).
@@ -794,17 +563,17 @@ async function boot() {
     for (const k of next) {
       if (!resolvedKeys.has(k)) {
         const shiftOnlyCaps = k === 'CAPS_SHIFT' && !nextSansShift.has('CAPS_SHIFT');
-        if (!shiftOnlyCaps) keyboard.tap(k);
+        if (!shiftOnlyCaps) keyboard.keys.tap(k);
       }
     }
     resolvedKeys = next;
-    for (const k of Object.keys(KEY_MATRIX)) {
-      if (next.has(k)) keyboard.down(k);
-      else keyboard.up(k);
+    for (const k of KEY_NAMES) {
+      if (next.has(k)) keyboard.keys.down(k);
+      else keyboard.keys.up(k);
     }
   };
   window.addEventListener('keydown', (e) => {
-    if (autoload && autoload.next < autoload.blocks.length) return; // autoload owns the keyboard
+    if (autotype) return; // typing `LOAD ""`: the autoload owns the keyboard until then
     if (!claimsBrowserEvent(e)) return; // F-keys / OS chords stay with the browser
     held.set(e.code, e.key);
     syncHeldKeys();
@@ -817,16 +586,82 @@ async function boot() {
     e.preventDefault();
   });
 
-  // ---- live-reload over SSE (preview --watch, RT-PROD-PREVIEW-005) ----------
-  try {
-    const es = new EventSource('events');
-    es.addEventListener('reload', () => window.location.reload());
-  } catch {
-    /* SSE unavailable — the player still runs, just without live reload. */
+  // ---- the 50.08 Hz emulation clock + independently throttled renderer -----
+  const canvas = document.getElementById('screen');
+  canvas.width = OUT_WIDTH;
+  canvas.height = OUT_HEIGHT;
+  const ctx = canvas.getContext('2d');
+  const image = ctx.createImageData(OUT_WIDTH, OUT_HEIGHT);
+  let frameCounter = 0; // emulated frames since power-on (FLASH phase, typing schedule)
+
+  /** Press the scheduled `LOAD ""` keys for the frame about to run; hand back at the end. */
+  function applyAutotype() {
+    if (!autotype) return;
+    if (frameCounter >= autotype.end) {
+      // Typed and released: the host keyboard is live again (the tape trap stays).
+      autotype = null;
+      syncHeldKeys();
+      return;
+    }
+    const keys = scheduledKeys(autotype, frameCounter);
+    for (const k of KEY_NAMES) {
+      if (keys.includes(k)) keyboard.keys.down(k);
+      else keyboard.keys.up(k);
+    }
   }
+
+  let clockState = createPreviewFrameClock(performance.now());
+  function advanceEmulation(now) {
+    const advanced = advancePreviewFrameClock(clockState, now, {
+      frameDurationMs: FRAME_MS,
+      maxCatchUpFrames: MAX_CATCH_UP_FRAMES,
+    });
+    clockState = advanced.state;
+    for (let step = 0; step < advanced.frames; step += 1) {
+      applyAutotype();
+      keyboard.keys.beginScan(); // freeze this frame's visible key set (KBD-LATCH-001)
+      emulatedFrameStartTStates = machine.tStatesTotal;
+      // The colour in force at the top of this frame is whatever the previous
+      // frame left behind; the log then collects this frame's changes.
+      const borderCarry = keyboard.border;
+      borderLog.length = 0;
+      stepFrame(machine, trap);
+      beeper.endFrame();   // one frame of speaker edges -> one buffer of samples
+      borderRowsFromLog(borderLog, borderCarry, borderRows); // -> scanline colours
+      frameCounter += 1;
+    }
+  }
+  const stopEmulationClock = startEmulationClock(advanceEmulation);
+  window.addEventListener('pagehide', (event) => {
+    // A page kept in the back/forward cache can resume; let its Worker survive.
+    if (!event.persisted) stopEmulationClock();
+  }, { once: true });
+
+  // Paint only when an emulated frame has run since the last paint: rAF fires at the
+  // display rate (60-144 Hz) while the machine makes 50.08 frames a second.
+  let paintedFrame = -1;
+  function render() {
+    if (paintedFrame !== frameCounter) {
+      paintedFrame = frameCounter;
+      // Border rows first (the in-canvas raster border), then the display content
+      // inset over it — the border is real pixels, not page CSS.
+      fillBorderRows(image.data, borderRows, PALETTE_RGB);
+      renderInto(image, machine.memory, frameCounter);
+      ctx.putImageData(image, 0, 0);
+    }
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+}
+
+function start() {
+  boot().catch((err) => {
+    const status = document.getElementById('status');
+    if (status) status.textContent = 'preview: player failed: ' + errorText(err);
+  });
 }
 
 if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 }

@@ -62,6 +62,7 @@ function acceptInterruptOn(machine: Machine): void {
     memory: machine.memory,
     halted: machine.halted,
     dataBus: INT_DATA_BUS,
+    romTop: machine.romTop(),
   });
   machine.registers = result.registers;
   machine.halted = false;

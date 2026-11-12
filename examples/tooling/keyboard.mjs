@@ -33,6 +33,113 @@ export function keyboardMatrixByte(pressed, highByte) {
   return result;
 }
 
+/**
+ * The currently-held canonical matrix keys (`zx.pressed`) with the quick-tap latch of
+ * dna/product/keyboard-input.md KBD-LATCH-001. The ROM — and most games — scan the
+ * keyboard once per 50 Hz frame, so a key pressed AND released between two scans
+ * would never be seen if the matrix only followed the live set. Here every key that
+ * goes down (is added) is also buffered as a tap; the first keyboard read of the next
+ * frame starts a new scan that sees the live keys plus those taps, and the taps retire
+ * when the following scan starts. So a quick tap is visible for exactly one scan, a
+ * held key for every scan it spans, and a release of a key that is not down has no
+ * effect (nothing is ever latched by a release).
+ *
+ * It IS the live Set — pages may add/delete/clear keys directly, as before — and it
+ * answers the matrix read itself: `keyBits(highByte, frame)`, where `frame` is the
+ * machine's frame counter (a change of frame = a new scan). The per-row masks are
+ * computed once per scan or change, so the many IN (0xFE) reads of a frame allocate
+ * nothing.
+ */
+export class PressedKeys extends Set {
+  constructor() {
+    super();
+    this._taps = new Set(); // went down since the current scan began
+    this._scanTaps = new Set(); // taps the current scan shows
+    this._scanFrame = undefined;
+    this._masks = new Uint8Array(8).fill(0x1f);
+    this._dirty = true;
+  }
+
+  /** Press `key`: held from now on, and latched for the next scan (a quick tap). */
+  add(key) {
+    if (!this.has(key)) {
+      super.add(key);
+      if (this._taps) this._taps.add(key); // (undefined while super() runs)
+      this._dirty = true;
+    }
+    return this;
+  }
+
+  /**
+   * Hold `key` WITHOUT latching it: for a modifier a host key contributes only as a
+   * side effect (the CAPS SHIFT from a host Shift), whose sub-frame pulses are not
+   * taps — latching one next to a symbol chord would read as EXTENDED mode.
+   */
+  hold(key) {
+    if (!this.has(key)) {
+      super.add(key);
+      this._dirty = true;
+    }
+    return this;
+  }
+
+  delete(key) {
+    const had = super.delete(key);
+    if (had) this._dirty = true;
+    return had;
+  }
+
+  clear() {
+    if (this.size > 0) this._dirty = true;
+    super.clear();
+  }
+
+  /** Forget everything, latched taps included (a machine reset / snapshot load). */
+  reset() {
+    this.clear();
+    this._taps.clear();
+    this._scanTaps.clear();
+    this._dirty = true;
+  }
+
+  /** The keys the scan of `frame` sees: held now, plus the taps it latched. */
+  visible(frame) {
+    this._sync(frame);
+    return new Set([...this, ...this._scanTaps]);
+  }
+
+  /** Key bits (b0..b4) of an IN (0xFE) with port high byte `highByte` during `frame`. */
+  keyBits(highByte, frame) {
+    this._sync(frame);
+    if (this._dirty) {
+      this._masks.fill(0x1f);
+      for (const set of [this, this._scanTaps]) {
+        for (const key of set) {
+          const cell = KEY_MATRIX[key];
+          if (cell) this._masks[cell[0]] &= ~(1 << cell[1]) & 0x1f;
+        }
+      }
+      this._dirty = false;
+    }
+    let bits = 0x1f;
+    for (let row = 0; row < 8; row += 1) {
+      if (((highByte >> row) & 1) === 0) bits &= this._masks[row];
+    }
+    return bits;
+  }
+
+  /** A read in a new frame starts a new scan: its taps become the scan's, the old retire. */
+  _sync(frame) {
+    if (frame === this._scanFrame) return;
+    this._scanFrame = frame;
+    const retired = this._scanTaps;
+    this._scanTaps = this._taps;
+    this._taps = retired;
+    this._taps.clear();
+    this._dirty = true;
+  }
+}
+
 // A printable character -> the canonical matrix keys that type it. On the 48K,
 // punctuation is SYMBOL SHIFT + a key (the red legends), so "=" is SYM+L, "+" is
 // SYM+K, '"' is SYM+P, and so on. The host produces these characters directly
@@ -54,19 +161,26 @@ export function charToKeys(char) {
 }
 
 // Browser KeyboardEvent.code -> the canonical matrix key(s) it produces. Some host
-// keys map to a Spectrum combo (e.g. Backspace = CAPS SHIFT + 0 = DELETE). Host
-// Shift maps to CAPS SHIFT and Ctrl to SYMBOL SHIFT, so the two Spectrum shifts
-// are reachable (needed for EXTENDED mode = CAPS+SYM, e.g. to type BEEP). The
-// CAPS from a host Shift used only to *produce a symbol* is dropped in
-// resolveMatrix so it does not corrupt the symbol chord.
+// keys map to a Spectrum combo (dna/product/keyboard-input.md KBD-BROWSERMAP-001:
+// Backspace/Delete = CAPS SHIFT + 0 = DELETE, Escape = CAPS SHIFT + SPACE = BREAK,
+// the arrows = CAPS SHIFT + 5..8). Host Shift maps to CAPS SHIFT and Ctrl to SYMBOL
+// SHIFT, so the two Spectrum shifts are reachable (needed for EXTENDED mode =
+// CAPS+SYM, e.g. to type BEEP). The CAPS from a host Shift used only to *produce a
+// symbol* is dropped in resolveMatrix so it does not corrupt the symbol chord.
 const CODE_MAP = {
   Enter: ['ENTER'], NumpadEnter: ['ENTER'], Space: ['SPACE'],
   ShiftLeft: ['CAPS'], ShiftRight: ['CAPS'],
   ControlLeft: ['SYM'], ControlRight: ['SYM'], AltRight: ['SYM'],
-  Backspace: ['CAPS', '0'], // DELETE
+  Backspace: ['CAPS', '0'], Delete: ['CAPS', '0'], // DELETE
+  Escape: ['CAPS', 'SPACE'], // BREAK
   ArrowLeft: ['CAPS', '5'], ArrowDown: ['CAPS', '6'],
   ArrowUp: ['CAPS', '7'], ArrowRight: ['CAPS', '8'],
 };
+
+/** True for the two host Shift keys (by KeyboardEvent.code). */
+export function isShiftCode(code) {
+  return code === 'ShiftLeft' || code === 'ShiftRight';
+}
 
 /** Map a browser KeyboardEvent.code to canonical matrix keys, or null if unmapped. */
 export function browserCodeToKeys(code) {
@@ -86,10 +200,13 @@ export function browserCodeToKeys(code) {
  * key. The one subtlety: a host Shift held only to type a symbol must NOT also
  * press CAPS SHIFT, or CAPS+SYM would silently drop the machine into EXTENDED
  * mode. So when any symbol is being typed, CAPS coming from a Shift key is
- * dropped — while a Shift held on its own (with no symbol) still gives CAPS, so
+ * dropped — and, via `stickyShiftCodes`, for the rest of a Shift hold that has
+ * already produced a symbol: releasing the symbol key a few milliseconds before
+ * the Shift (every host does) would otherwise pulse CAPS into the same scan as the
+ * latched chord. A Shift held on its own (no symbol involved) still gives CAPS, so
  * Shift+Ctrl still enters EXTENDED mode.
  */
-export function resolveMatrix(held) {
+export function resolveMatrix(held, stickyShiftCodes) {
   const set = new Set();
   const entries = [...held];
   let symbolActive = false;
@@ -104,7 +221,7 @@ export function resolveMatrix(held) {
     const byCode = browserCodeToKeys(code);
     if (!byCode) continue;
     for (const k of byCode) {
-      if (k === 'CAPS' && symbolActive && (code === 'ShiftLeft' || code === 'ShiftRight')) continue;
+      if (k === 'CAPS' && isShiftCode(code) && (symbolActive || stickyShiftCodes?.has(code))) continue;
       set.add(k);
     }
   }

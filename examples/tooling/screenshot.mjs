@@ -5,15 +5,14 @@
 //   node screenshot.mjs [out.png] [frames]
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import pngjs from 'pngjs'; // this package's own devDependency
 import { createMachine, RESET_REGISTERS } from '@zx-vibes/machine';
 import { renderWithBorder, OUT_WIDTH, OUT_HEIGHT } from './render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const require = createRequire(join(HERE, '..', '..', 'packages', 'toolkit', 'package.json'));
-const { PNG } = require('pngjs');
+const { PNG } = pngjs;
 
 /** Boot the ROM for `frames` frames, capturing the final border colour. */
 export function boot(frames = 200) {
@@ -27,7 +26,7 @@ export function boot(frames = 200) {
       if ((port & 1) === 0) state.border = value & 0x07;
     },
   };
-  const machine = createMachine({ memory, registers: { ...RESET_REGISTERS }, io });
+  const machine = createMachine({ memory, registers: { ...RESET_REGISTERS }, io, romWriteProtect: true });
   for (let i = 0; i < frames; i += 1) machine.runFrame();
   return { screen: machine.memory.slice(0x4000, 0x4000 + 6912), border: state.border, frames };
 }

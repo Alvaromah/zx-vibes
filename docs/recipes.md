@@ -42,25 +42,30 @@ What you get:
 The tight loop for iterating (each step observes, never assumes):
 
 ```bash
-zxs build --json        # assemble src/main.asm → build/
-zxs run --json          # run 300 frames under the hang watchdog
-zxs screen --text       # read the screen back as text (cheap eyes)
-zxs verify --json       # the single acceptance gate
+zxs build --json                                # assemble src/main.asm → build/
+zxs state reset                                 # this build, fresh, in .zxs/state.zxstate
+zxs run --state .zxs/state.zxstate --json       # run 300 frames under the hang watchdog
+zxs screen --text --state .zxs/state.zxstate    # read back what that run drew (cheap eyes)
+zxs verify --json                               # the single acceptance gate
 ```
+
+Every command is stateless unless you pass `--state`: a bare `zxs screen` boots
+fresh and shows a machine that has not run. `state reset` after each build is
+what keeps the session on the new code. Without it, `run --state` continues the
+previous session's machine.
 
 ## Inspect the screen
 
 ```bash
-# Text OCR of the 32×24 character grid (fast, diff-friendly):
-zxs screen --text
-
-# PNG snapshot of the current session, and a raw 256×192 bitmap render:
-zxs screen --png screen.png
-zxs gfx screen --out screen.png
-zxs gfx attrs --out attrs.png       # attribute (colour) map
-
 # Run and capture a screenshot in one shot, driving input on the way:
 zxs run --frames 120 --keys "5:P*40" --screenshot screen.png
+
+# Or keep the machine in a session and look at it afterwards:
+zxs state reset
+zxs run --frames 120 --keys "5:P*40" --state .zxs/state.zxstate
+zxs screen --text --state .zxs/state.zxstate         # 32×24 OCR grid (fast, diff-friendly)
+zxs screen --png screen.png --state .zxs/state.zxstate
+zxs gfx attrs --out attrs.png --state .zxs/state.zxstate   # the attribute (colour) map
 ```
 
 The `run` JSON reports what changed without opening the image:
@@ -167,7 +172,7 @@ carries a `kind` so you know *why*:
 | ------------- | ------- |
 | `di-halt`     | `HALT` with interrupts disabled — nothing will ever wake it. |
 | `tight-loop`  | Spinning on a small PC range with no forward progress. |
-| `pc-in-rom`   | Execution parked in ROM (often an IM1 game spending most frames in the ROM interrupt handler). |
+| `pc-in-rom`   | Execution left the program into ROM and never came back (a wild `JP`/`RET` — check the stack). A busy IM1 game is not flagged: the whole frame must run in ROM. |
 | `sp-corrupt`  | The stack pointer walked into an implausible place. |
 | `rom-error`   | Dropped into a ROM error routine. |
 
@@ -193,11 +198,11 @@ The default ZX Spectrum interrupt mode is **IM1**: every 50 Hz interrupt jumps t
 handler at `0x0038`, which scans the keyboard, updates `FRAMES`, etc., then returns. That is
 perfectly fine for most small games — the scaffolded starters use it (`ei` + `halt`).
 
-The catch for **larger** HALT-based games: because IM1 spends part of every frame executing
-**ROM** code, a game that also idles a lot can trip the `pc-in-rom` hang heuristic — the
-watchdog sees the PC in ROM too often and suspects a hang. The fix is **IM2** with your own
-tiny handler in RAM: you own the whole frame, spend zero time in ROM, and hang detection sees
-only your code.
+The catch for **larger** games: the ROM handler costs about 1k T-states of every frame, and it
+indexes the system variables through `IY`, so a game that repurposes `IY` gets memory
+scribbled wherever `IY` points. The fix is **IM2** with your own tiny handler in RAM: you own
+the whole frame, `IY` is yours, and the timing is exact and predictable. You then read the
+keyboard yourself, because the ROM no longer scans it.
 
 A minimal, self-contained IM2 setup (verified: `status: ok`, `haltSynced: true`, `im: 2`, PC
 stays in your code, and the counter increments once per frame):
@@ -247,5 +252,4 @@ isr:
 ```
 
 Rule of thumb: start in IM1 (the scaffold default). Reach for IM2 only when you want the
-whole frame to yourself — smooth raster effects, tight timing, or to keep a mostly-idle game
-out of the `pc-in-rom` heuristic.
+whole frame to yourself — smooth raster effects, tight timing, or a free `IY` register.

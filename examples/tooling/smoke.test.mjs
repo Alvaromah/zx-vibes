@@ -15,7 +15,7 @@ function bootBasic(frames = 200) {
   assert.equal(rom.length, 16384);
   const memory = new Uint8Array(0x10000);
   memory.set(rom, 0);
-  const machine = createMachine({ memory, registers: { ...RESET_REGISTERS } });
+  const machine = createMachine({ memory, registers: { ...RESET_REGISTERS }, romWriteProtect: true });
   for (let i = 0; i < frames; i += 1) machine.runFrame();
   return machine.memory.slice(0x4000, 0x4000 + 6912);
 }

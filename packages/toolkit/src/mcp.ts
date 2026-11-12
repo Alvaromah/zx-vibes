@@ -56,7 +56,7 @@ import { asciiBytes, hexBytes } from './observe/memory.js';
 import { resolveDisasmSpec, type DisasmEntry } from './observe/disasm.js';
 import { type StepEntry } from './observe/step.js';
 import { resolveObserveMachine, type SourceMapEntry, type SymbolDef } from './observe/source.js';
-import { charToKey } from './input/input-command.js';
+import { typeSchedule } from './input/input-command.js';
 import {
   loadDebugStore,
   loadSession,
@@ -245,6 +245,7 @@ function traceSession(session: McpSession, frames: number): Record<string, unkno
   const result = runProgram(machine, RAM_BASE, {
     frames,
     detectHangs: false,
+    border: session.border,
     onStep: (m: Machine) => {
       const pc = m.registers.pc & 0xffff;
       counts.set(pc, (counts.get(pc) ?? 0) + 1);
@@ -270,10 +271,9 @@ function traceSession(session: McpSession, frames: number): Record<string, unkno
 /** Build a `frame:KEY*hold` schedule string for `zx_keys typeText` (CLI `type` parity). */
 function textToKeySpec(text: string): string {
   if (text.length === 0) throw userError('zx_keys typeText must be a non-empty string', 'keys');
-  const per = DEFAULT_HOLD;
-  const parts: string[] = [];
-  for (let i = 0; i < text.length; i += 1) parts.push(`${i * per}:${charToKey(text[i]!)}*${per}`);
-  return parts.join(',');
+  return typeSchedule(text, DEFAULT_HOLD)
+    .map((e) => `${e.frame}:${e.key}*${e.hold}`)
+    .join(',');
 }
 
 // --- the seven tools (each delegates to an existing service) ----------------
@@ -334,6 +334,7 @@ function toolRun(session: McpSession, args: ToolArgs): CallToolResult {
 
   let boot: RunBoot;
   let hangOrg: number;
+  let resume = false;
   if (selectedFileSource({ bin, z80, tap, sna }) !== undefined) {
     // Loading a program boots clean first (MCP-PROD-TOOL-RUN-001). Sandbox the given
     // project-relative path, then load through the ONE shared source loader — `z80`/`tap`
@@ -359,9 +360,11 @@ function toolRun(session: McpSession, args: ToolArgs): CallToolResult {
     hangOrg = RAM_BASE;
     boot = { source: 'state', org: RAM_BASE };
   } else {
-    // Otherwise execution continues from the current live state.
+    // Otherwise execution continues from the current live state — past a breakpoint
+    // or `untilPc` it stopped at (continue semantics), with its border carried over.
     hangOrg = RAM_BASE;
     boot = { source: 'state', org: RAM_BASE };
+    resume = args.pc === undefined;
   }
   if (args.pc !== undefined) session.machine.registers.pc = parseAddress(args.pc as string, 'run') & 0xffff;
 
@@ -381,6 +384,8 @@ function toolRun(session: McpSession, args: ToolArgs): CallToolResult {
     detectHangs: args.detectHangs as boolean | undefined,
     breakpoints,
     watchWrite,
+    border: session.border,
+    resume,
   });
   session.machine = result.machine;
   session.border = result.io.borderColor();
@@ -391,7 +396,8 @@ function toolRun(session: McpSession, args: ToolArgs): CallToolResult {
 function toolScreen(session: McpSession, args: ToolArgs): CallToolResult {
   const scale = (args.scale as number | undefined) ?? 2;
   const image = readScreenImage(session.machine);
-  const png = encodePng(scaleRgba(renderRgbaImage(image, session.border), scale)).toString('base64');
+  // The second argument is the FLASH frame counter (not the border): frame 0, as `screen`.
+  const png = encodePng(scaleRgba(renderRgbaImage(image, 0), scale)).toString('base64');
   const grid = {
     rows: ocrScreenRows(image),
     nonBlankCells: nonBlankCellsImage(image),
@@ -549,6 +555,7 @@ function toolKeys(session: McpSession, args: ToolArgs): CallToolResult {
     keys: spec,
     frames: scheduleEnd + extra,
     detectHangs: false, // input injection is not a hang (MCP-PROD-EDGE-001)
+    border: session.border,
   });
   session.machine = result.machine;
   session.border = result.io.borderColor();

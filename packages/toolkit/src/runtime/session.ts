@@ -86,7 +86,27 @@ export class Session {
  * giving each boot an independent address space (RT-PROD-SESSION-001).
  */
 export function bootFreshMachine(): Machine {
-  return createMachine({ memory: romBootMemory(), registers: { ...RESET_REGISTERS } });
+  // The ROM is read-only, as on a real 48K (MACHINE-ROM-READONLY-001): a program that
+  // writes below 0x4000 changes nothing. Programs are loaded by copying into memory.
+  return createMachine({ memory: romBootMemory(), registers: { ...RESET_REGISTERS }, romWriteProtect: true });
+}
+
+/**
+ * Where an assembled program loads and starts (cli.md CLI-PROD-CONV-ORIGIN-001): the
+ * address its source's first `ORG` assembled it at — the only address where its absolute
+ * jumps, calls and data references are right, whatever `zx.config.json` says. A source
+ * with no `ORG` assembles at 0x0000 (the ROM on a 48K) and loads at the configured `org`
+ * instead (config-schema.md CFG-PROD-FIELD-ORG-001, default 0x8000). `run`, `verify`,
+ * the observe/state commands, `test` specs and `build --tap/--z80/--scr` all use this one
+ * rule, so a program never runs from one address in one command and another elsewhere.
+ */
+export function programLoadOrigin(
+  assembledOrigin: number,
+  configuredOrg: number | (() => number),
+): number {
+  const origin = assembledOrigin & 0xffff;
+  if (origin !== 0) return origin;
+  return (typeof configuredOrg === 'function' ? configuredOrg() : configuredOrg) & 0xffff;
 }
 
 /**
