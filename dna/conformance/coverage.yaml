@@ -1517,6 +1517,15 @@ behaviors:
     status: covered
     notes: "ADR-0031 (2026-11). cli.md CLI-PROD-TRACE-002: trace takes --keys/--joy like coverage. Before, the flags were unknown (exit 1), so a keyed scenario could not be traced."
 
+  - id: CLI-BOOT-STATE-001
+    area: toolkit
+    behavior: "run, regs and mem on the same --state session report the same boot { source: state, pc, file }: the session PC, not an origin"
+    tier: contract
+    provenance: decision:ADR-0031
+    fixtures: [conformance/cli/boot-descriptor.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0031 (2026-11). cli.md CLI-PROD-CONV-BOOT-001: boot.org is a program origin; a session, a .z80 snapshot and a fresh boot report boot.pc instead. Before, run reported org 16384 (the internal hang floor) and regs/mem org = the session PC for the same file. The absence of org is pinned by tests/boot-descriptor.test.ts."
+
   - id: RUN-BEEPER-001
     area: toolkit
     behavior: "run JSON reports audio.beeperEdges as an integer >= 0"

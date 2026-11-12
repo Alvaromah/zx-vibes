@@ -55,8 +55,14 @@ export interface MachineSourceOptions {
 /** How a file source booted the machine (the `boot` descriptor it reports). */
 export interface LoadedMachineBoot {
   source: 'bin' | 'z80' | 'tap';
-  /** The reported load origin (PC): the `--org` for `--bin`, else the snapshot/tape entry. */
-  org: number;
+  /**
+   * The load origin (also the entry PC): the `--org` for `--bin`, the CODE block's address
+   * for `--tap`. A `.z80` snapshot has no origin and reports `pc` instead
+   * (cli.md CLI-PROD-CONV-BOOT-001).
+   */
+  org?: number;
+  /** `.z80`: the PC the snapshot resumes at. */
+  pc?: number;
   /** The source file as given (portable / normalizable across machines). */
   file: string;
   /** Snapshot version (1/2/3) reported by `readZ80` (`.z80` only). */
@@ -161,7 +167,7 @@ function loadZ80(given: string, cwd: string, stage: string): LoadedMachine {
     org,
     ramFloor: RAM_BASE,
     border: (snap.border ?? DEFAULT_BORDER) & 0x07,
-    boot: { source: 'z80', org, file: given, version: snap.version },
+    boot: { source: 'z80', pc: org, file: given, version: snap.version },
     length: 0,
   };
 }

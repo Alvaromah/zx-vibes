@@ -650,7 +650,9 @@ describe('zxs run — --z80 snapshot boot (D1, CLI-PROD-RUN-001)', () => {
     const env = JSON.parse(cap.out().trim());
     expect(env.ok).toBe(true);
     expect(env.status).toBe('ok');
-    expect(env.boot).toMatchObject({ source: 'z80', org: 0x8000, version: 3 });
+    // A snapshot has no origin: boot reports the PC it resumes at (CLI-PROD-CONV-BOOT-001).
+    expect(env.boot).toMatchObject({ source: 'z80', pc: 0x8000, version: 3 });
+    expect(env.boot.org).toBeUndefined();
     expect(env.audio.beeperEdges).toBeGreaterThan(0);
   });
 });

@@ -265,7 +265,9 @@ export function probableHang(machine: Machine, org: number, stats: HangStats): H
       detail: `The program jumped to 0x0000 in frame ${stats.resetFrame ?? 0}, resetting the machine, and never ran RAM code again`,
       confidence: 'probable',
       likelyCause:
-        'A jump or return to 0x0000 (a corrupt stack, or running off the end of the code) reset the 48K; the ROM cleared RAM and is in BASIC',
+        'A jump or return to 0x0000 (a corrupt stack, running off the end of the code, or a ROM routine ' +
+        'such as `rst 0x10` that needs the system variables: the toolkit starts a program without the ' +
+        "ROM's start-up, so they are zero) reset the 48K; the ROM cleared RAM and is in BASIC",
     };
   }
 
@@ -276,7 +278,10 @@ export function probableHang(machine: Machine, org: number, stats: HangStats): H
       pc,
       detail: `PC has been resident in ROM (< 0x4000) for ${stats.romFrames} frames`,
       confidence: 'probable',
-      likelyCause: 'Execution left the program into ROM and never returned',
+      likelyCause:
+        'Execution left the program into ROM and never returned: a wild JP/RET, or a ROM routine that ' +
+        "needs the system variables (such as `rst 0x10` printing) — the toolkit starts a program " +
+        "without the ROM's start-up, so they are zero",
     };
   }
 

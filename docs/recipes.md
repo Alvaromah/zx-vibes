@@ -172,7 +172,7 @@ carries a `kind` so you know *why*:
 | ------------- | ------- |
 | `di-halt`     | `HALT` with interrupts disabled — nothing will ever wake it. |
 | `tight-loop`  | Spinning on a small PC range with no forward progress. |
-| `pc-in-rom`   | Execution left the program into ROM and never came back (a wild `JP`/`RET` — check the stack). A busy IM1 game is not flagged: the whole frame must run in ROM. |
+| `pc-in-rom`   | Execution left the program into ROM and never came back (a wild `JP`/`RET` — check the stack; or a ROM routine such as `rst 0x10` that needs the system variables, which are zero because `zxs` starts your program without the ROM's start-up). A busy IM1 game is not flagged: the whole frame must run in ROM. |
 | `sp-corrupt`  | The stack pointer walked into an implausible place. |
 | `rom-error`   | Dropped into a ROM error routine. |
 

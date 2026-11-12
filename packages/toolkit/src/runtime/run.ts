@@ -93,7 +93,14 @@ export interface RunAudio {
 /** How the run's machine was sourced (CLI-PROD-OUT-RUN-001 `boot`). */
 export interface RunBoot {
   source: 'bin' | 'z80' | 'tap' | 'build' | 'state';
-  org: number;
+  /**
+   * The program's load origin, for a source that has one (`build`, `bin`, `tap`;
+   * cli.md CLI-PROD-CONV-BOOT-001). A snapshot or a resumed session has no known
+   * origin and reports `pc` instead.
+   */
+  org?: number;
+  /** `z80`/`state`: the PC the machine started this command at. */
+  pc?: number;
   file?: string;
   entry?: string;
   /** Snapshot version (1/2/3) when the source is a `.z80`. */
@@ -709,13 +716,15 @@ function resolveRunMachine(
   // Opt-in persistent session (`--state`): resume the saved machine instead of a
   // fresh boot (RT-PROD-SESSION-001/002). The resumed PC is wherever the session
   // paused; `org` is the RAM floor for the hang heuristics (a resumed program lives
-  // in RAM — a PC in ROM is still suspicious).
+  // in RAM — a PC in ROM is still suspicious). That floor is internal: the session's
+  // origin is unknown, so `boot` reports where it resumed (CLI-PROD-CONV-BOOT-001),
+  // exactly as `regs`/`mem --state` do.
   if (options.state !== undefined) {
     const session = loadSession(options.state, cwd, 'run');
     return {
       machine: session.machine,
       org: RAM_BASE,
-      boot: { source: 'state', org: RAM_BASE, file: options.state },
+      boot: { source: 'state', pc: session.machine.registers.pc & 0xffff, file: options.state },
       border: session.border,
     };
   }

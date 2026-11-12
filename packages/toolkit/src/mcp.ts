@@ -358,15 +358,18 @@ function toolRun(session: McpSession, args: ToolArgs): CallToolResult {
     session.machine = bootFreshMachine();
     session.border = DEFAULT_BORDER;
     hangOrg = RAM_BASE;
-    boot = { source: 'state', org: RAM_BASE };
+    boot = { source: 'state' };
   } else {
     // Otherwise execution continues from the current live state — past a breakpoint
     // or `untilPc` it stopped at (continue semantics), with its border carried over.
     hangOrg = RAM_BASE;
-    boot = { source: 'state', org: RAM_BASE };
+    boot = { source: 'state' };
     resume = args.pc === undefined;
   }
   if (args.pc !== undefined) session.machine.registers.pc = parseAddress(args.pc as string, 'run') & 0xffff;
+  // The live session has no known origin (RAM_BASE is only the hang floor): report the
+  // PC this run starts at, as the CLI does for `run --state` (CLI-PROD-CONV-BOOT-001).
+  if (boot.source === 'state') boot = { ...boot, pc: session.machine.registers.pc & 0xffff };
 
   // The persistent break/watch store feeds every run (additions persist for
   // subsequent runs — MCP-PROD-TOOL-DEBUG-002). Read watchpoints cannot be stored
@@ -551,6 +554,7 @@ function toolKeys(session: McpSession, args: ToolArgs): CallToolResult {
 
   const extra = (args.extraFrames as number | undefined) ?? 10;
   const scheduleEnd = parseKeySchedule(spec).reduce((end, e) => Math.max(end, e.frame + e.hold), 0);
+  const startPc = session.machine.registers.pc & 0xffff;
   const result = runProgram(session.machine, RAM_BASE, {
     keys: spec,
     frames: scheduleEnd + extra,
@@ -559,7 +563,7 @@ function toolKeys(session: McpSession, args: ToolArgs): CallToolResult {
   });
   session.machine = result.machine;
   session.border = result.io.borderColor();
-  return jsonResult(buildRunEnvelope(result, { source: 'state', org: RAM_BASE }));
+  return jsonResult(buildRunEnvelope(result, { source: 'state', pc: startPc }));
 }
 
 /** `zx_state` (MCP-PROD-TOOL-STATE-001, MCP-PROD-RULE-INTEROP-001). */

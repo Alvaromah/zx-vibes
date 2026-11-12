@@ -1966,3 +1966,17 @@ things in `run` and `regs`, and screenshots without the border.
    list` shows a project server as pending until it is approved in an interactive
    session, and `codex mcp list` did not show the project's `.codex/config.toml` (an
    untrusted project); both are approvals for the user to give.
+5. **One meaning for `boot`, and the entry hint in `pc-in-rom`** (FEEDBACK 11 code half,
+   13). New claim CLI-PROD-CONV-BOOT-001: `boot.org` is a program's load origin and
+   appears only for `build`, `bin` and a CODE `tap`; a `--state` session, a `.z80`
+   snapshot, a fresh boot and the MCP hot session report `boot.pc` (the PC the command
+   starts at) instead; CLI-PROD-OUT-RUN-001 points at that shape. `run --state` used to
+   report the hang watchdog's RAM floor (`RAM_BASE`) as `org`; the floor stays internal.
+   Both `pc-in-rom` verdicts in `runtime/hang.ts` now also name a ROM routine that needs
+   the system variables (`rst 0x10`), with the skill `debug-hangs` and
+   `docs/recipes.md`. Fixture `dna/conformance/cli/boot-descriptor.json` (coverage row
+   CLI-BOOT-STATE-001; `run`, `regs` and `mem` on one session, red on the previous
+   build: `org` 16384 vs 0) and `tests/boot-descriptor.test.ts` (the absence of `org`,
+   the fresh boot, the `rst 0x10` hint); the `.z80` case in `tests/run.test.ts` now
+   expects `pc`. *Changed output:* a script that read `boot.org` for those sources must
+   read `boot.pc`.
