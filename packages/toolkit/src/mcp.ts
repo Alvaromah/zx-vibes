@@ -644,7 +644,8 @@ export interface McpTool {
   name: (typeof MCP_TOOL_NAMES)[number];
   title: string;
   description: string;
-  inputSchema: z.ZodRawShape;
+  // Classic zod schemas (not zod 4's core `ZodRawShape`), so each field keeps `.safeParse`.
+  inputSchema: Record<string, z.ZodType>;
   handler: (args: ToolArgs) => CallToolResult;
 }
 
