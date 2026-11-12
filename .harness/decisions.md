@@ -1938,3 +1938,31 @@ things in `run` and `regs`, and screenshots without the border.
    `tests/human-output.test.ts`. *Known divergence:* the MCP `zx_run` tool keeps
    extending a `frames` budget to the end of its `keys` plan, as before; only the CLI
    flag changed meaning. No document or test used `--frames N` with a plan past N.
+4. **MCP registration for project-local installs** (FEEDBACK 5; D2). `setup` registers
+   the install that runs it (`setup/mcp-launch.ts`): a toolkit inside, or linked from,
+   the `node_modules` of the project or of a parent that `npx` would search gets
+   `node <relative path to zxs-mcp.js>` (the `@zx-vibes/toolkit` bin, else the
+   umbrella's, else the running toolkit's own path), in `.mcp.json` and the Codex
+   TOML (`command` + `args`; Codex's global config gets the path absolute). Anything
+   else keeps the bare `zxs-mcp`. The envelope reports `mcpCommand`; a kept entry that
+   starts something else puts the `--force` command first in `next`. `doctor` gained
+   `mcp-command`: each registration must resolve on the PATH a client sees (without
+   npx's `node_modules/.bin`), and a `node` script must exist; no registration passes.
+   PATH lookup and the toolkit-root walk moved to `util/install-paths.ts`, shared by
+   both. Claims: new CLI-PROD-SETUP-002 and CLI-PROD-DOCTOR-003; CLI-PROD-DOCTOR-001
+   amended. Pinned by `tests/mcp-launch.test.ts` (npm, pnpm store, umbrella-only,
+   workspace parent, linked and global layouts; setup for both agents; the doctor
+   check; a spawn of the registered command with PATH stripped of `node_modules/.bin`,
+   which lists the seven tools). *Rejected:* `npx --no-install zxs-mcp` — spawned
+   without a shell, as clients do, it fails with ENOENT on Windows (`npx` is a `.cmd`),
+   exactly like the bare `zxs-mcp`; an absolute path in `.mcp.json`, which is usually
+   committed. *Verified on Windows 11, 2026-11-12,* in a project installed from the
+   six tarballs with one `npm install` (lockfile: six `file:` entries, none from the
+   registry): `npx zxs setup` for both agents wrote the `node` launch, `npx zxs doctor`
+   passed 5/5, Claude Code 2.1.322 (`claude -p --mcp-config .mcp.json
+   --strict-mcp-config`) reported `zx-vibes` connected with the seven tools, and
+   codex-cli 0.167.2 (`codex exec` with the same command/args as `-c` overrides) listed
+   the seven tools. *Not run:* the clients' own project-config paths — `claude mcp
+   list` shows a project server as pending until it is approved in an interactive
+   session, and `codex mcp list` did not show the project's `.codex/config.toml` (an
+   untrusted project); both are approvals for the user to give.

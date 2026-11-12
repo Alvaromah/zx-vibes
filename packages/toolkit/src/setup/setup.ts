@@ -4,7 +4,9 @@
 // `zxs setup --agent <codex|claude>` installs, into the current project (or, for
 // Codex with `--write-global`, the user's global Codex config):
 //   - the thin MCP snippet that registers the `zxs-mcp` stdio server under the MCP
-//     name `zx-vibes` (mcp-tools.md MCP-PROD-SERVER-001/002), and
+//     name `zx-vibes` (mcp-tools.md MCP-PROD-SERVER-001/002) — the bare bin for a
+//     global install, `node <path to zxs-mcp.js>` for a project-local one, whose bins
+//     a client's PATH lacks (CLI-PROD-SETUP-002, ./mcp-launch.ts), and
 //   - the native skills registration carrying the minimal available knowledge — the
 //     agent playbook (KP-PROD-CONTENT-PLAYBOOK-001), the same material `new`/`init`
 //     emit (shared `PLAYBOOK` from the scaffold service).
@@ -30,15 +32,25 @@ import type { Command } from 'commander';
 import { successEnvelope, userError, type SuccessEnvelope } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
 import { PLAYBOOK } from '../scaffold/scaffold.js';
+import {
+  CODEX_TABLE_HEADER,
+  MCP_SERVER_BIN,
+  MCP_SERVER_NAME as MCP_NAME,
+  formatLaunch,
+  mcpLaunchFor,
+  readMcpRegistrations,
+  runningToolkitRoot,
+  type McpLaunch,
+} from './mcp-launch.js';
 import { PACK_FILES } from './pack-content.js';
 
 /** The supported agents (CLI-PROD-SETUP-001 `--agent <codex|claude>`). */
 export type SetupAgent = 'claude' | 'codex';
 
 /** The MCP server name the snippet registers (mcp-tools.md MCP-PROD-SERVER-001). */
-export const MCP_SERVER_NAME = 'zx-vibes';
-/** The bin that starts the stdio MCP server (cli.md CLI-PROD-PKG-003). */
-export const MCP_SERVER_COMMAND = 'zxs-mcp';
+export const MCP_SERVER_NAME = MCP_NAME;
+/** The bin that starts the stdio MCP server for a global install (cli.md CLI-PROD-PKG-003). */
+export const MCP_SERVER_COMMAND = MCP_SERVER_BIN;
 /** The native skill installed by `setup` (Claude Code `/skills`, KP-PROD-PKG-001). */
 export const SKILL_NAME = 'zx-vibes';
 
@@ -52,9 +64,11 @@ export const DEFERRED_PACK_CONTENT: ReadonlyArray<string> = [
   'examples/ — the worked tutorial + pong-by-agent proof (KP-PROD-CONTENT-EXAMPLES-001)',
 ];
 
-/** The Claude Code project MCP registration body (`.mcp.json`). */
-function mcpServerEntry(): { command: string } {
-  return { command: MCP_SERVER_COMMAND };
+/** The Claude Code project MCP registration body (`.mcp.json`) for a launch. */
+function mcpServerEntry(launch: McpLaunch): McpLaunch {
+  return launch.args === undefined
+    ? { command: launch.command }
+    : { command: launch.command, args: [...launch.args] };
 }
 
 /** The pack pointer appended to the playbook wherever the pack is installed beside it. */
@@ -90,12 +104,18 @@ function skillMarkdown(): string {
   ].join('\n');
 }
 
-/** The Codex config snippet (TOML) that registers the MCP server. */
-function codexConfigToml(): string {
+/** A TOML basic string (JSON's escaping is valid TOML for these values). */
+function tomlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+/** The Codex config snippet (TOML) that registers the MCP server with a launch. */
+function codexConfigToml(launch: McpLaunch): string {
   return [
     '# zx-vibes MCP server — registered by `zxs setup --agent codex`.',
     `[mcp_servers.${MCP_SERVER_NAME}]`,
-    `command = "${MCP_SERVER_COMMAND}"`,
+    `command = ${tomlString(launch.command)}`,
+    ...(launch.args === undefined ? [] : [`args = [${launch.args.map(tomlString).join(', ')}]`]),
     '',
   ].join('\n');
 }
@@ -104,6 +124,11 @@ export type SetupEnvelope = SuccessEnvelope<{
   agent: SetupAgent;
   /** The registered MCP server name (`zx-vibes`). */
   mcpServer: string;
+  /**
+   * The command line this install registers to start the server (CLI-PROD-SETUP-002):
+   * `zxs-mcp`, or `node <path to zxs-mcp.js>` for a project-local install.
+   */
+  mcpCommand: string;
   /** Whether the Codex global config was targeted (`--write-global`). */
   global: boolean;
   /** Paths newly written or merged (portable, sorted). */
@@ -127,6 +152,11 @@ export interface SetupOptions {
   writeGlobal?: boolean | undefined;
   /** Home dir for the global Codex config (tests redirect it away from the real HOME). */
   home?: string | undefined;
+  /**
+   * The toolkit package root that decides the MCP launch (default: the running
+   * toolkit's). Tests point it into a fake `node_modules` to simulate a local install.
+   */
+  toolkitRoot?: string | undefined;
 }
 
 /** Validate + normalize the `--agent` flag (an unknown / missing agent is a USER_ERROR). */
@@ -167,31 +197,54 @@ export function runSetup(options: SetupOptions): SetupEnvelope {
   const force = options.force ?? false;
   const writeGlobal = (options.writeGlobal ?? false) && agent === 'codex';
   const home = resolve(options.home ?? homedir());
+  // Start the install that runs `setup` (CLI-PROD-SETUP-002). The global Codex config
+  // serves every project, so a local install is registered there by absolute path.
+  const launch = mcpLaunchFor(cwd, options.toolkitRoot ?? runningToolkitRoot(), undefined, {
+    absolute: writeGlobal,
+  });
 
-  const targets: Target[] = agent === 'claude' ? claudeTargets(cwd) : codexTargets(cwd, home, writeGlobal);
+  const targets: Target[] =
+    agent === 'claude' ? claudeTargets(cwd) : codexTargets(cwd, home, writeGlobal, launch);
 
   const installed: string[] = [];
   const skipped: string[] = [];
   for (const target of targets) {
-    const outcome = applyTarget(target, force);
+    const outcome = applyTarget(target, force, launch);
     const label = portablePath(target.abs, cwd);
     (outcome === 'skipped' ? skipped : installed).push(label);
   }
   installed.sort();
   skipped.sort();
 
+  const next =
+    agent === 'claude'
+      ? ['zxs verify --json', 'restart your agent to load the zx-vibes MCP server + skill']
+      : ['zxs verify --json', 'restart Codex to load the zx-vibes MCP server'];
+  // A kept registration that starts something else (e.g. the bare `zxs-mcp` an older
+  // setup wrote for what is now a local install) is not replaced without --force: say so.
+  const stale = readMcpRegistrations(cwd).find(
+    (registration) =>
+      registration.agent === agent &&
+      skipped.includes(registration.file) &&
+      (registration.launch === undefined || formatLaunch(registration.launch) !== formatLaunch(launch)),
+  );
+  if (stale !== undefined) {
+    const current = stale.launch === undefined ? 'an unreadable command' : `\`${formatLaunch(stale.launch)}\``;
+    next.unshift(
+      `zxs setup --agent ${agent} --force  (${stale.file} starts ${MCP_SERVER_NAME} with ${current}; this install needs \`${formatLaunch(launch)}\`)`,
+    );
+  }
+
   return successEnvelope('setup', {
     agent,
     mcpServer: MCP_SERVER_NAME,
+    mcpCommand: formatLaunch(launch),
     global: writeGlobal,
     installed,
     skipped,
     deferred: [...DEFERRED_PACK_CONTENT],
     force,
-    next:
-      agent === 'claude'
-        ? ['zxs verify --json', 'restart your agent to load the zx-vibes MCP server + skill']
-        : ['zxs verify --json', 'restart Codex to load the zx-vibes MCP server'],
+    next,
   });
 }
 
@@ -217,11 +270,11 @@ function claudeTargets(cwd: string): Target[] {
 }
 
 /** The Codex target set: the config TOML (project or global) + the playbook + the pack. */
-function codexTargets(cwd: string, home: string, writeGlobal: boolean): Target[] {
+function codexTargets(cwd: string, home: string, writeGlobal: boolean, launch: McpLaunch): Target[] {
   const configAbs = writeGlobal
     ? resolve(home, '.codex', 'config.toml')
     : resolve(cwd, '.codex', 'config.toml');
-  const targets: Target[] = [{ abs: configAbs, content: codexConfigToml(), mode: 'merge-toml' }];
+  const targets: Target[] = [{ abs: configAbs, content: codexConfigToml(launch), mode: 'merge-toml' }];
   // The playbook (the minimal available skill knowledge) always lands in the project,
   // with the pack beside the Codex config and the playbook pointing at it.
   const packRoot = resolve(cwd, '.codex', SKILL_NAME);
@@ -240,8 +293,8 @@ function codexTargets(cwd: string, home: string, writeGlobal: boolean): Target[]
 }
 
 /** Apply one target; returns whether it was `installed` (written/merged) or `skipped`. */
-function applyTarget(target: Target, force: boolean): 'installed' | 'skipped' {
-  if (target.mode === 'merge-mcp') return mergeMcpRegistration(target.abs, force);
+function applyTarget(target: Target, force: boolean, launch: McpLaunch): 'installed' | 'skipped' {
+  if (target.mode === 'merge-mcp') return mergeMcpRegistration(target.abs, force, launch);
   if (target.mode === 'merge-toml') return mergeCodexToml(target.abs, target.content, force);
   if (target.mode === 'merge-agents') return mergeAgentsPlaybook(target, force);
   if (!force && existsSync(target.abs)) return 'skipped';
@@ -268,11 +321,6 @@ function mergeAgentsPlaybook(target: Target, force: boolean): 'installed' | 'ski
   writeFileSync(target.abs, `${text}${separator}${appendix}${eol}`, 'utf8');
   return 'installed';
 }
-
-/** The `[mcp_servers.zx-vibes]` header, bare or quoted. */
-const CODEX_TABLE_HEADER = new RegExp(
-  `^\\s*\\[\\s*mcp_servers\\.(?:${MCP_SERVER_NAME}|"${MCP_SERVER_NAME}")\\s*\\]\\s*(?:#.*)?$`,
-);
 
 /** `zx-vibes` used as a TOML key (`zx-vibes = …`, `zx-vibes.command = …`), bare or quoted. */
 const CODEX_SERVER_KEY = new RegExp(
@@ -321,8 +369,8 @@ function mergeCodexToml(abs: string, snippet: string, force: boolean): 'installe
  * unless `--force`. An existing-but-unparseable file is left untouched (skipped) unless
  * `--force` (never silently clobbered).
  */
-function mergeMcpRegistration(abs: string, force: boolean): 'installed' | 'skipped' {
-  const fresh = { mcpServers: { [MCP_SERVER_NAME]: mcpServerEntry() } };
+function mergeMcpRegistration(abs: string, force: boolean, launch: McpLaunch): 'installed' | 'skipped' {
+  const fresh = { mcpServers: { [MCP_SERVER_NAME]: mcpServerEntry(launch) } };
   if (!existsSync(abs)) {
     writeFileTo(abs, `${JSON.stringify(fresh, null, 2)}\n`);
     return 'installed';
@@ -347,7 +395,7 @@ function mergeMcpRegistration(abs: string, force: boolean): 'installed' | 'skipp
       ? (serversValue as Record<string, unknown>)
       : {};
   if (MCP_SERVER_NAME in servers && !force) return 'skipped';
-  servers[MCP_SERVER_NAME] = mcpServerEntry();
+  servers[MCP_SERVER_NAME] = mcpServerEntry(launch);
   parsed.mcpServers = servers;
   writeFileTo(abs, `${JSON.stringify(parsed, null, 2)}\n`);
   return 'installed';

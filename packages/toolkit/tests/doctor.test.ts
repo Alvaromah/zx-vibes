@@ -49,9 +49,10 @@ describe('runDoctor — healthy environment (CLI-PROD-DOCTOR-001 → exit 0)', (
     expect(env.stage).toBe('doctor');
     expect(Array.isArray(env.checks)).toBe(true);
     expect(env.checks.every((c) => c.ok)).toBe(true);
-    // The default config checks node + asm + ROM + zxs PATH (no sjasmplus).
+    // The default config checks node + asm + ROM + zxs PATH + the MCP registration
+    // (none here, which passes) — no sjasmplus.
     const names = env.checks.map((c) => c.name).sort();
-    expect(names).toEqual(['asm', 'node', 'rom', 'zxs-path']);
+    expect(names).toEqual(['asm', 'mcp-command', 'node', 'rom', 'zxs-path']);
     for (const c of env.checks) {
       expect(typeof c.name).toBe('string');
       expect(typeof c.detail).toBe('string');

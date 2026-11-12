@@ -265,6 +265,10 @@ Tips for testing a local clone:
   entry. An unreleased checkout can carry the same version number as the
   npm release, so `zxs --version` can't tell them apart, but the lockfile
   can. The bins live in `node_modules/.bin`, so run the CLI as `npx zxs`.
+  For the same reason `npx zxs setup` registers the MCP server as
+  `node node_modules/@zx-vibes/toolkit/bin/zxs-mcp.js`, which an agent can
+  start without your PATH, and `npx zxs doctor` checks that the registration
+  starts (a project set up by an older build needs `setup --force`).
 - Iterate on one package with `pnpm --filter @zx-vibes/toolkit test` (same
   for `asm`, `machine`, …).
 - The scaffold templates are generated from `starters/` — edit a starter,
