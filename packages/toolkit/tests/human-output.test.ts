@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCli } from '../src/cli.js';
+import { ASSERTION_REFERENCE } from '../src/test/assertions.js';
 
 let dir: string;
 beforeEach(() => {
@@ -108,5 +109,32 @@ describe('the observe payloads print whole', () => {
     expect(out).toMatch(/top:\n {2}8003 +x\d+ {2}HALT/);
     expect(out).toContain('last:');
     expect(out).toMatch(/profile: active [\d.]+% {2}HALT idle [\d.]+%/);
+  });
+});
+
+describe('lists a human reads item by item print one per line', () => {
+  it('test --list-assertions: the whole reference, one line per type', async () => {
+    const { code, out } = await human(['test', '--list-assertions']);
+    expect(code).toBe(0);
+    const [line, header, ...rows] = out.trimEnd().split('\n');
+    expect(line).toBe(`test: assertions=${ASSERTION_REFERENCE.length}`);
+    expect(header).toBe('assertions:');
+    expect(rows).toHaveLength(ASSERTION_REFERENCE.length);
+    ASSERTION_REFERENCE.forEach((doc, i) => {
+      expect(rows[i]!.startsWith(`  ${doc.type} `)).toBe(true);
+      expect(rows[i]).toContain(`{ ${doc.fields.join(', ')} }`);
+      expect(rows[i]).toContain(doc.description);
+    });
+    expect(out).toContain('frameBudget');
+    expect(out).toContain('{ maxOverrunFrames?, requireMeasured? }');
+  });
+
+  it('new: the next steps, not their count', async () => {
+    const { code, out } = await human(['new', 'pong']);
+    expect(code).toBe(0);
+    const lines = out.trimEnd().split('\n');
+    expect(lines[0]).toMatch(/^new: name=pong dir=pong template=game files=\d+$/);
+    expect(lines[0]).not.toContain('next=');
+    expect(lines.slice(1)).toEqual(['next:', '  cd pong', '  zxs verify', '  zxs preview --watch']);
   });
 });

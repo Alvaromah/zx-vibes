@@ -1911,3 +1911,11 @@ things in `run` and `regs`, and screenshots without the border.
    free themselves after 256 frames; from then on a held key registers, decoded in
    keyword mode (`A` arrives in `LAST_K` as `0xE6`, `NEW`). Probes of 40 frames had
    suggested it never registers; 300- and 600-frame runs showed otherwise.
+2. **Human output prints the lists people read** (FEEDBACK 3, 4). `next` and `deferred`
+   string lists print one item per line under the summary line, and the
+   `test --list-assertions` reference prints as an aligned table (type, fields,
+   description), in `output/envelope.ts`. Wording stays incidental (CLI-PROD-FREE-001),
+   so no claim changed; ASSERT-PROD-LIST-001 already promised the reference. Pinned by
+   `tests/envelope.test.ts` (the two cases that pinned `next=2`/`next=1`) and
+   `tests/human-output.test.ts` (all 17 types on their own lines; `new` prints its
+   three steps).

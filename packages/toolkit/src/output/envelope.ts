@@ -221,16 +221,65 @@ function hex(value: number, digits: number): string {
 
 /**
  * Fields that carry a machine-readable payload an agent parses from `--json` but
- * a human never wants dumped inline: file manifests, per-item result arrays, the
- * `next` hint list. In human mode these are SUMMARIZED (a count) instead of
- * stringified — `zxs setup` otherwise prints 27 absolute paths on one line.
- * Wording is Incidental (CLI-PROD-FREE-001); `--json` is untouched.
+ * a human never wants dumped inline: file manifests, per-item result arrays. In
+ * human mode these are SUMMARIZED (a count) instead of stringified — `zxs setup`
+ * otherwise prints 27 absolute paths on one line. The exceptions a human does read
+ * item by item (`next`/`deferred` strings, the assertion reference) are printed as
+ * lines under the summary instead (see `formatHuman`). Wording is Incidental
+ * (CLI-PROD-FREE-001); `--json` is untouched.
  */
 const SUMMARIZED_FIELDS = new Set([
   'files', 'created', 'skipped', 'installed', 'deferred', 'removed',
   'artifacts', 'results', 'errors', 'warnings', 'next', 'checks', 'assertions',
   'symbols', 'top', 'last', 'entries', 'executed', 'routines', 'edges',
 ]);
+
+/**
+ * Short string lists a human reads as steps or notes rather than counts: the `next`
+ * commands `new`/`init`/`setup` suggest, and what `setup` deferred. Printed one item
+ * per line under the summary line (a count, `next=3`, hid the steps themselves).
+ */
+const LINE_LIST_FIELDS = new Set(['next', 'deferred']);
+
+/** A non-empty list of strings. */
+function isStringList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'string');
+}
+
+/** One entry of the `test --list-assertions` reference (recipes-and-assertions.md ASSERT-PROD-LIST-001). */
+interface AssertionReferenceEntry {
+  type: string;
+  fields: string[];
+  description: string;
+}
+
+/** A non-empty list of `{ type, fields, description }` reference entries. */
+function isAssertionReference(value: unknown): value is AssertionReferenceEntry[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => {
+      if (item === null || typeof item !== 'object') return false;
+      const entry = item as Partial<AssertionReferenceEntry>;
+      return (
+        typeof entry.type === 'string' &&
+        Array.isArray(entry.fields) &&
+        entry.fields.every((field) => typeof field === 'string') &&
+        typeof entry.description === 'string'
+      );
+    })
+  );
+}
+
+/** The assertion reference as one aligned line per type: `type  {fields}  description`. */
+function formatAssertionReference(entries: readonly AssertionReferenceEntry[]): string[] {
+  const typeWidth = Math.max(...entries.map((entry) => entry.type.length));
+  const shapes = entries.map((entry) => `{ ${entry.fields.join(', ')} }`);
+  const shapeWidth = Math.max(...shapes.map((shape) => shape.length));
+  return entries.map(
+    (entry, i) => `  ${entry.type.padEnd(typeWidth)}  ${shapes[i]!.padEnd(shapeWidth)}  ${entry.description}`,
+  );
+}
 
 /**
  * Summarize one bulk list. The KEY already names what is being counted, so the
@@ -279,6 +328,17 @@ function formatHuman(envelope: SuccessEnvelope): string {
     // `trace --profile`: the routine table is the answer, so print it as one.
     if (key === 'profile' && isProfile(value)) {
       blocks.push(...formatProfile(value));
+      continue;
+    }
+    // `next` steps and `deferred` notes are read, not counted: one per line.
+    if (LINE_LIST_FIELDS.has(key) && isStringList(value)) {
+      blocks.push(`${key}:`, ...value.map((item) => `  ${item}`));
+      continue;
+    }
+    // `test --list-assertions`: the reference is the answer, so print it as a table.
+    if (key === 'assertions' && isAssertionReference(value)) {
+      parts.push(`${key}=${value.length}`);
+      blocks.push(`${key}:`, ...formatAssertionReference(value));
       continue;
     }
     if (Array.isArray(value) && SUMMARIZED_FIELDS.has(key)) {
