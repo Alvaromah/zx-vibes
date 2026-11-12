@@ -1980,3 +1980,18 @@ things in `run` and `regs`, and screenshots without the border.
    the fresh boot, the `rst 0x10` hint); the `.z80` case in `tests/run.test.ts` now
    expects `pc`. *Changed output:* a script that read `boot.org` for those sources must
    read `boot.pc`.
+6. **Border in screenshots** (FEEDBACK 10; D4). `HostIo` keeps the current frame's
+   border-changing writes (`[t, colour, …]` from the frame's raster T-state 0, stamped
+   with the clock it already kept for beeper edges) and its carry-in colour; the run
+   loop opens each frame with `beginFrame(tStatesTotal - clock)`. `run --screenshot
+   <file> --border` and `verify --border` compose the 320×240 frame through the one
+   encoder with the preview's own `border-frame.ts` (`borderRowsFromLog`,
+   `fillBorderRows`, `PALETTE_RGB`). New claim CLI-PROD-RUN-008. Pinned by
+   `tests/border-screenshot.test.ts`, which reproduces RASTER-SAVE-PP-001 headlessly with
+   the real ROM: a program that calls SA-BYTES (0x04C2) shows exactly red and cyan in the
+   border after 20 frames (pilot tone) and exactly blue and yellow after 150 (data);
+   plus the screen's placement at (32, 24), the default 256×192 size and the
+   `--border`-without-`--screenshot` error. Scope as decided: `run` and `verify` only.
+   `screen --state` has no frame log (a `.zxstate` keeps only the final border colour),
+   so it gets no `--border`; no assertion type or MCP tool changed (17 and 7 stay
+   pinned).

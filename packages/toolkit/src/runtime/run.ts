@@ -448,6 +448,9 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     let haltResumed = false;
     let frameIdleTStates = 0;
     const frameStartTStates = machine.tStatesTotal;
+    // The raster's T-state 0 for this frame (the clock may already be a few T-states in,
+    // carried over from the last frame's final instruction): the border log's origin.
+    io.beginFrame(machine.tStatesTotal - machine.clock);
     frameSawRamPc = false;
     frameInterrupted = false;
     currentFrame = f + 1;
@@ -695,6 +698,8 @@ interface RunCliOptions {
   keys?: string;
   joy?: string;
   screenshot?: string;
+  /** `--border`: the screenshot is the 320×240 bordered frame (CLI-PROD-RUN-008). */
+  border?: boolean;
   scale?: string;
   wav?: string;
   state?: string;
@@ -780,6 +785,11 @@ export function runCommand(context: CommandContext): RunEnvelope {
     throw envError(READ_WATCH_UNAVAILABLE, 'run');
   }
 
+  // `--border` frames the screenshot; on its own it would silently do nothing.
+  if (options.border === true && options.screenshot === undefined) {
+    throw userError('--border needs --screenshot <file> (it adds the border to the screenshot)', 'run');
+  }
+
   const cwd = process.cwd();
   const { machine, org, boot, border } = resolveRunMachine(options, cwd);
 
@@ -829,7 +839,12 @@ export function runCommand(context: CommandContext): RunEnvelope {
   // screenshot encoder (CLI-PROD-RULE-SCREENSHOT-001); the WAV renders the run's beeper edge
   // stream per beeper-output.md (BEEPER-PCM-*). Both are deterministic functions of the run.
   if (options.screenshot !== undefined) {
-    captureScreenshot(result.machine, resolve(cwd, options.screenshot), parseScale(options.scale));
+    captureScreenshot(
+      result.machine,
+      resolve(cwd, options.screenshot),
+      parseScale(options.scale),
+      options.border === true ? result.io.frameBorder() : undefined,
+    );
   }
   if (options.wav !== undefined) {
     const startT = result.machine.tStatesTotal - result.tstatesRun;
@@ -905,6 +920,10 @@ export function configureRunCommand(command: Command): void {
     .option('--keys <spec>', 'scheduled keyboard input, e.g. "60:O*30,120:SPACE*5"')
     .option('--joy <spec>', 'scheduled Kempston input, e.g. "60:R*30,90:RF*10"')
     .option('--screenshot <file>', 'capture the post-run screen to a PNG (the one encoder)')
+    .option(
+      '--border',
+      'make --screenshot the 320x240 frame with the border, banded as the last frame drew it',
+    )
     .option('--scale <n>', 'integer upscale 1..4 for --screenshot (default 1)')
     .option('--wav <file>', 'capture the run beeper audio to a WAV (mono 16-bit PCM)')
     .option('--state <file>', 'resume + persist an opt-in persistent session (.zxstate)')

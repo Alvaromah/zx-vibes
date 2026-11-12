@@ -31,6 +31,16 @@ export interface BeeperEdge {
 /** Border colour reported when no port-`0xFE` write set it during the run (conventional white boot border). */
 export const DEFAULT_BORDER = 7;
 
+/**
+ * One frame's border, as the raster renderer (preview/border-frame.ts) takes it: the
+ * colour in force when the frame began, and its border-changing writes as a flat
+ * `[t, colour, …]` with `t` the T-state offset from the frame's start (raster-border.md).
+ */
+export interface FrameBorder {
+  carryIn: number;
+  log: number[];
+}
+
 export class HostIo implements MachineIo {
   // --- scheduled input (set per frame by the run loop) ---------------------
   private pressedKeys: ReadonlySet<string> = new Set();
@@ -52,6 +62,13 @@ export class HostIo implements MachineIo {
   portFEWrites = 0;
   /** Chronological beeper edge stream (consumed by `run --wav`, beeper-output.md). */
   readonly edges: BeeperEdge[] = [];
+  // --- the current frame's border (consumed by `run --screenshot --border`) ---
+  /** Machine clock (total T-states) at which the current frame began. */
+  private frameStartT = 0;
+  /** The border colour in force when the current frame began. */
+  private frameCarryIn: number = DEFAULT_BORDER;
+  /** This frame's border-changing writes, `[t, colour, …]` with `t` from the frame start. */
+  private readonly frameBorderLog: number[] = [];
 
   /**
    * @param border the border colour already in effect (a resumed session's or a
@@ -76,6 +93,21 @@ export class HostIo implements MachineIo {
   /** The border colour in effect (the cheap-eyes scalar; defaults when never written). */
   borderColor(): number {
     return this.border ?? DEFAULT_BORDER;
+  }
+
+  /**
+   * Start a new frame's border log (called by the run loop at each frame): `frameStartT`
+   * is the machine clock (total T-states) at the frame's T-state 0.
+   */
+  beginFrame(frameStartT: number): void {
+    this.frameStartT = frameStartT;
+    this.frameCarryIn = this.borderColor();
+    this.frameBorderLog.length = 0;
+  }
+
+  /** The current (after a run: the last) frame's border, for the bordered screenshot. */
+  frameBorder(): FrameBorder {
+    return { carryIn: this.frameCarryIn, log: [...this.frameBorderLog] };
   }
 
   /** The final speaker level (0/1) at end of run. */
@@ -115,8 +147,10 @@ export class HostIo implements MachineIo {
     this.portFEWrites += 1;
     const byte = value & 0xff;
 
-    // Border colour (b0–b2): track the running colour; first write opens the span.
+    // Border colour (b0–b2): track the running colour; first write opens the span. A
+    // change is also logged against the frame clock for the raster (border bands).
     const colour = byte & 0x07;
+    if (colour !== this.borderColor()) this.frameBorderLog.push(this.clockT - this.frameStartT, colour);
     if (this.border === null || colour !== this.border) this.border = colour;
 
     // Beeper (b4): count an edge only when the speaker level changes; the EAR-in idle

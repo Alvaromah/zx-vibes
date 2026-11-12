@@ -54,6 +54,12 @@ a breakpoint mid-draw. Check `frameBudget.overrunFrames` and
 `worstFrame.busyTStates` before chasing a render bug; `haltSynced: true` alone is
 only a majority cadence signal and can coexist with intermittent missed frames.
 
+Screenshots show the 256×192 screen only. To see the border too (raster stripes,
+the bands a tape `SAVE` paints), add `--border` to `run --screenshot` or `verify`:
+the PNG becomes the 320×240 frame, each row in the border colour its raster line
+started with during the last frame, as the preview player draws it. Keep baselines
+for `--diff`/`screenDiff` without it.
+
 ## Visual regression
 
 ```
