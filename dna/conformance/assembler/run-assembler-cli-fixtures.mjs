@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createDeterministicEnv } from "../determinism.mjs";
+import { ensurePackageBuilt } from "../package-build.mjs";
 import { normalizeByProfile } from "../normalization.mjs";
 
 const thisDir = path.dirname(fileURLToPath(import.meta.url));
@@ -118,9 +118,15 @@ function runProcess(command, args, options = {}) {
   };
 }
 
-async function pathExists(candidate) {
+/**
+ * Whether the command's executable exists. A bare name such as `node` is looked up
+ * on PATH by spawnSync, which reports ENOENT itself, so only a path is checked; and
+ * with stat(), not by reading the file (the default executable is the Node binary).
+ */
+async function executableExists(candidate) {
+  if (!path.isAbsolute(candidate) && !/[\\/]/.test(candidate)) return true;
   try {
-    await readFile(candidate);
+    await stat(candidate);
     return true;
   } catch (error) {
     if (error?.code === "ENOENT") {
@@ -131,33 +137,14 @@ async function pathExists(candidate) {
 }
 
 function ensureDefaultCommand(root, skipBuild) {
-  const cliPath = path.join(root, "packages", "asm", "dist", "cli.js");
-  if (!skipBuild) {
-    const build = runProcess(
-      "corepack",
-      ["pnpm", "--filter", "@zx-vibes/asm", "run", "build"],
-      {
-        cwd: root,
-        shell: true,
-      },
-    );
-    if (build.status !== 0 || build.error) {
-      throw new Error(
-        [
-          "failed to build @zx-vibes/asm before CLI conformance",
-          build.error?.message,
-          build.stdout,
-          build.stderr,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      );
-    }
-  }
-  if (!existsSync(cliPath)) {
-    throw new Error(`built zxasm CLI does not exist: ${cliPath}`);
-  }
-  return [process.execPath, cliPath];
+  return [process.execPath, ensurePackageBuilt({
+    root,
+    packageDir: path.join("packages", "asm"),
+    packageName: "@zx-vibes/asm",
+    artifact: path.join("dist", "cli.js"),
+    skipBuild,
+    label: "CLI conformance",
+  })];
 }
 
 async function writeFixtureFiles(files, tempDir) {
@@ -228,7 +215,7 @@ export async function runAssemblerCliFixtures({
   const errors = [];
   let caseCount = 0;
 
-  assert(await pathExists(executable), `zxasm executable does not exist: ${executable}`);
+  assert(await executableExists(executable), `zxasm executable does not exist: ${executable}`);
 
   for (const fixture of fixtureObjects) {
     if (fixture.input?.kind !== "assembler-cli") {

@@ -1,7 +1,9 @@
 /**
- * Table-driven Z80 disassembler using the algebraic x/y/z opcode decomposition
- * (per the canonical z80.info decoding guide). Output is sjasmplus-compatible
- * so the round-trip test (assemble → disassemble → reassemble) can verify it.
+ * Hand-coded Z80 disassembler using the algebraic x/y/z opcode decomposition and its
+ * small register/condition/ALU name tables (per the canonical z80.info decoding
+ * guide). It does not read the generated opcode table; the round-trip gate
+ * (assemble → disassemble → reassemble, ASM-ROUNDTRIP-001) keeps the two in step.
+ * Output is sjasmplus-compatible so that gate can verify it.
  */
 
 export interface DisasmLine {
@@ -62,6 +64,14 @@ export function disassembleOne(read: ReadFn, addr: number): DisasmLine {
   while ((op === 0xdd || op === 0xfd) && guard++ < 3) {
     ix = op === 0xdd ? 'IX' : 'IY';
     op = next();
+  }
+  // Four or more chained DD/FD prefixes: the guard expired with `op` still a prefix,
+  // which decodeMain would read as `CALL nn` (DD DD DD DD 00 00 -> "CALL 0x0000").
+  // Emit the first prefix as a one-byte item instead (the CPU treats a prefix that
+  // is followed by another prefix as a no-op); decoding resumes at the next byte.
+  if (op === 0xdd || op === 0xfd) {
+    const first = bytes[0]!;
+    return { addr, bytes: [first], text: `DB ${h8(first)}` };
   }
 
   let text: string;

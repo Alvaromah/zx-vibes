@@ -9,6 +9,10 @@
         "path": "wrap.bin",
         "encoding": "hex",
         "data": "013412"
+      },
+      {
+        "path": "bad-label.asm",
+        "data": "    ORG 0x8000\n    DISPLAY \"probe\"\n    call draw_sprtie\ndraw_sprite:\n    ret\n"
       }
     ],
     "cases": [
@@ -43,6 +47,10 @@
       {
         "name": "bad-count",
         "args": ["disasm", "<tmp>/wrap.bin", "--count", "0"]
+      },
+      {
+        "name": "assemble-failure-shows-hint-and-warnings",
+        "args": ["assemble", "<tmp>/bad-label.asm", "--out-dir", "<tmp>/build"]
       }
     ]
   },
@@ -116,6 +124,16 @@
         "name": "bad-count",
         "status": 1,
         "stderrContains": ["Invalid instruction count: '0' must be a positive integer"]
+      },
+      {
+        "name": "assemble-failure-shows-hint-and-warnings",
+        "status": 1,
+        "stdoutExact": "",
+        "stderrContains": [
+          "warning: DISPLAY: probe",
+          "error: Label not found: draw_sprtie",
+          "  hint: Did you mean 'draw_sprite'?"
+        ]
       }
     ]
   },

@@ -2,6 +2,8 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -76,6 +78,14 @@ interface SourceLine {
   line: number;
   text: string;
   moduleScope?: string | undefined;
+  /** For a line produced by a macro expansion: the invocations, innermost first. */
+  macroStack?: readonly MacroCall[] | undefined;
+}
+
+interface MacroCall {
+  name: string;
+  file: string;
+  line: number;
 }
 
 interface ParsedLine {
@@ -90,7 +100,13 @@ interface ParsedLine {
 }
 
 interface EvalContext {
+  /** Symbol values as expressions read them: 16-bit, so `X EQU -1` reads as 0xFFFF. */
   symbols: Map<string, number>;
+  /**
+   * The negative value a symbol was defined with (`X EQU -1`, `X EQU 1==1` -> -1), for
+   * the signed view only (see readsAsNegativeByte). Absent where no 8-bit check runs.
+   */
+  negativeSymbols?: Map<string, number>;
   currentGlobal: string;
   moduleScope: string;
   pc: number;
@@ -103,16 +119,24 @@ interface EvalContext {
   /** Sandbox config for INCBIN/INSERT; absent = unrestricted (default). */
   sandbox?: boolean;
   roots?: string[];
+  /**
+   * Set while evaluating during source loading, before any address exists: IF/ELSEIF
+   * conditions, DUP/REPT counts, and the load-time values of EQU and DEFINE that those
+   * read. `$` and code labels (and constants computed from them) are then reported as
+   * unusable instead of silently reading PC 0 or failing as "Label not found".
+   */
+  beforeLayout?: { directive: string; layoutSymbols: ReadonlySet<string> };
 }
 
-interface EmitContext extends EvalContext {
-  sourceMap: SourceMapEntry[];
+function beforeLayoutMessage(directive: string, uses: readonly string[]): string {
+  return `${directive} is evaluated before layout and can only use constants already known above it, not $ or code labels (${uses.join(', ')})`;
 }
 
 interface LayoutResult {
   origin: number;
   pc: number;
   symbols: Map<string, number>;
+  negativeSymbols: Map<string, number>;
   definitions: Map<string, SymbolDef>;
   lines: ParsedLine[];
   errors: Diagnostic[];
@@ -129,7 +153,13 @@ interface LoadContext {
   includePaths: string[];
   diagnostics: Diagnostic[];
   active: Set<string>;
+  /** Constants known while loading: defines, constant EQU/DEFL values, DUP counters. */
   symbols: Map<string, number>;
+  /**
+   * Symbols seen while loading that only get a value during layout: code labels, and
+   * EQU/DEFL/DEFINE values computed from `$` or code labels (see EvalContext.beforeLayout).
+   */
+  layoutSymbols: Set<string>;
   defineNames: Set<string>;
   defineValueNames: Set<string>;
   conditionals: ConditionalFrame[];
@@ -259,9 +289,13 @@ const INDEX_HALF_REGS = new Map<string, { code: number; prefix: 0xdd | 0xfd }>([
 ]);
 
 export function assemble(source: string, opts: AssembleOptions = {}): AssembleResult {
-  const file = opts.entryPath ? resolve(opts.entryPath) : '<memory>';
+  // `entryPath` is relative to `opts.cwd`, as in assembleFile; in-memory source resolves
+  // its quoted INCLUDE/INCBIN paths against `opts.cwd` (see includeBaseDir).
+  const file = opts.entryPath ? resolve(resolve(opts.cwd ?? process.cwd()), opts.entryPath) : MEMORY_FILE;
   const lines = source.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   const sourceLines = lines.map((text, i) => ({ file, line: i + 1, text }));
+  const defineErrors = validateDefines(opts.defines ?? {});
+  if (defineErrors.length > 0) return emptyResult(defineErrors);
   const diagnostics: Diagnostic[] = [];
   const cwd = resolve(opts.cwd ?? process.cwd());
   const ctx = makeLoadContext(opts, cwd, diagnostics);
@@ -272,6 +306,8 @@ export function assemble(source: string, opts: AssembleOptions = {}): AssembleRe
 }
 
 export function assembleFile(entry: string, opts: AssembleOptions = {}): AssembleResult {
+  const defineErrors = validateDefines(opts.defines ?? {});
+  if (defineErrors.length > 0) return emptyResult(defineErrors);
   const diagnostics: Diagnostic[] = [];
   const cwd = resolve(opts.cwd ?? process.cwd());
   const file = resolve(cwd, entry);
@@ -333,27 +369,46 @@ function assembleLines(sourceLines: SourceLine[], opts: AssembleOptions): Assemb
   const roots = sandboxRoots(cwd, includePaths);
   const deviceEnabled = layout.lines.some((line) => line.op === 'DEVICE');
   const emitSymbols = new Map(layout.symbols);
-  const apiDefineValues = new Map(
-    Object.entries(opts.defines ?? {}).map(([name, raw]) => [name, defineValue(raw) & 0xffff])
-  );
-  for (const [name, value] of apiDefineValues) emitSymbols.set(name, value);
-  const activeDefineSymbols = new Set(apiDefineValues.keys());
+  const negativeSymbols = new Map(layout.negativeSymbols);
+  const apiDefines = apiDefineValues(opts.defines ?? {});
+  for (const [name, value] of apiDefines) setDefineValue(emitSymbols, negativeSymbols, name, value);
+  const activeDefineSymbols = new Set(apiDefines.keys());
   const sourceDefineSymbols = new Set<string>();
 
-  const emitPadTo = (addr: number) => {
-    while (layout.origin + bytes.length < addr) bytes.push(0);
-  };
-  const emitBytes = (loc: SourceLine, out: number[]) => {
-    emitPadTo(pc);
-    if (out.length > 0) sourceMap.push({ file: loc.file, line: loc.line, addr: pc & 0xffff });
-    bytes.push(...out.map((b) => b & 0xff));
-    pc += out.length;
+  // The output is one contiguous run of bytes from `layout.origin`: a forward ORG pads
+  // with zeros, but bytes can never be placed below what is already emitted. A
+  // backwards ORG (or code before the first ORG, which is laid out at the origin) used
+  // to append them anyway, so a label's address and its byte's position disagreed.
+  let lastOrg: { loc: SourceLine; addr: number; afterUnorgedCode: boolean; reported: boolean } | undefined;
+  const write = (loc: SourceLine, at: number, out: number[]): void => {
+    const end = layout.origin + bytes.length;
+    if (out.length > 0 && at < end) {
+      if (lastOrg && !lastOrg.reported) {
+        lastOrg.reported = true;
+        const org = `ORG ${hex16(lastOrg.addr)}`;
+        errors.push(
+          diag(
+            lastOrg.loc,
+            lastOrg.afterUnorgedCode
+              ? `${org} follows code or data emitted before the first ORG; put the ORG before any instruction or data`
+              : `${org} moves backwards into code or data already emitted (the output ends at ${hex16(end)})`
+          )
+        );
+      }
+      return;
+    }
+    while (layout.origin + bytes.length < at) bytes.push(0);
+    if (out.length === 0) return;
+    // Source-line records cover data directives as well as instructions (ASM-PROD-OUTPUT-003).
+    sourceMap.push({ file: loc.file, line: loc.line, addr: at & 0xffff });
+    for (const b of out) bytes.push(b & 0xff);
   };
 
   for (const line of layout.lines) {
     currentGlobal = line.globalScope;
-    const ctx: EmitContext = {
+    const ctx: EvalContext = {
       symbols: emitSymbols,
+      negativeSymbols,
       currentGlobal,
       moduleScope: line.moduleScope,
       pc,
@@ -365,14 +420,16 @@ function assembleLines(sourceLines: SourceLine[], opts: AssembleOptions): Assemb
       strict: true,
       sandbox,
       roots,
-      sourceMap,
     };
     if (!line.op) continue;
     const op = line.op;
     if (line.equ) {
       if (line.labelKey) {
         const value = evalExpr(line.args, ctx);
-        if (value !== undefined) emitSymbols.set(line.labelKey, value & 0xffff);
+        if (value !== undefined) {
+          emitSymbols.set(line.labelKey, value & 0xffff);
+          recordSignedValue(ctx, line.labelKey, line.args);
+        }
       }
       continue;
     }
@@ -381,10 +438,17 @@ function assembleLines(sourceLines: SourceLine[], opts: AssembleOptions): Assemb
       continue;
     }
     if (isDirective(op)) {
-      pc = emitDirective(op, line.args, ctx, bytes, layout.origin, artifacts, deviceEnabled);
+      const before = bytes.length;
+      pc = emitDirective(op, line.args, ctx, (at, out) => write(line.loc, at, out), bytes, layout.origin, artifacts, deviceEnabled);
+      if (op === 'ORG') {
+        lastOrg = { loc: line.loc, addr: pc, afterUnorgedCode: lastOrg === undefined && before > 0, reported: false };
+      }
     } else {
       const out = encodeInstruction(op, line.args, ctx);
-      if (out) emitBytes(line.loc, out);
+      if (out) {
+        write(line.loc, pc, out);
+        pc += out.length;
+      }
     }
   }
 
@@ -409,6 +473,7 @@ function computeLayout(sourceLines: SourceLine[], opts: AssembleOptions): Layout
   const warnings: Diagnostic[] = [];
   const lines = parseLines(sourceLines, errors);
   const symbols = new Map<string, number>();
+  const negativeSymbols = new Map<string, number>();
   const definitions = new Map<string, SymbolDef>();
   seedDefines(opts.defines ?? {}, symbols, definitions);
   const cwd = resolve(opts.cwd ?? process.cwd());
@@ -416,30 +481,51 @@ function computeLayout(sourceLines: SourceLine[], opts: AssembleOptions): Layout
   const sandbox = opts.sandbox ?? false;
   const roots = sandboxRoots(cwd, includePaths);
   const seen = new Set<string>(symbols.keys());
-  const apiDefineValues = new Map(
-    Object.entries(opts.defines ?? {}).map(([name, raw]) => [name, defineValue(raw) & 0xffff])
-  );
+  // How each source symbol is defined (collected in pass 0): a code label, an EQU
+  // constant, or a DEFL/`=` variable. A name used for both a label and a constant
+  // used to resolve silently to whichever definition the emit pass saw last.
+  const definedAs = new Map<string, 'label' | 'EQU' | 'DEFL'>();
+  const apiDefines = apiDefineValues(opts.defines ?? {});
   const sourceDefineSymbols = new Set<string>();
+  // The output origin is the first ORG's address, recomputed every pass: an ORG whose
+  // expression is a forward reference (`ORG BASE` before `BASE EQU 0x8000`) evaluates
+  // to the placeholder 0 in pass 0 and must not freeze the origin there.
   let origin = 0;
-  let sawOrg = false;
+  let hasOrg = false;
   let pc = 0;
   let previousSymbols: Map<string, number> | undefined;
+  let previousOrigin: number | undefined;
 
-  for (let pass = 0; pass < 5; pass++) {
-    for (const name of sourceDefineSymbols) symbols.delete(name);
+  for (let pass = 0; pass < LAYOUT_PASSES; pass++) {
+    const finalPass = pass === LAYOUT_PASSES - 1;
+    for (const name of sourceDefineSymbols) {
+      symbols.delete(name);
+      negativeSymbols.delete(name);
+    }
     sourceDefineSymbols.clear();
-    for (const [name, value] of apiDefineValues) symbols.set(name, value);
-    const activeDefineSymbols = new Set(apiDefineValues.keys());
-    pc = sawOrg ? origin : 0;
+    for (const [name, value] of apiDefines) setDefineValue(symbols, negativeSymbols, name, value);
+    const activeDefineSymbols = new Set(apiDefines.keys());
+    // Lines before the first ORG are laid out at the origin (found by the previous pass).
+    pc = hasOrg ? origin : 0;
+    let passOrigin: number | undefined;
+    // Final pass: the first value of each EQU constant, to catch a redefinition.
+    const equValues = new Map<string, number>();
     let currentGlobal = '';
     for (const line of lines) {
       currentGlobal = line.globalScope;
       if (line.labelKey && !line.equ) {
-        if (pass === 0 && seen.has(line.labelKey)) {
-          errors.push(diag(line.loc, `Duplicate label: ${line.labelKey}`));
+        if (pass === 0) {
+          const previous = definedAs.get(line.labelKey);
+          if (previous === 'EQU' || previous === 'DEFL') {
+            errors.push(diag(line.loc, duplicateSymbolMessage(line.labelKey, previous)));
+          } else if (seen.has(line.labelKey)) {
+            errors.push(diag(line.loc, `Duplicate label: ${line.labelKey}`));
+          }
+          if (!previous) definedAs.set(line.labelKey, 'label');
         }
         seen.add(line.labelKey);
         symbols.set(line.labelKey, pc & 0xffff);
+        negativeSymbols.delete(line.labelKey);
         if (!definitions.has(line.labelKey)) {
           definitions.set(line.labelKey, {
             name: line.labelKey,
@@ -457,22 +543,47 @@ function computeLayout(sourceLines: SourceLine[], opts: AssembleOptions): Layout
 
       const ctx: EvalContext = {
         symbols,
+        negativeSymbols,
         currentGlobal,
         moduleScope: line.moduleScope,
         pc,
         cwd,
         includePaths,
-        diagnostics: pass === 4 ? errors : [],
-        warnings: pass === 4 ? warnings : [],
+        diagnostics: finalPass ? errors : [],
+        warnings: finalPass ? warnings : [],
         loc: line.loc,
-        strict: pass === 4,
+        strict: finalPass,
         sandbox,
         roots,
       };
 
       if (line.equ && line.labelKey) {
-        const value = evalExpr(line.args, ctx) ?? 0;
+        const kind = line.op === 'EQU' ? 'EQU' : 'DEFL';
+        if (pass === 0) {
+          const previous = definedAs.get(line.labelKey);
+          if (previous === 'label') errors.push(diag(line.loc, duplicateSymbolMessage(line.labelKey, kind)));
+          else if (previous !== 'EQU') definedAs.set(line.labelKey, kind);
+        }
+        const raw = evalExpr(line.args, ctx);
+        const value = raw ?? 0;
+        // EQU defines a constant: every definition of an EQU symbol must agree (an
+        // included header defining the same EQU twice is fine). DEFL and `=` stay
+        // reassignable.
+        if (finalPass && raw !== undefined && definedAs.get(line.labelKey) === 'EQU') {
+          const first = equValues.get(line.labelKey);
+          if (first === undefined) {
+            equValues.set(line.labelKey, value & 0xffff);
+          } else if (first !== (value & 0xffff)) {
+            errors.push(
+              diag(
+                line.loc,
+                `EQU ${line.labelKey} redefined with a different value (${hex16(first)}, then ${hex16(value & 0xffff)}); use DEFL or = for a symbol that changes`
+              )
+            );
+          }
+        }
         symbols.set(line.labelKey, value & 0xffff);
+        recordSignedValue(ctx, line.labelKey, line.args);
         if (!definitions.has(line.labelKey)) {
           definitions.set(line.labelKey, {
             name: line.labelKey,
@@ -494,31 +605,121 @@ function computeLayout(sourceLines: SourceLine[], opts: AssembleOptions): Layout
 
       if (isDirective(line.op)) {
         const nextPc = layoutDirective(line.op, line.args, ctx);
-        if (line.op === 'ORG' && !sawOrg) {
-          origin = nextPc;
-          sawOrg = true;
-        }
+        if (line.op === 'ORG' && passOrigin === undefined) passOrigin = nextPc;
         pc = nextPc;
       } else {
         const out = encodeInstruction(line.op, line.args, { ...ctx, strict: false });
         if (out) pc += out.length;
       }
     }
-    if (pass === 4 && previousSymbols && !sameSymbolValues(previousSymbols, symbols)) {
-      errors.push(diag(lines[0]?.loc ?? sourceLines[0] ?? { file: '<memory>', line: 1, text: '' }, 'Layout did not converge after 5 passes'));
+    origin = passOrigin ?? 0;
+    hasOrg = passOrigin !== undefined;
+    if (
+      finalPass &&
+      previousSymbols &&
+      (!sameSymbolValues(previousSymbols, symbols) || previousOrigin !== origin)
+    ) {
+      errors.push(diag(lines[0]?.loc ?? sourceLines[0] ?? { file: MEMORY_FILE, line: 1, text: '' }, 'Layout did not converge after 5 passes'));
     }
     previousSymbols = new Map(symbols);
+    previousOrigin = origin;
   }
 
   return {
     origin,
     pc,
     symbols,
+    negativeSymbols,
     definitions,
     lines,
     errors: uniqueDiagnostics(errors),
     warnings,
   };
+}
+
+/** Number of layout passes; the last one is strict and reports diagnostics. */
+const LAYOUT_PASSES = 5;
+
+function duplicateSymbolMessage(name: string, kind: 'EQU' | 'DEFL'): string {
+  return kind === 'EQU'
+    ? `Duplicate symbol: ${name} is both a code label and an EQU constant`
+    : `Duplicate symbol: ${name} is both a code label and a DEFL/= variable`;
+}
+
+/** `0x8000` for diagnostics; negative values (an `ORG -1`) keep their sign. */
+function hex16(value: number): string {
+  const digits = Math.abs(value).toString(16).toUpperCase().padStart(4, '0');
+  return value < 0 ? `-0x${digits}` : `0x${digits}`;
+}
+
+interface ApiDefine {
+  /** The value as expressions read it (before the 16-bit masking of the symbol table). */
+  value: number;
+  /** The signed view (see readsAsNegativeByte): `-D X=1==1` is -1 here, 0xFFFF above. */
+  signed: number;
+}
+
+/** The API/CLI defines, by name. */
+function apiDefineValues(defines: Record<string, string | number | boolean>): Map<string, ApiDefine> {
+  return new Map(
+    Object.entries(defines).map(([name, raw]) => [name, { value: defineValue(raw), signed: defineValue(raw, true) }])
+  );
+}
+
+/** Stores a define's value: 16-bit in `symbols`, a negative signed view in `negativeSymbols`. */
+function setDefineValue(
+  symbols: Map<string, number>,
+  negativeSymbols: Map<string, number>,
+  name: string,
+  define: ApiDefine
+): void {
+  symbols.set(name, define.value & 0xffff);
+  if (define.signed < 0) negativeSymbols.set(name, define.signed);
+  else negativeSymbols.delete(name);
+}
+
+/** A source line split into its optional label and the rest (the operation and arguments). */
+interface LineHead {
+  label: string | undefined;
+  /** The label is defined by EQU, DEFL or `=`; `rest` is then `EQU expr` / `DEFL expr`. */
+  equ: boolean;
+  rest: string;
+}
+
+/**
+ * Splits off a line's label: `name:` (any indentation), a column-0 `name` that is not an
+ * instruction or directive, or the constant forms `name EQU`, `name DEFL`, `name = ...`
+ * (each also accepted after `name:`). Shared by layout (parseLines) and source loading,
+ * so both recognize the same labels.
+ */
+function splitLineHead(cleaned: string, hasLeadingWhitespace: boolean): LineHead {
+  const colon = cleaned.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s*:\s*(.*)$/);
+  if (colon) {
+    const rest = colon[2]!.trim();
+    // `FOO: EQU 5` / `FOO: DEFL 7` / `FOO: = 3` define a constant, exactly like the
+    // colon-less forms below; without this the label silently took the PC.
+    const equAfterColon = rest.match(/^(EQU|DEFL)\b\s*(.*)$/i);
+    if (equAfterColon) {
+      return { label: colon[1]!, equ: true, rest: `${equAfterColon[1]!.toUpperCase()} ${equAfterColon[2]!.trim()}`.trim() };
+    }
+    const assignAfterColon = rest.match(/^=\s*(.*)$/);
+    if (assignAfterColon) return { label: colon[1]!, equ: true, rest: `DEFL ${assignAfterColon[1]!.trim()}`.trim() };
+    return { label: colon[1]!, equ: false, rest };
+  }
+  const equMatch = cleaned.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s+(EQU|DEFL)\b\s*(.*)$/i);
+  if (equMatch) {
+    return { label: equMatch[1]!, equ: true, rest: `${equMatch[2]!.toUpperCase()} ${equMatch[3]!.trim()}`.trim() };
+  }
+  const assignMatch = cleaned.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s*=\s*(.*)$/);
+  if (assignMatch) return { label: assignMatch[1]!, equ: true, rest: `DEFL ${assignMatch[2]!.trim()}`.trim() };
+  if (!hasLeadingWhitespace) {
+    const labelMatch = cleaned.match(/^([A-Za-z_.][A-Za-z0-9_.]*)(?:\s+(.*))?$/);
+    const head = labelMatch?.[1]?.toUpperCase();
+    if (labelMatch && (!isKnownOperation(head!) || isIndentSensitiveDirective(head!))) {
+      return { label: labelMatch[1]!, equ: false, rest: (labelMatch[2] ?? '').trim() };
+    }
+  }
+  return { label: undefined, equ: false, rest: cleaned };
 }
 
 function parseLines(sourceLines: SourceLine[], errors: Diagnostic[]): ParsedLine[] {
@@ -532,45 +733,11 @@ function parseLines(sourceLines: SourceLine[], errors: Diagnostic[]): ParsedLine
       continue;
     }
 
-    let rest = cleaned;
-    let label: string | undefined;
-    let labelKey: string | undefined;
-    let equ = false;
     const hasLeadingWhitespace = /^\s/.test(stripComment(loc.text));
-    const colon = rest.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s*:\s*(.*)$/);
-    if (colon) {
-      label = colon[1]!;
-      labelKey = qualifyLabel(label, currentGlobal, moduleScope);
-      rest = colon[2]!.trim();
-      if (!label.startsWith('.')) currentGlobal = labelKey;
-    } else {
-      const equMatch = rest.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s+(EQU|DEFL)\b\s*(.*)$/i);
-      if (equMatch) {
-        label = equMatch[1]!;
-        labelKey = qualifyLabel(label, currentGlobal, moduleScope);
-        equ = true;
-        rest = `${equMatch[2]!.toUpperCase()} ${equMatch[3]!.trim()}`.trim();
-      } else {
-        const assignMatch = rest.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s*=\s*(.*)$/);
-        if (assignMatch) {
-          label = assignMatch[1]!;
-          labelKey = qualifyLabel(label, currentGlobal, moduleScope);
-          equ = true;
-          rest = `DEFL ${assignMatch[2]!.trim()}`.trim();
-        }
-      }
-    }
-
-    if (!label && !hasLeadingWhitespace) {
-      const labelMatch = rest.match(/^([A-Za-z_.][A-Za-z0-9_.]*)(?:\s+(.*))?$/);
-      const head = labelMatch?.[1]?.toUpperCase();
-      if (labelMatch && (!isKnownOperation(head!) || isIndentSensitiveDirective(head!))) {
-        label = labelMatch[1]!;
-        labelKey = qualifyLabel(label, currentGlobal, moduleScope);
-        rest = (labelMatch[2] ?? '').trim();
-        if (!label.startsWith('.')) currentGlobal = labelKey;
-      }
-    }
+    const { label, equ, rest } = splitLineHead(cleaned, hasLeadingWhitespace);
+    const labelKey = label === undefined ? undefined : qualifyLabel(label, currentGlobal, moduleScope);
+    // A code label (not a constant) opens the scope of the dotted local labels after it.
+    if (labelKey !== undefined && !equ && !label!.startsWith('.')) currentGlobal = labelKey;
 
     if (!rest) {
       out.push({ loc, label, labelKey, args: '', globalScope: currentGlobal, moduleScope });
@@ -684,22 +851,42 @@ function processSourceLines(sourceLines: SourceLine[], ctx: LoadContext): Source
       }
       continue;
     }
+    // `here: M 7` / `here INCLUDE "x.asm"`: a label in front of a macro call or an
+    // INCLUDE is defined at the current address, then the rest is expanded / included.
+    // These used to fail as "Unsupported instruction: M 7" or skip the INCLUDE silently.
+    const head = splitLineHead(cleaned, hasLeadingWhitespace);
+    if (head.label !== undefined && !head.equ && head.rest) {
+      const labelledCall = parseMacroInvocation(head.rest, ctx);
+      const labelledInclude = labelledCall ? null : head.rest.match(/^INCLUDE\s+(.+)$/i);
+      if (labelledCall || labelledInclude) {
+        const labelLine = withCurrentModuleScope({ ...line, text: `${head.label}:` }, ctx);
+        out.push(labelLine);
+        noteLoadTimeSymbol(labelLine, ctx);
+        if (labelledCall) out.push(...expandMacro(line, labelledCall.macro, labelledCall.args, ctx));
+        else includeSource(line, labelledInclude![1]!.trim(), ctx, out);
+        continue;
+      }
+    }
     const inc = cleaned.match(/^INCLUDE\s+(.+)$/i);
     if (inc) {
-      const target = parseIncludeTarget(inc[1]!.trim());
-      if (!target) {
-        ctx.diagnostics.push(diag(line, `Invalid INCLUDE target: ${inc[1]!.trim()}`));
-      } else {
-        const resolved = resolveIncludeFile(line, target, ctx);
-        if (resolved) out.push(...loadSourceFile(resolved, ctx));
-      }
+      includeSource(line, inc[1]!.trim(), ctx, out);
     } else {
       const scoped = withCurrentModuleScope(line, ctx);
       out.push(scoped);
-      seedLineEqu(scoped, ctx);
+      noteLoadTimeSymbol(scoped, ctx);
     }
   }
   return out;
+}
+
+function includeSource(line: SourceLine, targetText: string, ctx: LoadContext, out: SourceLine[]): void {
+  const target = parseIncludeTarget(targetText);
+  if (!target) {
+    ctx.diagnostics.push(diag(line, `Invalid INCLUDE target: ${targetText}`));
+    return;
+  }
+  const resolved = resolveIncludeFile(line, target, ctx);
+  if (resolved) for (const included of loadSourceFile(resolved, ctx)) out.push(included);
 }
 
 function parseModuleDirective(cleaned: string): { op: 'MODULE' | 'ENDMODULE'; args: string } | undefined {
@@ -748,9 +935,14 @@ function withCurrentModuleScope(line: SourceLine, ctx: LoadContext): SourceLine 
 }
 
 function parseEndDirective(cleaned: string, hasLeadingWhitespace: boolean): boolean {
-  if (hasLeadingWhitespace && /^END\b/i.test(cleaned)) return true;
+  // An indented `END` (but not an indented label named `end:`).
+  if (hasLeadingWhitespace && /^END\b(?!\s*:)/i.test(cleaned)) return true;
   if (/^[A-Za-z_.][A-Za-z0-9_.]*:\s*END\b/i.test(cleaned)) return true;
-  return /^[A-Za-z_.][A-Za-z0-9_.]*\s+END\b/i.test(cleaned);
+  // `stop END`: a column-0 label followed by END. Like parseLines, a first word that
+  // is an instruction or directive is not a label, so `call end`, `jp end` and
+  // `dw end` reference a label named `end` instead of silently ending the source.
+  const labelled = cleaned.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s+END\b/i);
+  return labelled !== null && !hasLeadingWhitespace && !isKnownOperation(labelled[1]!.toUpperCase());
 }
 
 function parseRepeat(cleaned: string): RepeatDirective | undefined {
@@ -801,10 +993,14 @@ function expandRepeat(
     ctx.diagnostics.push(diag(loc, `${repeat.op} expects a repeat count`));
     return [];
   }
+  if (parts.length > 2) {
+    ctx.diagnostics.push(diag(loc, `${repeat.op} expects 1 or 2 argument(s), got ${parts.length}`));
+    return [];
+  }
   const count = repeatCount(loc, repeat.op, parts[0]!, ctx);
   if (count === undefined) return [];
   const counter = parts[1]?.trim();
-  if (counter && !/^[A-Za-z_.][A-Za-z0-9_.]*$/.test(counter)) {
+  if (counter !== undefined && !/^[A-Za-z_.][A-Za-z0-9_.]*$/.test(counter)) {
     ctx.diagnostics.push(diag(loc, `${repeat.op} counter must be a symbol name: ${counter}`));
     return [];
   }
@@ -824,20 +1020,7 @@ function expandRepeat(
 }
 
 function repeatCount(loc: SourceLine, op: string, expr: string, ctx: LoadContext): number | undefined {
-  const diagnostics: Diagnostic[] = [];
-  const value = evalExpr(expr, {
-    symbols: ctx.symbols,
-    currentGlobal: '',
-    moduleScope: currentModuleScope(ctx),
-    pc: 0,
-    cwd: ctx.cwd,
-    includePaths: ctx.includePaths,
-    diagnostics,
-    warnings: [],
-    loc,
-    strict: true,
-  });
-  ctx.diagnostics.push(...diagnostics);
+  const value = evalExpr(expr, loadEvalContext(loc, ctx, op, ctx.diagnostics, true));
   if (value === undefined) return undefined;
   if (value < 0) {
     ctx.diagnostics.push(diag(loc, `${op} repeat count must be positive or zero: ${expr}`));
@@ -880,7 +1063,7 @@ function replaceIdentifierOutsideStrings(text: string, name: string, replacement
       out += text.slice(i);
       break;
     }
-    if (ch === '"' || ch === "'") {
+    if (opensQuote(text, i)) {
       quote = ch;
       out += ch;
       i++;
@@ -906,6 +1089,17 @@ function isIdentStart(ch: string): boolean {
 
 function isIdentPart(ch: string): boolean {
   return /[A-Za-z0-9_.]/.test(ch);
+}
+
+/**
+ * Whether the quote at `text[i]` opens a string literal. The `'` of a shadow register
+ * (`AF'`) follows an identifier character and does not; treating it as a quote made
+ * `ex af,af' ; comment` keep its comment as part of the operand.
+ */
+function opensQuote(text: string, i: number): boolean {
+  const ch = text[i];
+  if (ch === '"') return true;
+  return ch === "'" && (i === 0 || !isIdentPart(text[i - 1]!));
 }
 
 function parseMacroDefinition(cleaned: string, hasLeadingWhitespace: boolean): MacroDefinitionParse | undefined {
@@ -959,6 +1153,7 @@ function applySourceDefine(
   if (define.op === 'UNDEFINE') {
     ctx.defineNames.delete(define.name);
     if (ctx.defineValueNames.delete(define.name)) ctx.symbols.delete(define.name);
+    ctx.layoutSymbols.delete(define.name);
     return;
   }
 
@@ -968,25 +1163,24 @@ function applySourceDefine(
   ctx.defineNames.add(define.name);
   if (!define.expr) {
     if (ctx.defineValueNames.delete(define.name)) ctx.symbols.delete(define.name);
+    ctx.layoutSymbols.delete(define.name);
     return;
   }
 
-  const diagnostics: Diagnostic[] = [];
-  const value = evalExpr(define.expr, {
-    symbols: ctx.symbols,
-    currentGlobal: '',
-    moduleScope: currentModuleScope(ctx),
-    pc: 0,
-    cwd: ctx.cwd,
-    includePaths: ctx.includePaths,
-    diagnostics,
-    warnings: [],
-    loc,
-    strict: true,
-  });
-  ctx.diagnostics.push(...diagnostics);
+  // A value computed from `$` or code labels only exists during layout (where
+  // applyLayoutDefine evaluates it at the DEFINE's address); while loading it is
+  // unknown, not 0, so an IF reading it is reported rather than silently false.
+  const probe = new ExprParser(define.expr, loadEvalContext(loc, ctx, 'DEFINE', [], false));
+  probe.parse();
+  if (probe.layoutUses.length > 0) {
+    if (ctx.defineValueNames.delete(define.name)) ctx.symbols.delete(define.name);
+    ctx.layoutSymbols.add(define.name);
+    return;
+  }
+  const value = evalExpr(define.expr, loadEvalContext(loc, ctx, 'DEFINE', ctx.diagnostics, true));
   if (value === undefined) return;
   ctx.symbols.set(define.name, value & 0xffff);
+  ctx.layoutSymbols.delete(define.name);
   ctx.defineValueNames.add(define.name);
 }
 
@@ -1011,6 +1205,7 @@ function applyLayoutDefine(
     if (activeDefineSymbols.delete(trimmed)) {
       sourceDefineSymbols.delete(trimmed);
       ctx.symbols.delete(trimmed);
+      ctx.negativeSymbols?.delete(trimmed);
     }
     return;
   }
@@ -1029,12 +1224,15 @@ function applyLayoutDefine(
   if (!expr) {
     sourceDefineSymbols.delete(name);
     ctx.symbols.delete(name);
+    ctx.negativeSymbols?.delete(name);
     return;
   }
 
   const value = evalExpr(expr, ctx);
   if (value === undefined) return;
   ctx.symbols.set(name, value & 0xffff);
+  // `DEFINE NEG -1` must stay usable in an 8-bit slot, like `NEG EQU -1`.
+  recordSignedValue(ctx, name, expr);
   sourceDefineSymbols.add(name);
 }
 
@@ -1100,14 +1298,17 @@ function expandMacro(
     ctx.diagnostics.push(diag(loc, `Macro expansion too deep: ${macro.name}`));
     return [];
   }
-  if (args.length > macro.params.length) {
+  // Too few arguments used to expand the missing parameters to empty text silently.
+  if (args.length !== macro.params.length) {
     ctx.diagnostics.push(diag(loc, `Macro ${macro.name} expects ${macro.params.length} argument(s), got ${args.length}`));
     return [];
   }
   const argMap = new Map<string, string>();
   for (let i = 0; i < macro.params.length; i++) argMap.set(macro.params[i]!, args[i] ?? '');
   const localMap = macroLocalLabelMap(macro.body, ++ctx.macroSerial);
-  const expanded = macro.body.map((line) => expandMacroLine(line, argMap, localMap));
+  // Diagnostics on expanded lines keep the body's file:line and name the call site.
+  const macroStack: MacroCall[] = [{ name: macro.name, file: loc.file, line: loc.line }, ...(loc.macroStack ?? [])];
+  const expanded = macro.body.map((line) => ({ ...expandMacroLine(line, argMap, localMap), macroStack }));
   ctx.expansionDepth++;
   const out = processSourceLines(expanded, ctx);
   ctx.expansionDepth--;
@@ -1151,7 +1352,7 @@ function identifiersOutsideStrings(text: string): string[] {
       continue;
     }
     if (ch === ';') break;
-    if (ch === '"' || ch === "'") {
+    if (opensQuote(text, i)) {
       quote = ch;
       i++;
       continue;
@@ -1183,12 +1384,29 @@ function parseIncludeTarget(text: string): IncludeTarget | undefined {
   return undefined;
 }
 
+/** The `file` of source lines given to `assemble()` as a string rather than read from disk. */
+const MEMORY_FILE = '<memory>';
+
+/** The directory a quoted INCLUDE/INCBIN path is relative to: the including file's, or `cwd` for in-memory source. */
+function includeBaseDir(loc: SourceLine, cwd: string): string {
+  return loc.file === MEMORY_FILE ? cwd : dirname(loc.file);
+}
+
+/** Whether `path` names an existing regular file (an INCLUDE/INCBIN directory is not one). */
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 function resolveIncludeFile(loc: SourceLine, target: IncludeTarget, ctx: LoadContext): string | undefined {
-  const candidates = target.searchOnly ? [] : [resolve(dirname(loc.file), target.path)];
+  const candidates = target.searchOnly ? [] : [resolve(includeBaseDir(loc, ctx.cwd), target.path)];
   candidates.push(...ctx.includePaths.map((dir) => resolve(dir, target.path)));
   let blocked = false;
   for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
+    if (!isFile(candidate)) continue;
     if (ctx.sandbox && !isWithinRoots(candidate, ctx.roots)) {
       blocked = true;
       continue;
@@ -1215,9 +1433,28 @@ function sandboxRoots(cwd: string, includePaths: string[]): string[] {
   return [resolve(cwd), ...includePaths.map((p) => resolve(p))];
 }
 
+/**
+ * Whether `candidate` lies inside one of the sandbox roots. Both sides are compared as
+ * real paths (symlinks and junctions resolved, so a link inside the project cannot
+ * reach outside it) and, on Windows, case-insensitively (a `d:\` cwd against a `D:\`
+ * include used to be "outside the sandbox"). A lexical startsWith check did neither.
+ */
 function isWithinRoots(candidate: string, roots: string[]): boolean {
-  const resolved = resolve(candidate);
-  return roots.some((root) => resolved === root || resolved.startsWith(root + sep));
+  const target = comparablePath(candidate);
+  return roots.some((root) => {
+    const rel = relative(comparablePath(root), target);
+    return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+  });
+}
+
+function comparablePath(path: string): string {
+  let real = resolve(path);
+  try {
+    real = realpathSync.native(real);
+  } catch {
+    // A path that does not exist (yet) is compared lexically.
+  }
+  return process.platform === 'win32' ? real.toLowerCase() : real;
 }
 
 function makeLoadContext(opts: AssembleOptions, cwd: string, diagnostics: Diagnostic[]): LoadContext {
@@ -1231,6 +1468,7 @@ function makeLoadContext(opts: AssembleOptions, cwd: string, diagnostics: Diagno
     diagnostics,
     active: new Set(),
     symbols,
+    layoutSymbols: new Set(),
     defineNames: new Set(Object.keys(opts.defines ?? {})),
     defineValueNames: new Set(Object.keys(opts.defines ?? {})),
     conditionals: [],
@@ -1290,7 +1528,7 @@ function applyConditional(
         frame.active = false;
         return;
       }
-      const condition = evalConditional('IF', directive.args, loc, ctx);
+      const condition = evalConditional(directive.op, directive.args, loc, ctx);
       frame.active = condition;
       frame.conditionMatched = condition;
       return;
@@ -1330,49 +1568,72 @@ function evalConditional(op: string, args: string, loc: SourceLine, ctx: LoadCon
   }
 
   if (!args) {
-    ctx.diagnostics.push(diag(loc, 'IF expects an expression'));
+    ctx.diagnostics.push(diag(loc, `${op} expects an expression`));
     return false;
   }
-  const diagnostics: Diagnostic[] = [];
-  const evalCtx: EvalContext = {
+  const value = evalExpr(args, loadEvalContext(loc, ctx, op, ctx.diagnostics, true));
+  return (value ?? 0) !== 0;
+}
+
+/**
+ * The evaluation context for an expression read while loading source, before layout:
+ * only constants are known, and `$` / code labels are reported (EvalContext.beforeLayout).
+ */
+function loadEvalContext(
+  loc: SourceLine,
+  ctx: LoadContext,
+  directive: string,
+  diagnostics: Diagnostic[],
+  strict: boolean
+): EvalContext {
+  return {
     symbols: ctx.symbols,
     currentGlobal: '',
-    moduleScope: currentModuleScope(ctx),
+    moduleScope: loc.moduleScope ?? currentModuleScope(ctx),
     pc: 0,
     cwd: ctx.cwd,
     includePaths: ctx.includePaths,
     diagnostics,
     warnings: [],
     loc,
-    strict: true,
+    strict,
+    beforeLayout: { directive, layoutSymbols: ctx.layoutSymbols },
   };
-  const value = evalExpr(args, evalCtx);
-  ctx.diagnostics.push(...diagnostics);
-  return (value ?? 0) !== 0;
 }
 
-function seedLineEqu(loc: SourceLine, ctx: LoadContext): void {
+/**
+ * Records what loading knows about the symbol `loc` defines, for the IF/ELSEIF
+ * conditions and DUP/REPT counts evaluated before layout. A constant EQU/DEFL/`=` is
+ * seeded with its value. A code label, or a constant that cannot be computed yet (it
+ * uses `$`, a code label or a later definition), has no value until layout and is
+ * remembered so a condition using it gets a precise error. Seeding a partial value
+ * (`B+1` read as 1 while B is unknown) used to pick IF branches silently.
+ */
+function noteLoadTimeSymbol(loc: SourceLine, ctx: LoadContext): void {
   const cleaned = stripComment(loc.text).trim();
-  const match =
-    cleaned.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s+(EQU|DEFL)\b\s*(.*)$/i) ??
-    cleaned.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s*=\s*(.*)$/);
-  if (!match) return;
-  const label = match[1]!;
-  const expr = (match[3] ?? match[2] ?? '').trim();
-  const moduleScope = loc.moduleScope ?? currentModuleScope(ctx);
-  const value = evalExpr(expr, {
-    symbols: ctx.symbols,
-    currentGlobal: '',
-    moduleScope,
-    pc: 0,
-    cwd: ctx.cwd,
-    includePaths: ctx.includePaths,
-    diagnostics: [],
-    warnings: [],
-    loc,
-    strict: false,
-  });
-  if (value !== undefined) ctx.symbols.set(qualifyLabel(label, '', moduleScope), value & 0xffff);
+  if (!cleaned) return;
+  const head = splitLineHead(cleaned, /^\s/.test(stripComment(loc.text)));
+  if (head.label === undefined) return;
+  const key = qualifyLabel(head.label, '', loc.moduleScope ?? currentModuleScope(ctx));
+  if (!head.equ) {
+    // Dotted local labels are scoped to a global label only known during layout.
+    if (!head.label.startsWith('.')) ctx.layoutSymbols.add(key);
+    return;
+  }
+  const expr = head.rest.replace(/^(EQU|DEFL)\b\s*/i, '');
+  const parser = new ExprParser(expr, loadEvalContext(loc, ctx, 'EQU', [], false));
+  const value = parser.parse();
+  if (parser.layoutUses.length > 0 || parser.missing.length > 0) {
+    ctx.symbols.delete(key);
+    ctx.layoutSymbols.add(key);
+  } else if (value === undefined || parser.syntaxErrors.length > 0) {
+    // Malformed: layout reports the expression error itself.
+    ctx.symbols.delete(key);
+    ctx.layoutSymbols.delete(key);
+  } else {
+    ctx.symbols.set(key, value & 0xffff);
+    ctx.layoutSymbols.delete(key);
+  }
 }
 
 function seedDefines(
@@ -1393,26 +1654,62 @@ function seedDefines(
   }
 }
 
-function defineValue(raw: string | number | boolean): number {
+/** The `file` of diagnostics and symbols that come from API/CLI defines. */
+const DEFINE_FILE = '<define>';
+
+/**
+ * Value of an API/CLI define: a number, a boolean (1/0), an empty string (`-D NAME`,
+ * true = 1) or a numeric expression such as `0x44`, `-5` or `1<<8`. Invalid values
+ * are rejected up front by validateDefines.
+ */
+function defineValue(raw: string | number | boolean, signedView = false): number {
   if (typeof raw === 'number') return raw;
   if (typeof raw === 'boolean') return raw ? 1 : 0;
   const trimmed = raw.trim();
   if (trimmed === '') return 1;
   // Evaluate the full expression (e.g. -5, 1+1, 1<<8) rather than only the
   // first token, which silently collapsed any compound/negative define to 1.
-  const value = evalExpr(trimmed, {
+  const ctx = defineEvalContext(trimmed, [], false);
+  return (signedView ? evalSignedView(trimmed, ctx) : evalExpr(trimmed, ctx)) ?? 1;
+}
+
+function defineEvalContext(text: string, diagnostics: Diagnostic[], strict: boolean): EvalContext {
+  return {
     symbols: new Map(),
     currentGlobal: '',
     moduleScope: '',
     pc: 0,
     cwd: process.cwd(),
     includePaths: [],
-    diagnostics: [],
+    diagnostics,
     warnings: [],
-    loc: { file: '<define>', line: 1, text: trimmed },
-    strict: false,
-  });
-  return value ?? 1;
+    loc: { file: DEFINE_FILE, line: 1, text },
+    strict,
+    beforeLayout: { directive: 'A define', layoutSymbols: new Set() },
+  };
+}
+
+/**
+ * Rejects API/CLI define values that are not numbers or numeric expressions. `-D
+ * MODE=fast` used to become 1 and `-D X=0x` became 0, silently.
+ */
+function validateDefines(defines: Record<string, string | number | boolean>): Diagnostic[] {
+  const errors: Diagnostic[] = [];
+  for (const [name, raw] of Object.entries(defines)) {
+    const loc = { file: DEFINE_FILE, line: 1, text: `${name}=${String(raw)}` };
+    if (typeof raw === 'number') {
+      if (!Number.isInteger(raw)) errors.push(diag(loc, `Invalid value for define ${name}: ${raw} is not an integer`));
+      continue;
+    }
+    if (typeof raw !== 'string' || raw.trim() === '') continue;
+    const diagnostics: Diagnostic[] = [];
+    const value = evalExpr(raw.trim(), defineEvalContext(raw.trim(), diagnostics, true));
+    if (value === undefined || diagnostics.length > 0) {
+      const reason = diagnostics[0]?.message ?? 'not a numeric expression';
+      errors.push(diag(loc, `Invalid value for define ${name}: '${raw}' (${reason})`));
+    }
+  }
+  return errors;
 }
 
 function isDirective(op: string): boolean {
@@ -1494,9 +1791,30 @@ function isIndentSensitiveDirective(op: string): boolean {
   return op === 'DEFINE' || op === 'UNDEFINE' || op === 'END';
 }
 
+/** Directives whose arguments are a comma-separated list. */
+const LIST_DIRECTIVES = new Set([
+  'DB', 'DEFB', 'BYTE', 'DEFM', 'DM', 'DZ', 'DC', 'DW', 'DEFW', 'WORD', 'D24', 'DEFD', 'DD', 'DWORD',
+  'DS', 'DEFS', 'BLOCK', 'ALIGN', 'INCBIN', 'BINARY', 'INSERT', 'SAVEBIN', 'ASSERT', 'DISPLAY',
+]);
+
+/** The only DEVICE this assembler emulates (ASM-PROD-SRC-SKELETON-001). */
+const SUPPORTED_DEVICE = 'ZXSPECTRUM48';
+
 function layoutDirective(op: string, args: string, ctx: EvalContext): number {
+  if (LIST_DIRECTIVES.has(op) && hasEmptyArgument(args)) {
+    fail(ctx, `${op} has an empty argument: ${args}`);
+    return ctx.pc;
+  }
   switch (op) {
-    case 'DEVICE':
+    case 'DEVICE': {
+      // Any other name used to be accepted and still produced 48K metadata.
+      const device = args.trim();
+      if (!device) fail(ctx, `DEVICE expects a device name (${SUPPORTED_DEVICE})`);
+      else if (upper(device) !== SUPPORTED_DEVICE) {
+        fail(ctx, `Unsupported DEVICE: ${device} (only ${SUPPORTED_DEVICE} is supported; use sjasmplus for other devices)`);
+      }
+      return ctx.pc;
+    }
     case 'DEFINE':
     case 'UNDEFINE':
     case 'INCLUDE':
@@ -1519,8 +1837,12 @@ function layoutDirective(op: string, args: string, ctx: EvalContext): number {
     case 'SAVESNA':
       fail(ctx, 'SAVESNA is not supported by @zx-vibes/asm; use sjasmplus for snapshot output');
       return ctx.pc;
-    case 'ORG':
-      return evalExpr(args, ctx) ?? ctx.pc;
+    case 'ORG': {
+      const address = evalExpr(args, ctx);
+      if (address === undefined) return ctx.pc;
+      if (address < 0 || address > 0xffff) fail(ctx, `ORG address out of range: ${args}`);
+      return address;
+    }
     case 'DB':
     case 'DEFB':
     case 'BYTE':
@@ -1553,23 +1875,21 @@ function layoutDirective(op: string, args: string, ctx: EvalContext): number {
   }
 }
 
+/**
+ * Emit-pass directive handling; returns the next PC. `write(at, out)` places `out` at
+ * address `at` (padding a forward gap with zeros); `bytes`/`origin` are the output so
+ * far, read by SAVEBIN.
+ */
 function emitDirective(
   op: string,
   args: string,
   ctx: EvalContext,
+  write: (at: number, out: number[]) => void,
   bytes: number[],
   origin: number,
   artifacts: OutputArtifact[],
   deviceEnabled: boolean
 ): number {
-  const padTo = (addr: number) => {
-    while (origin + bytes.length < addr) bytes.push(0);
-  };
-  const write = (pc: number, out: number[]) => {
-    padTo(pc);
-    bytes.push(...out.map((b) => b & 0xff));
-  };
-
   switch (op) {
     case 'DEVICE':
     case 'DEFINE':
@@ -1670,10 +1990,13 @@ function emitDirective(
 //     immediate is validated (not parenthesized memory, not a register, not an
 //     (IX+d)/(IY+d) ref) so it cannot shadow LD r,r', the reg16 convenience forms,
 //     or the displacement forms.
-// The e/d displacement forms (C2.3) and the non-ISA convenience forms (LD BC,DE,
-// LD IX,IY, SLI/XH synonyms) still fall back to the hand-coded path below. The C4
-// round-trip oracle + the ASM-EMIT fixtures keep the migration byte-identical at
-// every step.
+//   SLICE 3 (C2.3): the `e` relative-branch and `d` (IX+d)/(IY+d) displacement
+//     slots, matched by the same slot machinery (see SLOT_OPCODE_ROWS below).
+// What the table does not spell falls back to the hand-coded encoders below: the
+// non-ISA convenience forms (LD BC,DE / LD IX,IY pseudo-copies, SLI, the XH/HX
+// index-half synonyms, `ADD n`, `JP HL`, `IN F,(C)`) and operand spellings other
+// than the canonical text (`[HL]` for `(HL)`, `rst 0x10` for `RST 10H`). The C4
+// round-trip oracle + the ASM-EMIT fixtures keep both paths byte-identical.
 
 function tableSyntaxKey(syntax: string): string {
   const space = syntax.indexOf(' ');
@@ -1772,7 +2095,10 @@ interface SlotValues {
 }
 
 function relativeByte(targetExpr: string, ctx: EvalContext): number {
-  const target = evalExpr(targetExpr, ctx) ?? 0;
+  const target = evalExpr(targetExpr, ctx);
+  // An unresolved target is already reported ("Label not found"); a range check
+  // against a placeholder 0 only added a misleading "out of range" error.
+  if (target === undefined) return 0;
   const offset = target - ((ctx.pc + 2) & 0xffff);
   const signed = offset < -128 ? offset + 0x10000 : offset > 127 ? offset - 0x10000 : offset;
   if (ctx.strict && (signed < -128 || signed > 127)) {
@@ -1857,7 +2183,9 @@ function encodeInstruction(op: string, argsText: string, ctx: EvalContext): numb
   const noArg = NO_ARG_OPS.get(signature) ?? (!argsText ? NO_ARG_OPS.get(op) : undefined);
   if (noArg) return [...noArg];
 
-  const args = splitArgs(argsText);
+  const args = splitArgs(argsText).map(normalizeOperand);
+  // `ret z,` / `push bc,` used to drop the empty operand and assemble silently.
+  if (args.includes('')) return fail(ctx, `${op} has an empty operand: ${argsText}`);
   const fromTable = encodeFromTable(op, args, ctx);
   if (fromTable) return fromTable;
   try {
@@ -1884,13 +2212,16 @@ function encodeInstruction(op: string, argsText: string, ctx: EvalContext): numb
       case 'JR':
         return encodeJr(args, ctx);
       case 'DJNZ':
+        if (!expectArgs('DJNZ', args, 1, ctx)) return undefined;
         return rel8(0x10, args[0], ctx);
       case 'CALL':
         return encodeCall(args, ctx);
       case 'RET':
         return encodeRet(args, ctx);
       case 'RST':
-        return [0xc7 + (rstValue(args[0], ctx) << 3)];
+        // A bare `rst` used to assemble silently as RST 0, and `rst 8,1` dropped the 1.
+        if (!expectArgs('RST', args, 1, ctx)) return undefined;
+        return [0xc7 + (rstValue(args[0]!, ctx) << 3)];
       case 'PUSH':
         return encodePushPop(args, false, ctx);
       case 'POP':
@@ -1926,7 +2257,7 @@ function encodeInstruction(op: string, argsText: string, ctx: EvalContext): numb
 }
 
 function encodeLd(args: string[], ctx: EvalContext): number[] | undefined {
-  expectArgs('LD', args, 2, ctx);
+  if (!expectArgs('LD', args, 2, ctx)) return undefined;
   const dst = args[0]!;
   const src = args[1]!;
   const d8 = reg8Info(dst);
@@ -2014,7 +2345,7 @@ function ldMemRp(expr: string, rp: RpInfo, load: boolean, ctx: EvalContext): num
 }
 
 function encodeIncDec(args: string[], ctx: EvalContext, dec: boolean): number[] | undefined {
-  expectArgs(dec ? 'DEC' : 'INC', args, 1, ctx);
+  if (!expectArgs(dec ? 'DEC' : 'INC', args, 1, ctx)) return undefined;
   const r = reg8Info(args[0]!);
   if (r) {
     const out = pref(r.prefix, (dec ? 0x05 : 0x04) + r.code * 8);
@@ -2028,7 +2359,7 @@ function encodeIncDec(args: string[], ctx: EvalContext, dec: boolean): number[] 
 
 function encodeAdd(args: string[], ctx: EvalContext): number[] | undefined {
   if (args.length === 1) return encodeAlu('ADD', [args[0]!], ctx);
-  expectArgs('ADD', args, 2, ctx);
+  if (!expectArgs('ADD', args, 2, ctx)) return undefined;
   const dst = upper(args[0]!);
   if (dst === 'A') return encodeAlu('ADD', [args[1]!], ctx);
   const rp = rpInfo(args[0]!);
@@ -2048,7 +2379,7 @@ function encodeAdd(args: string[], ctx: EvalContext): number[] | undefined {
 
 function encodeAdcSbc(op: string, args: string[], ctx: EvalContext): number[] | undefined {
   if (args.length === 1) return encodeAlu(op, [args[0]!], ctx);
-  expectArgs(op, args, 2, ctx);
+  if (!expectArgs(op, args, 2, ctx)) return undefined;
   const dst = upper(args[0]!);
   if (dst === 'A') return encodeAlu(op, [args[1]!], ctx);
   if (dst === 'HL') {
@@ -2061,7 +2392,7 @@ function encodeAdcSbc(op: string, args: string[], ctx: EvalContext): number[] | 
 
 function encodeAlu(op: string, args: string[], ctx: EvalContext): number[] | undefined {
   const spec = ALU_BASE.get(op)!;
-  expectArgs(op, args, 1, ctx);
+  if (!expectArgs(op, args, 1, ctx)) return undefined;
   const src = reg8Info(args[0]!);
   if (src) {
     const out = pref(src.prefix, spec.reg + src.code);
@@ -2107,24 +2438,21 @@ function encodeCall(args: string[], ctx: EvalContext): number[] | undefined {
 }
 
 function encodeRet(args: string[], ctx: EvalContext): number[] | undefined {
-  if (args.length === 0) return [0xc9];
+  // A bare RET is in NO_ARG_OPS; only the conditional form reaches here.
   if (args.length === 1) return [0xc0 + cond(args[0]!, ctx) * 8];
   return fail(ctx, `Unsupported RET form: ${args.join(', ')}`);
 }
 
 function encodePushPop(args: string[], pop: boolean, ctx: EvalContext): number[] | undefined {
-  expectArgs(pop ? 'POP' : 'PUSH', args, 1, ctx);
+  if (!expectArgs(pop ? 'POP' : 'PUSH', args, 1, ctx)) return undefined;
   const rp = rp2Info(args[0]!);
   if (!rp) return fail(ctx, `Unsupported ${pop ? 'POP' : 'PUSH'} operand: ${args[0]}`);
   return pref(rp.prefix, (pop ? 0xc1 : 0xc5) + rp.code * 0x10);
 }
 
 function encodeEx(args: string[], ctx: EvalContext): number[] | undefined {
-  expectArgs('EX', args, 2, ctx);
-  const a = upper(args[0]!);
-  const b = upper(args[1]!);
-  if (a === 'DE' && b === 'HL') return [0xeb];
-  if (a === 'AF' && b === "AF'") return [0x08];
+  if (!expectArgs('EX', args, 2, ctx)) return undefined;
+  // EX DE,HL and EX AF,AF' are matched earlier (NO_ARG_OPS or the opcode table).
   const mem = memInfo(args[0]!);
   const rp = rpInfo(args[1]!);
   if (mem?.kind === 'SP' && rp && (rp.name === 'HL' || rp.name === 'IX' || rp.name === 'IY')) {
@@ -2170,7 +2498,7 @@ function encodeIn(args: string[], ctx: EvalContext): number[] | undefined {
     if (port?.kind === 'C') return [0xed, 0x70];
     return fail(ctx, `Unsupported IN form: ${args.join(', ')}`);
   }
-  expectArgs('IN', args, 2, ctx);
+  if (!expectArgs('IN', args, 2, ctx)) return undefined;
   const dst = reg8Info(args[0]!);
   const port = memInfo(args[1]!);
   if (upper(args[0]!) === 'A' && port?.kind === 'ABS' && !port.bracket) return [0xdb, u8(port.expr, ctx)];
@@ -2180,7 +2508,7 @@ function encodeIn(args: string[], ctx: EvalContext): number[] | undefined {
 }
 
 function encodeOut(args: string[], ctx: EvalContext): number[] | undefined {
-  expectArgs('OUT', args, 2, ctx);
+  if (!expectArgs('OUT', args, 2, ctx)) return undefined;
   const port = memInfo(args[0]!);
   const src = reg8Info(args[1]!);
   if (port?.kind === 'ABS' && !port.bracket && upper(args[1]!) === 'A') return [0xd3, u8(port.expr, ctx)];
@@ -2190,7 +2518,7 @@ function encodeOut(args: string[], ctx: EvalContext): number[] | undefined {
 }
 
 function encodeIm(args: string[], ctx: EvalContext): number[] | undefined {
-  expectArgs('IM', args, 1, ctx);
+  if (!expectArgs('IM', args, 1, ctx)) return undefined;
   const mode = evalExpr(args[0]!, ctx) ?? 0;
   if (mode === 0) return [0xed, 0x46];
   if (mode === 1) return [0xed, 0x56];
@@ -2209,7 +2537,6 @@ interface Reg8Info {
 interface RpInfo {
   name: string;
   code: number;
-  codeEd: number;
   prefix?: 0xdd | 0xfd;
 }
 
@@ -2240,18 +2567,18 @@ function invalidLdReg8Pair(dst: Reg8Info, src: Reg8Info): boolean {
 function rpInfo(text: string): RpInfo | undefined {
   const t = upper(text);
   const code = RP.indexOf(t);
-  if (code >= 0) return { name: t, code, codeEd: code };
-  if (t === 'IX') return { name: 'IX', code: 2, codeEd: 2, prefix: 0xdd };
-  if (t === 'IY') return { name: 'IY', code: 2, codeEd: 2, prefix: 0xfd };
+  if (code >= 0) return { name: t, code };
+  if (t === 'IX') return { name: 'IX', code: 2, prefix: 0xdd };
+  if (t === 'IY') return { name: 'IY', code: 2, prefix: 0xfd };
   return undefined;
 }
 
 function rp2Info(text: string): RpInfo | undefined {
   const t = upper(text);
   const code = RP2.indexOf(t);
-  if (code >= 0) return { name: t, code, codeEd: code };
-  if (t === 'IX') return { name: 'IX', code: 2, codeEd: 2, prefix: 0xdd };
-  if (t === 'IY') return { name: 'IY', code: 2, codeEd: 2, prefix: 0xfd };
+  if (code >= 0) return { name: t, code };
+  if (t === 'IX') return { name: 'IX', code: 2, prefix: 0xdd };
+  if (t === 'IY') return { name: 'IY', code: 2, prefix: 0xfd };
   return undefined;
 }
 
@@ -2271,10 +2598,23 @@ function memInfo(text: string): MemInfo | undefined {
 function indexedMem(text: string): { prefix: 0xdd | 0xfd; disp: string } | undefined {
   const operand = memoryOperand(text);
   if (!operand) return undefined;
-  const m = operand.inner.match(/^(IX|IY)(.*)$/i);
+  // IX/IY must stand alone or be followed by a +/- displacement: a label such as
+  // `ixcount` is an absolute address, not `(IX+count)`.
+  const m = operand.inner.match(/^(IX|IY)(?=\s*(?:[+-]|$))(.*)$/i);
   if (!m) return undefined;
   const rest = m[2]!.trim();
   return { prefix: upper(m[1]!) === 'IX' ? 0xdd : 0xfd, disp: rest || '0' };
+}
+
+/**
+ * `( hl )` -> `(hl)` and `[ hl ]` -> `[hl]`. Whitespace just inside a memory operand's
+ * brackets is insignificant, but the opcode-table keys and the register lookups compare
+ * operand text, so `ld a,( hl )` failed while `ld a,( ix+5 )` and `ld a,[ hl ]` worked.
+ */
+function normalizeOperand(text: string): string {
+  const mem = memoryOperand(text);
+  if (!mem) return text;
+  return mem.bracket ? `[${mem.inner}]` : `(${mem.inner})`;
 }
 
 function memoryOperand(text: string): { inner: string; bracket: boolean } | undefined {
@@ -2298,8 +2638,8 @@ function rel8(op: number, targetExpr: string | undefined, ctx: EvalContext): num
   return [op, relativeByte(targetExpr, ctx)];
 }
 
-function rstValue(text: string | undefined, ctx: EvalContext): number {
-  const value = evalExpr(text ?? '0', ctx) ?? 0;
+function rstValue(text: string, ctx: EvalContext): number {
+  const value = evalExpr(text, ctx) ?? 0;
   if (value % 8 !== 0 || value < 0 || value > 0x38) {
     fail(ctx, `RST target must be one of 0x00..0x38: ${text}`);
     return 0;
@@ -2309,10 +2649,42 @@ function rstValue(text: string | undefined, ctx: EvalContext): number {
 
 function u8(expr: string, ctx: EvalContext): number {
   const value = evalExpr(expr, ctx) ?? 0;
-  if (ctx.strict && value !== 0xffff && (value < -128 || value > 0xff)) {
+  if (ctx.strict && (value < -128 || value > 0xff) && !readsAsNegativeByte(expr, value, ctx)) {
     fail(ctx, `8-bit value out of range: ${expr}`);
   }
   return value & 0xff;
+}
+
+/**
+ * Whether an out-of-range 8-bit value is really a negative byte stored in 16 bits.
+ * Expressions read true (`1==1`, `!0`) as 0xFFFF, and symbols keep 16 bits, so
+ * `X EQU -1` reads as 0xFFFF; an 8-bit slot stores those as 0xFF. A literal 0xFFFF
+ * (`db 0xFFFF`, `ld a,65535`) does not fit and must be an error, so rather than
+ * exempting every 0xFFFF the expression is re-read in the signed view (true = -1,
+ * symbols keep their negative value) and the value passes only when it is exactly
+ * the 16-bit two's complement of a signed byte. The emitted byte is `value & 0xFF`
+ * either way; only the range check changes.
+ */
+function readsAsNegativeByte(expr: string, value: number, ctx: EvalContext): boolean {
+  if (value < 0xff80 || value > 0xffff) return false;
+  const signed = evalSignedView(expr, ctx);
+  return signed !== undefined && signed >= -128 && signed <= -1 && value === signed + 0x10000;
+}
+
+/** Evaluates `expr` in the signed view (diagnostics are left to the normal evaluation). */
+function evalSignedView(expr: string, ctx: EvalContext): number | undefined {
+  return new ExprParser(expr, ctx, true).parse();
+}
+
+/**
+ * Records the signed-view value of a symbol just defined from `expr` (EQU, DEFL, `=`,
+ * DEFINE), so a later 8-bit use of `X EQU -1` still reads as -1.
+ */
+function recordSignedValue(ctx: EvalContext, key: string, expr: string): void {
+  if (!ctx.negativeSymbols) return;
+  const signed = evalSignedView(expr, ctx);
+  if (signed !== undefined && signed < 0) ctx.negativeSymbols.set(key, signed);
+  else ctx.negativeSymbols.delete(key);
 }
 
 function word(expr: string, ctx: EvalContext): number[] {
@@ -2332,7 +2704,10 @@ function pushInt(out: number[], value: number, width: 2 | 3 | 4): void {
 
 function evalDisp(expr: string, ctx: EvalContext): number {
   const value = evalExpr(expr, ctx) ?? 0;
-  if (ctx.strict && (value < -128 || value > 127)) fail(ctx, `Index displacement out of range: ${expr}`);
+  // `X EQU -2` reads as 0xFFFE: accept it as the displacement -2 (see readsAsNegativeByte).
+  if (ctx.strict && (value < -128 || value > 127) && !readsAsNegativeByte(expr, value, ctx)) {
+    fail(ctx, `Index displacement out of range: ${expr}`);
+  }
   return value & 0xff;
 }
 
@@ -2375,7 +2750,7 @@ function formatDirectiveParts(parts: string[], ctx: EvalContext): string {
 
 function formatDirectivePart(part: string, ctx: EvalContext): string {
   const t = part.trim();
-  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+  if (isStringLiteral(t)) {
     return String.fromCharCode(...decodeString(t, ctx));
   }
   const value = evalExpr(t, ctx);
@@ -2396,8 +2771,12 @@ function readIncbinBytes(argsText: string, ctx: EvalContext, op = 'INCBIN'): num
   const offset = parts[1] ? (evalExpr(parts[1]!, ctx) ?? 0) : 0;
   const requestedLength = parts[2] ? (evalExpr(parts[2]!, ctx) ?? 0) : data.length - offset;
   if (ctx.strict) {
-    if (offset < 0 || offset > data.length) fail(ctx, `${op} offset out of range: ${parts[1]}`);
-    if (requestedLength < 0) fail(ctx, `${op} length out of range: ${parts[2]}`);
+    if (offset < 0 || offset > data.length) {
+      fail(ctx, `${op} offset out of range: ${parts[1]} (the file has ${data.length} byte(s))`);
+    } else if (parts[2] && (requestedLength < 0 || offset + requestedLength > data.length)) {
+      // A length past the end of the file used to be clamped silently.
+      fail(ctx, `${op} length out of range: ${parts[2]} (${data.length - offset} byte(s) available from offset ${offset})`);
+    }
   }
   const start = Math.max(0, Math.min(offset, data.length));
   const end = Math.max(start, Math.min(start + Math.max(0, requestedLength), data.length));
@@ -2475,11 +2854,11 @@ function memorySlice(bytes: number[], origin: number, start: number, length: num
 }
 
 function resolveDataFile(loc: SourceLine, target: IncludeTarget, ctx: EvalContext, op = 'INCBIN'): string | undefined {
-  const candidates = target.searchOnly ? [] : [resolve(dirname(loc.file), target.path)];
+  const candidates = target.searchOnly ? [] : [resolve(includeBaseDir(loc, ctx.cwd), target.path)];
   candidates.push(...ctx.includePaths.map((dir) => resolve(dir, target.path)));
   let blocked = false;
   for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
+    if (!isFile(candidate)) continue;
     if (ctx.sandbox && ctx.roots && !isWithinRoots(candidate, ctx.roots)) {
       blocked = true;
       continue;
@@ -2501,7 +2880,7 @@ function dbValues(argsText: string, ctx: EvalContext, op = 'DB'): number[] {
   const out: number[] = [];
   for (const arg of dataArgs(argsText, ctx, op)) {
     const t = arg.trim();
-    if (/^".*"$/.test(t) || /^'.*'$/.test(t)) {
+    if (isStringLiteral(t)) {
       out.push(...decodeString(t, ctx).map((c) => c & 0xff));
     } else {
       out.push(u8(t, ctx));
@@ -2595,7 +2974,7 @@ function splitArgs(text: string): string[] {
       else if (ch === quote) quote = undefined;
       continue;
     }
-    if (ch === '"' || ch === "'") {
+    if (opensQuote(text, i)) {
       quote = ch;
     } else if (ch === '(') {
       depth++;
@@ -2606,9 +2985,16 @@ function splitArgs(text: string): string[] {
       start = i + 1;
     }
   }
+  // After a comma the tail is an element even when empty: `db 1,` has an empty second
+  // value (an error) instead of silently assembling as `db 1`.
   const tail = text.slice(start).trim();
-  if (tail) out.push(tail);
+  if (tail || out.length > 0) out.push(tail);
   return out;
+}
+
+/** Whether a comma-separated argument list has an empty element (`1,`, `1,,2`, `,1`). */
+function hasEmptyArgument(text: string): boolean {
+  return splitArgs(text).some((part) => part === '');
 }
 
 function stripComment(text: string): string {
@@ -2620,10 +3006,18 @@ function stripComment(text: string): string {
       else if (ch === quote) quote = undefined;
       continue;
     }
-    if (ch === '"' || ch === "'") quote = ch;
+    if (opensQuote(text, i)) quote = ch;
     else if (ch === ';') return text.slice(0, i);
   }
   return text;
+}
+
+/**
+ * Whether `text` is exactly ONE quoted literal. Checking only the first and last
+ * characters made `'a'-'A'` (an expression over two char literals) a 5-byte string.
+ */
+function isStringLiteral(text: string): boolean {
+  return /^"(?:[^"\\]|\\.)*"$/.test(text) || /^'(?:[^'\\]|\\.)*'$/.test(text);
 }
 
 function decodeString(text: string, ctx?: EvalContext): number[] {
@@ -2655,6 +3049,11 @@ function decodeString(text: string, ctx?: EvalContext): number[] {
 function evalExpr(text: string, ctx: EvalContext): number | undefined {
   const parser = new ExprParser(text, ctx);
   const value = parser.parse();
+  if (parser.layoutUses.length > 0) {
+    // No value: `$` / an address read as 0 here would silently pick the wrong branch.
+    if (ctx.strict) ctx.diagnostics.push(diag(ctx.loc, beforeLayoutMessage(ctx.beforeLayout!.directive, parser.layoutUses)));
+    return undefined;
+  }
   if (ctx.strict) {
     for (const error of parser.syntaxErrors) {
       ctx.diagnostics.push(diag(ctx.loc, error));
@@ -2681,12 +3080,27 @@ class ExprParser {
   pos = 0;
   missing: string[] = [];
   syntaxErrors: string[] = [];
+  /** `$` and code labels read while evaluating before layout (see EvalContext.beforeLayout). */
+  layoutUses: string[] = [];
+  /** How many operands failed to resolve (a missing symbol, or a layoutUses entry). */
+  private unresolved = 0;
 
+  /**
+   * `signedView` evaluates the "signed view" used only by the 8-bit range check (see
+   * readsAsNegativeByte): true is -1 instead of 0xFFFF and a symbol whose defining value
+   * was negative reads as that negative value instead of its 16-bit stored form.
+   */
   constructor(
     private readonly text: string,
-    private readonly ctx: EvalContext
+    private readonly ctx: EvalContext,
+    private readonly signedView = false
   ) {
     this.tokens = tokenizeExpr(text);
+  }
+
+  private bool(value: boolean): number {
+    if (!value) return 0;
+    return this.signedView ? -1 : 0xffff;
   }
 
   parse(): number | undefined {
@@ -2695,19 +3109,31 @@ class ExprParser {
     if (trailing.kind !== 'eof') {
       this.syntaxErrors.push(`Unexpected token '${trailing.value}' in expression: ${this.text}`);
     }
-    if (value === undefined && this.missing.length === 0 && this.syntaxErrors.length === 0) {
+    if (value === undefined && this.unresolved === 0 && this.syntaxErrors.length === 0) {
       this.syntaxErrors.push(`Invalid expression: ${this.text}`);
     }
     return value;
+  }
+
+  /**
+   * Reports a binary operator's missing right operand. An operand that is present but
+   * unresolved (`1+nothere`) is not missing: "Label not found" already covers it, and
+   * the extra "Missing right operand after '+'" was misleading.
+   */
+  private requireRight(right: number | undefined, unresolvedBefore: number, op: string | number): void {
+    if (right === undefined && this.unresolved === unresolvedBefore) {
+      this.syntaxErrors.push(`Missing right operand after '${op}'`);
+    }
   }
 
   private parseLogicalOr(): number | undefined {
     let left = this.parseLogicalAnd();
     while (this.peek().value === '||') {
       this.take('||');
+      const before = this.unresolved;
       const right = this.parseLogicalAnd();
-      if (right === undefined) this.syntaxErrors.push("Missing right operand after '||'");
-      left = boolValue((left ?? 0) !== 0 || (right ?? 0) !== 0);
+      this.requireRight(right, before, '||');
+      left = this.bool((left ?? 0) !== 0 || (right ?? 0) !== 0);
     }
     return left;
   }
@@ -2716,9 +3142,10 @@ class ExprParser {
     let left = this.parseOr();
     while (this.peek().value === '&&') {
       this.take('&&');
+      const before = this.unresolved;
       const right = this.parseOr();
-      if (right === undefined) this.syntaxErrors.push("Missing right operand after '&&'");
-      left = boolValue((left ?? 0) !== 0 && (right ?? 0) !== 0);
+      this.requireRight(right, before, '&&');
+      left = this.bool((left ?? 0) !== 0 && (right ?? 0) !== 0);
     }
     return left;
   }
@@ -2727,16 +3154,17 @@ class ExprParser {
     let left = this.parseShift();
     while (['==', '!=', '<', '<=', '>', '>='].includes(String(this.peek().value))) {
       const op = this.take().value;
+      const before = this.unresolved;
       const parsedRight = this.parseShift();
-      if (parsedRight === undefined) this.syntaxErrors.push(`Missing right operand after '${op}'`);
+      this.requireRight(parsedRight, before, op);
       const lhs = left ?? 0;
       const right = parsedRight ?? 0;
-      if (op === '==') left = boolValue(lhs === right);
-      else if (op === '!=') left = boolValue(lhs !== right);
-      else if (op === '<') left = boolValue(lhs < right);
-      else if (op === '<=') left = boolValue(lhs <= right);
-      else if (op === '>') left = boolValue(lhs > right);
-      else left = boolValue(lhs >= right);
+      if (op === '==') left = this.bool(lhs === right);
+      else if (op === '!=') left = this.bool(lhs !== right);
+      else if (op === '<') left = this.bool(lhs < right);
+      else if (op === '<=') left = this.bool(lhs <= right);
+      else if (op === '>') left = this.bool(lhs > right);
+      else left = this.bool(lhs >= right);
     }
     return left;
   }
@@ -2756,8 +3184,9 @@ class ExprParser {
     let left = this.parseXor();
     while (this.peek().value === '|') {
       this.take('|');
+      const before = this.unresolved;
       const right = this.parseXor();
-      if (right === undefined) this.syntaxErrors.push("Missing right operand after '|'");
+      this.requireRight(right, before, '|');
       left = (left ?? 0) | (right ?? 0);
     }
     return left;
@@ -2767,8 +3196,9 @@ class ExprParser {
     let left = this.parseAnd();
     while (this.peek().value === '^') {
       this.take('^');
+      const before = this.unresolved;
       const right = this.parseAnd();
-      if (right === undefined) this.syntaxErrors.push("Missing right operand after '^'");
+      this.requireRight(right, before, '^');
       left = (left ?? 0) ^ (right ?? 0);
     }
     return left;
@@ -2778,8 +3208,9 @@ class ExprParser {
     let left = this.parseCompare();
     while (this.peek().value === '&') {
       this.take('&');
+      const before = this.unresolved;
       const right = this.parseCompare();
-      if (right === undefined) this.syntaxErrors.push("Missing right operand after '&'");
+      this.requireRight(right, before, '&');
       left = (left ?? 0) & (right ?? 0);
     }
     return left;
@@ -2789,8 +3220,9 @@ class ExprParser {
     let left = this.parseAdd();
     while (this.peek().value === '<<' || this.peek().value === '>>' || keyword(this.peek(), 'SHL') || keyword(this.peek(), 'SHR')) {
       const op = this.take().value;
+      const before = this.unresolved;
       const right = this.parseAdd();
-      if (right === undefined) this.syntaxErrors.push(`Missing right operand after '${op}'`);
+      this.requireRight(right, before, op);
       left = op === '<<' || upper(String(op)) === 'SHL' ? (left ?? 0) << (right ?? 0) : (left ?? 0) >> (right ?? 0);
     }
     return left;
@@ -2800,8 +3232,9 @@ class ExprParser {
     let left = this.parseMul();
     while (this.peek().value === '+' || this.peek().value === '-') {
       const op = this.take().value;
+      const before = this.unresolved;
       const right = this.parseMul();
-      if (right === undefined) this.syntaxErrors.push(`Missing right operand after '${op}'`);
+      this.requireRight(right, before, op);
       left = op === '+' ? (left ?? 0) + (right ?? 0) : (left ?? 0) - (right ?? 0);
     }
     return left;
@@ -2811,17 +3244,19 @@ class ExprParser {
     let left = this.parseUnary();
     while (['*', '/', '%'].includes(String(this.peek().value)) || keyword(this.peek(), 'MOD')) {
       const op = this.take().value;
+      const before = this.unresolved;
       const parsedRight = this.parseUnary();
-      if (parsedRight === undefined) this.syntaxErrors.push(`Missing right operand after '${op}'`);
+      this.requireRight(parsedRight, before, op);
       const right = parsedRight ?? 0;
       if (op === '*') left = (left ?? 0) * right;
       else if (op === '/') {
         // Flag in strict mode (the final emit pass); stay lenient (0) during
-        // non-strict layout passes where a forward reference may still be 0.
-        if (right === 0) this.syntaxErrors.push('Division by zero');
+        // non-strict layout passes where a forward reference may still be 0. An
+        // unresolved divisor is reported as such, not as a division by zero.
+        if (parsedRight === 0) this.syntaxErrors.push('Division by zero');
         left = right === 0 ? 0 : Math.trunc((left ?? 0) / right);
       } else {
-        if (right === 0) this.syntaxErrors.push('Modulo by zero');
+        if (parsedRight === 0) this.syntaxErrors.push('Modulo by zero');
         left = right === 0 ? 0 : (left ?? 0) % right;
       }
     }
@@ -2843,7 +3278,7 @@ class ExprParser {
     }
     if (this.peek().value === '!') {
       this.take('!');
-      return boolValue((this.parseUnary() ?? 0) === 0);
+      return this.bool((this.parseUnary() ?? 0) === 0);
     }
     if (keyword(this.peek(), 'LOW')) {
       this.take();
@@ -2862,12 +3297,28 @@ class ExprParser {
     const t = this.take();
     if (t.kind === 'num') return t.value;
     if (t.kind === 'id') {
-      const resolved = lookupSymbol(t.value, this.ctx);
+      const resolved = lookupSymbol(t.value, this.ctx, this.signedView);
       if (resolved.value !== undefined) return resolved.value;
+      this.unresolved++;
+      const layout = this.ctx.beforeLayout;
+      if (
+        layout &&
+        symbolCandidates(t.value, this.ctx.currentGlobal, this.ctx.moduleScope).some((key) => layout.layoutSymbols.has(key))
+      ) {
+        if (!this.layoutUses.includes(t.value)) this.layoutUses.push(t.value);
+        return undefined;
+      }
       if (!this.missing.includes(resolved.missing)) this.missing.push(resolved.missing);
       return undefined;
     }
-    if (t.value === '$') return this.ctx.pc;
+    if (t.value === '$') {
+      if (this.ctx.beforeLayout) {
+        this.unresolved++;
+        if (!this.layoutUses.includes('$')) this.layoutUses.push('$');
+        return undefined;
+      }
+      return this.ctx.pc;
+    }
     if (t.value === '(') {
       const value = this.parseLogicalOr();
       this.take(')');
@@ -2875,6 +3326,21 @@ class ExprParser {
     }
     return undefined;
   }
+}
+
+/** Operators spelled as words; the tokenizer reads them as identifiers. */
+const OPERATOR_KEYWORDS = new Set(['LOW', 'HIGH', 'SHL', 'SHR', 'MOD']);
+
+/**
+ * Whether the token before the cursor ends an operand (a number, a symbol, `$` or a
+ * closing parenthesis). After an operand, `%` is the modulo operator rather than the
+ * prefix of a binary literal: `7%10` is 7 MOD 10, while `%1010` and `1+%1010` are binary.
+ */
+function endsOperand(out: Token[]): boolean {
+  const last = out[out.length - 1];
+  if (!last) return false;
+  if (last.kind === 'id') return !OPERATOR_KEYWORDS.has(upper(last.value));
+  return last.kind === 'num' || last.value === ')' || last.value === '$';
 }
 
 function tokenizeExpr(text: string): Token[] {
@@ -2904,13 +3370,21 @@ function tokenizeExpr(text: string): Token[] {
         continue;
       }
     }
-    if (ch === '%') {
+    if (ch === '%' && !endsOperand(out)) {
       const m = text.slice(i + 1).match(/^[01]+/);
       if (m) {
         out.push({ kind: 'num', value: parseInt(m[0], 2) });
         i += 1 + m[0].length;
         continue;
       }
+    }
+    // A hex literal with an `h` suffix wins over the `0b` binary prefix: `0B0h` is 0xB0
+    // and `0B1Fh` is 0xB1F, not `0b0` / `0b1` followed by a stray token.
+    const hexSuffix = text.slice(i).match(/^[0-9][0-9a-fA-F]*[hH](?![A-Za-z0-9_.])/);
+    if (hexSuffix) {
+      out.push({ kind: 'num', value: parseInt(hexSuffix[0].slice(0, -1), 16) });
+      i += hexSuffix[0].length;
+      continue;
     }
     const binaryPrefix = text.slice(i).match(/^0[bB][01]+/);
     if (binaryPrefix) {
@@ -2976,10 +3450,6 @@ function tokenizeExpr(text: string): Token[] {
   return out;
 }
 
-function boolValue(value: boolean): number {
-  return value ? 0xffff : 0;
-}
-
 function keyword(token: Token, value: string): boolean {
   return token.kind === 'id' && upper(token.value) === value;
 }
@@ -2991,12 +3461,15 @@ function qualifyLabel(label: string, currentGlobal: string, moduleScope: string)
 
 function lookupSymbol(
   label: string,
-  ctx: Pick<EvalContext, 'symbols' | 'currentGlobal' | 'moduleScope'>
+  ctx: Pick<EvalContext, 'symbols' | 'negativeSymbols' | 'currentGlobal' | 'moduleScope'>,
+  signedView = false
 ): { value: number | undefined; missing: string } {
   const candidates = symbolCandidates(label, ctx.currentGlobal, ctx.moduleScope);
   for (const key of candidates) {
     const value = ctx.symbols.get(key);
-    if (value !== undefined) return { value, missing: key };
+    if (value !== undefined) {
+      return { value: signedView ? (ctx.negativeSymbols?.get(key) ?? value) : value, missing: key };
+    }
   }
   return { value: undefined, missing: candidates[0] ?? label };
 }
@@ -3018,7 +3491,8 @@ function alignAddress(pc: number, boundary: number): number {
 
 function makeSld(symbols: SymbolDef[], sourceMap: SourceMapEntry[], sourceLines: SourceLine[]): string {
   const lines = ['|SLD.data.version|1'];
-  const device = sourceLines.find((l) => stripComment(l.text).trim().toUpperCase().startsWith('DEVICE '));
+  // Any whitespace after DEVICE (a tab too), like the layout pass that validated it.
+  const device = sourceLines.find((l) => /^DEVICE\s/i.test(stripComment(l.text).trim()));
   if (device) {
     lines.push(
       `${device.file}|${device.line}||0|-1|-1|Z|pages.size:16384,pages.count:4,slots.count:4,slots.adr:0,16384,32768,49152`
@@ -3066,9 +3540,23 @@ function diag(loc: SourceLine, message: string): Diagnostic {
     file: loc.file,
     line: loc.line,
     severity: 'error',
-    message,
+    message: message + macroCallSuffix(loc),
     sourceLine: loc.text.trimEnd(),
   };
+}
+
+/**
+ * ` (in macro Pair called at line 7)` for a line produced by a macro expansion: the
+ * diagnostic points at the macro body line, and this names the invocation that
+ * supplied the arguments (the whole chain for nested macros, innermost first).
+ */
+function macroCallSuffix(loc: SourceLine): string {
+  if (!loc.macroStack || loc.macroStack.length === 0) return '';
+  const calls = loc.macroStack.map((call) => {
+    const where = call.file === loc.file ? `line ${call.line}` : `${basename(call.file)}:${call.line}`;
+    return `in macro ${call.name} called at ${where}`;
+  });
+  return ` (${calls.join(', ')})`;
 }
 
 function warn(ctx: EvalContext, message: string): void {
@@ -3084,8 +3572,15 @@ function fail(ctx: EvalContext, message: string): undefined {
   return undefined;
 }
 
-function expectArgs(op: string, args: string[], count: number, ctx: EvalContext): void {
-  if (args.length !== count) fail(ctx, `${op} expects ${count} operand(s), got ${args.length}`);
+/**
+ * Whether `args` has exactly `count` operands; reports the arity error otherwise. The
+ * encoders stop on `false`: reading a missing operand used to leak a JavaScript
+ * "Cannot read properties of undefined" error as a second diagnostic.
+ */
+function expectArgs(op: string, args: string[], count: number, ctx: EvalContext): boolean {
+  if (args.length === count) return true;
+  fail(ctx, `${op} expects ${count} operand(s), got ${args.length}`);
+  return false;
 }
 
 function upper(text: string): string {

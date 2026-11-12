@@ -307,6 +307,156 @@
         "options": {
           "entryPath": "define-invalid-syntax.asm"
         }
+      },
+      {
+        "name": "if-cannot-use-pc-before-layout",
+        "sourceLines": ["    ORG 0x8000", "    IF $ >= 0x8000", "    db 1", "    ELSE", "    db 2", "    ENDIF", ""],
+        "options": {
+          "entryPath": "if-dollar.asm"
+        }
+      },
+      {
+        "name": "dup-cannot-use-code-label-before-layout",
+        "sourceLines": ["    ORG 0x8000", "start:", "    nop", "    DUP start & 3", "    db 0", "    EDUP", ""],
+        "options": {
+          "entryPath": "dup-label.asm"
+        }
+      },
+      {
+        "name": "if-and-dup-use-constants-and-defines",
+        "sourceLines": [
+          "K EQU 2",
+          "M = K*2",
+          "    DEFINE D 3",
+          "    IF K == 2 && M == 4 && D == 3 && MODE == 1",
+          "    db 1",
+          "    ENDIF",
+          "    DUP K",
+          "    db 2",
+          "    EDUP",
+          ""
+        ],
+        "options": {
+          "entryPath": "if-constants.asm",
+          "defines": {
+            "MODE": "1"
+          }
+        }
+      },
+      {
+        "name": "forward-referenced-first-org-sets-origin",
+        "sourceLines": ["    ORG BASE", "start:", "    nop", "    jp start", "BASE EQU 0x8000", ""],
+        "options": {
+          "entryPath": "org-forward.asm"
+        }
+      },
+      {
+        "name": "org-cannot-move-back-over-emitted-bytes",
+        "sourceLines": ["    ORG 0x8000", "    db 1", "    ORG 0x8004", "    db 2", "    ORG 0x8002", "mid:", "    db 3", ""],
+        "options": {
+          "entryPath": "org-backwards.asm"
+        }
+      },
+      {
+        "name": "code-before-first-org-is-rejected",
+        "sourceLines": ["    db 1", "    ORG 0x8000", "start:", "    db 2", "    dw start", ""],
+        "options": {
+          "entryPath": "org-after-code.asm"
+        }
+      },
+      {
+        "name": "equ-cannot-change-value",
+        "sourceLines": ["FOO EQU 1", "    db FOO", "FOO EQU 2", "    db FOO", ""],
+        "options": {
+          "entryPath": "equ-redefined.asm"
+        }
+      },
+      {
+        "name": "label-and-equ-cannot-share-a-name",
+        "sourceLines": ["    ORG 0x8000", "FOO:", "    db FOO & 0xFF", "FOO EQU 5", "    db FOO", ""],
+        "options": {
+          "entryPath": "label-equ.asm"
+        }
+      },
+      {
+        "name": "byte-slot-rejects-literal-0xffff",
+        "sourceLines": ["    ORG 0x8000", "    ld a,65535", ""],
+        "options": {
+          "entryPath": "byte-ffff.asm"
+        }
+      },
+      {
+        "name": "byte-slot-accepts-true-and-negative-constants",
+        "sourceLines": ["T EQU 1==1", "N EQU -2", "    ld a,T", "    ld b,N", "    db 1==1, !0, N", "    dw 1==1", ""],
+        "options": {
+          "entryPath": "byte-true.asm"
+        }
+      },
+      {
+        "name": "macro-call-needs-every-argument",
+        "sourceLines": ["Pair MACRO left,right", "    db left,right", "ENDM", "    Pair 1", ""],
+        "options": {
+          "entryPath": "macro-arity.asm"
+        }
+      },
+      {
+        "name": "macro-diagnostic-names-call-site",
+        "sourceLines": ["Pair MACRO left,right", "    db left,right", "ENDM", "    nop", "    Pair 3,missing_sym", ""],
+        "options": {
+          "entryPath": "macro-call-site.asm"
+        }
+      },
+      {
+        "name": "label-before-macro-call",
+        "sourceLines": ["    ORG 0x8000", "M MACRO v", "    db v", "ENDM", "here: M 7", "there M 8", "    dw here, there", ""],
+        "options": {
+          "entryPath": "macro-label.asm"
+        }
+      },
+      {
+        "name": "data-list-rejects-empty-element",
+        "sourceLines": ["    ORG 0x8000", "    db 1,", ""],
+        "options": {
+          "entryPath": "db-trailing-comma.asm"
+        }
+      },
+      {
+        "name": "unsupported-device",
+        "sourceLines": ["    DEVICE ZXSPECTRUM128", "    ORG 0x8000", "    nop", ""],
+        "options": {
+          "entryPath": "device-128.asm"
+        }
+      },
+      {
+        "name": "invalid-define-value",
+        "sourceLines": ["    ORG 0x8000", "    db MODE", ""],
+        "options": {
+          "entryPath": "define-value.asm",
+          "defines": {
+            "MODE": "fast"
+          }
+        }
+      },
+      {
+        "name": "missing-operand-single-diagnostic",
+        "sourceLines": ["    ORG 0x8000", "    ld a", ""],
+        "options": {
+          "entryPath": "missing-operand.asm"
+        }
+      },
+      {
+        "name": "number-forms-modulo-and-spaced-memory-operands",
+        "sourceLines": ["K EQU 7", "    ld a,0B0h", "    db 7%10, K%4, %101", "    ld a,( hl )", "    inc ( hl )", ""],
+        "options": {
+          "entryPath": "number-forms.asm"
+        }
+      },
+      {
+        "name": "incbin-length-past-end-of-file",
+        "sourceLines": ["    ORG 0x8000", "    INCBIN \"data.bin\", 1, 10", ""],
+        "options": {
+          "cwd": "<tmp>"
+        }
       }
     ]
   },
@@ -395,6 +545,176 @@
         "errors": [
           {
             "message": "Invalid DEFINE syntax: FOO=1"
+          }
+        ]
+      },
+      {
+        "name": "if-cannot-use-pc-before-layout",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "IF is evaluated before layout and can only use constants already known above it, not $ or code labels ($)"
+          }
+        ]
+      },
+      {
+        "name": "dup-cannot-use-code-label-before-layout",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "DUP is evaluated before layout and can only use constants already known above it, not $ or code labels (start)"
+          }
+        ]
+      },
+      {
+        "name": "if-and-dup-use-constants-and-defines",
+        "ok": true,
+        "bytesHex": "010202"
+      },
+      {
+        "name": "forward-referenced-first-org-sets-origin",
+        "ok": true,
+        "bytesHex": "00C30080",
+        "symbols": [{ "name": "start", "value": 32768 }]
+      },
+      {
+        "name": "org-cannot-move-back-over-emitted-bytes",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "ORG 0x8002 moves backwards into code or data already emitted (the output ends at 0x8005)"
+          }
+        ]
+      },
+      {
+        "name": "code-before-first-org-is-rejected",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "ORG 0x8000 follows code or data emitted before the first ORG; put the ORG before any instruction or data"
+          }
+        ]
+      },
+      {
+        "name": "equ-cannot-change-value",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "EQU FOO redefined with a different value (0x0001, then 0x0002); use DEFL or = for a symbol that changes"
+          }
+        ]
+      },
+      {
+        "name": "label-and-equ-cannot-share-a-name",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Duplicate symbol: FOO is both a code label and an EQU constant"
+          }
+        ]
+      },
+      {
+        "name": "byte-slot-rejects-literal-0xffff",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "8-bit value out of range: 65535"
+          }
+        ]
+      },
+      {
+        "name": "byte-slot-accepts-true-and-negative-constants",
+        "ok": true,
+        "bytesHex": "3EFF06FEFFFFFEFFFF"
+      },
+      {
+        "name": "macro-call-needs-every-argument",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Macro Pair expects 2 argument(s), got 1"
+          }
+        ]
+      },
+      {
+        "name": "macro-diagnostic-names-call-site",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Label not found: missing_sym (in macro Pair called at line 5)"
+          }
+        ]
+      },
+      {
+        "name": "label-before-macro-call",
+        "ok": true,
+        "bytesHex": "070800800180",
+        "symbols": [
+          { "name": "here", "value": 32768 },
+          { "name": "there", "value": 32769 }
+        ]
+      },
+      {
+        "name": "data-list-rejects-empty-element",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "DB has an empty argument: 1,"
+          }
+        ]
+      },
+      {
+        "name": "unsupported-device",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Unsupported DEVICE: ZXSPECTRUM128 (only ZXSPECTRUM48 is supported; use sjasmplus for other devices)"
+          }
+        ]
+      },
+      {
+        "name": "invalid-define-value",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Invalid value for define MODE: 'fast' (Label not found: fast)"
+          }
+        ]
+      },
+      {
+        "name": "missing-operand-single-diagnostic",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "LD expects 2 operand(s), got 1"
+          }
+        ]
+      },
+      {
+        "name": "number-forms-modulo-and-spaced-memory-operands",
+        "ok": true,
+        "bytesHex": "3EB00703057E34"
+      },
+      {
+        "name": "incbin-length-past-end-of-file",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "INCBIN length out of range: 10 (4 byte(s) available from offset 1)"
           }
         ]
       }

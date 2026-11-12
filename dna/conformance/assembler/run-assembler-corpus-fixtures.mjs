@@ -1,10 +1,8 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createDeterministicEnv } from "../determinism.mjs";
+import { ensurePackageBuilt } from "../package-build.mjs";
 
 const thisDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(thisDir, "..", "..", "..");
@@ -86,46 +84,15 @@ function assert(condition, message) {
   }
 }
 
-function runProcess(command, args, options = {}) {
-  const useShell = options.shell ?? false;
-  const spawnCommand = useShell ? [command, ...args].join(" ") : command;
-  const spawnArgs = useShell ? [] : args;
-  return spawnSync(spawnCommand, spawnArgs, {
-    cwd: options.cwd,
-    encoding: "utf8",
-    env: createDeterministicEnv({
-      ...process.env,
-      NO_COLOR: "1",
-      FORCE_COLOR: "0",
-    }),
-    shell: useShell,
-  });
-}
-
 function ensureDefaultModule(root, skipBuild) {
-  const modulePath = path.join(root, "packages", "asm", "dist", "index.js");
-  if (!skipBuild) {
-    const build = runProcess("corepack", ["pnpm", "--filter", "@zx-vibes/asm", "run", "build"], {
-      cwd: root,
-      shell: true,
-    });
-    if (build.status !== 0 || build.error) {
-      throw new Error(
-        [
-          "failed to build @zx-vibes/asm before corpus conformance",
-          build.error?.message,
-          build.stdout,
-          build.stderr,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      );
-    }
-  }
-  if (!existsSync(modulePath)) {
-    throw new Error(`built assembler module does not exist: ${modulePath}`);
-  }
-  return modulePath;
+  return ensurePackageBuilt({
+    root,
+    packageDir: path.join("packages", "asm"),
+    packageName: "@zx-vibes/asm",
+    artifact: path.join("dist", "index.js"),
+    skipBuild,
+    label: "corpus conformance",
+  });
 }
 
 async function loadFixture(file) {

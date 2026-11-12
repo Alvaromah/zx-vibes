@@ -48,6 +48,22 @@
         }
       },
       {
+        "name": "sld-source-lines-cover-data-directives",
+        "sourceLines": [
+          "    DEVICE ZXSPECTRUM48",
+          "    ORG 0x6000",
+          "code: ld a,1",
+          "data: db 1,2,3",
+          "    dw 0x1234",
+          "    ds 2",
+          "    nop",
+          ""
+        ],
+        "options": {
+          "entryPath": "sld-data.asm"
+        }
+      },
+      {
         "name": "savebin-artifacts-and-output-files",
         "mode": "assembleFile",
         "entry": "<tmp>/savebin/main.asm",
@@ -152,6 +168,18 @@
           "|32768|F|start",
           "|32776|F|print_loop",
           "|32768|T|"
+        ]
+      },
+      {
+        "name": "sld-source-lines-cover-data-directives",
+        "ok": true,
+        "bytesHex": "3E010102033412000000",
+        "sldContains": [
+          "|3||0|2|24576|T|",
+          "|4||0|2|24578|T|",
+          "|5||0|2|24581|T|",
+          "|6||0|2|24583|T|",
+          "|7||0|2|24585|T|"
         ]
       },
       {

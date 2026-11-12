@@ -1,10 +1,18 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { assemble, assembleFile, writeAssemblyOutputs } from '../src/index.js';
+import { checkAssemblerRuntime } from '../src/doctor.js';
+import {
+  assemble,
+  assembleFile,
+  disassemble,
+  disassembleOne,
+  writeAssemblyOutputs,
+  type AssembleOptions,
+} from '../src/index.js';
 
 const workspace = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -1651,5 +1659,363 @@ describe('Spectral corpus compatibility', () => {
     expect(hex(ours.bytes)).toBe(hex(sj.raw));
     expect(hex(ours.artifacts[0]!.bytes)).toBe(hex(new Uint8Array(readFileSync(join(dir, 'early.bin')))));
     expect(hex(ours.artifacts[1]!.bytes)).toBe(hex(new Uint8Array(readFileSync(join(dir, 'all.bin')))));
+  });
+});
+
+describe('regressions: silent misassembly and crashes', () => {
+  const bytesOf = (source: string): string => {
+    const result = assemble(source);
+    expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+    return hex(result.bytes);
+  };
+
+  it('an instruction or directive whose operand is a label named `end` does not end the source', () => {
+    // `call end` / `dw end` used to be read as "label `call`, then END", dropping the rest.
+    expect(bytesOf('    ORG 0x8000\nend:\n    ret\nmain:\n    call end\n    ld a,1\n    ret\n')).toBe('C9CD00803E01C9');
+    expect(bytesOf('    ORG 0x8000\nend:\n    ret\n    dw end\n    ld a,1\n')).toBe('C900803E01');
+    // An indented label named `end:` is a label too; a column-0 `stop END` still ends.
+    expect(bytesOf('    ORG 0x8000\n    end: ret\n    jp end\n')).toBe('C9C30080');
+    expect(bytesOf('    ORG 0x8000\n    nop\nstop END\n    halt\n')).toBe('00');
+  });
+
+  it('`FOO: EQU 5` defines a constant like `FOO EQU 5`, not a label at the PC', () => {
+    expect(bytesOf('    ORG 0x8000\nFOO: EQU 5\n    db FOO\n')).toBe('05');
+    expect(bytesOf('    ORG 0x8000\nBAR: DEFL 7\n    db BAR\n')).toBe('07');
+    expect(bytesOf('    ORG 0x8000\nBAZ: = 9\n    db BAZ\n')).toBe('09');
+  });
+
+  it('a DB argument is a string only when it is ONE literal', () => {
+    expect(bytesOf("    db 'a'-'A'\n")).toBe('20');
+    expect(bytesOf('    db "ab", \'c\'\n')).toBe('616263');
+    expect(bytesOf('    db "say \\"hi\\""\n')).toBe('7361792022686922');
+  });
+
+  it('a label starting with ix/iy is an absolute address, not an index register', () => {
+    expect(bytesOf('    ORG 0x8000\nixcount: db 0\n    ld a,(ixcount)\n')).toBe('003A0080');
+    expect(bytesOf('    ld a,(ix+3)\n    ld a,(iy - 2)\n    ld a,(ix)\n')).toBe('DD7E03FD7EFEDD7E00');
+  });
+
+  it("`ex af,af'` accepts a trailing comment", () => {
+    expect(bytesOf("    ex af,af'   ; save A\n    db 'x' ; quoted\n")).toBe('0878');
+  });
+
+  it('a large DS assembles instead of overflowing the call stack', () => {
+    const result = assemble('    ORG 0x4000\n    DS 200000\n');
+    expect(result.bytes.length).toBe(200000);
+  });
+
+  it('INCLUDE/INCBIN of a directory is a diagnostic, not an EISDIR crash', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'zxasm-dir-include-'));
+    mkdirSync(join(dir, 'lib'));
+    for (const directive of ['INCLUDE "lib"', 'INCBIN "lib"']) {
+      writeFileSync(join(dir, 'main.asm'), `    ${directive}\n`);
+      const result = assembleFile(join(dir, 'main.asm'));
+      expect(result.ok).toBe(false);
+      expect(result.errors.some((e) => /file not found: lib/.test(e.message))).toBe(true);
+    }
+  });
+
+  it('assemble() resolves includes from in-memory source against opts.cwd', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'zxasm-cwd-'));
+    writeFileSync(join(dir, 'inc.asm'), '    db 7\n');
+    const result = assemble('    INCLUDE "inc.asm"\n', { cwd: dir });
+    expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+    expect(hex(result.bytes)).toBe('07');
+  });
+
+  it('`zxasm` with no command prints the help instead of "(outputHelp)"', () => {
+    const res = spawnSync('node', [asmCliPath], { encoding: 'utf8' });
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('Usage: zxasm');
+    expect(res.stderr).not.toContain('(outputHelp)');
+  });
+});
+
+describe('regressions: silent misassembly, layout and diagnostics (second review)', () => {
+  const bytesOf = (source: string, opts: AssembleOptions = {}): string => {
+    const result = assemble(source, opts);
+    expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+    return hex(result.bytes);
+  };
+  const errorsOf = (source: string, opts: AssembleOptions = {}): string[] => {
+    const result = assemble(source, opts);
+    expect(result.ok, `expected a failure for:\n${source}`).toBe(false);
+    return result.errors.map((e) => e.message);
+  };
+  const beforeLayout = (directive: string, uses: string) =>
+    `${directive} is evaluated before layout and can only use constants already known above it, not $ or code labels (${uses})`;
+
+  it('IF/ELSEIF and DUP/REPT reject $ and code labels instead of reading them as 0', () => {
+    // Each used to assemble silently with the wrong branch / count, or fail as "Label not found".
+    expect(errorsOf('    ORG 0x8000\n    IF $ >= 0x8000\n    db 1\n    ELSE\n    db 2\n    ENDIF\n')).toEqual([
+      beforeLayout('IF', '$'),
+    ]);
+    expect(errorsOf('    ORG 0x8000\n    IF 0\n    ELSEIF $ > 0\n    db 1\n    ENDIF\n')).toEqual([beforeLayout('ELSEIF', '$')]);
+    expect(errorsOf('    ORG 0x8000\n    db 0xAA\n    DUP 4-($&3)\n    db 0\n    EDUP\n')).toEqual([beforeLayout('DUP', '$')]);
+    expect(errorsOf('    ORG 0x8000\nstart:\n    nop\n    IF start == 0x8000\n    db 1\n    ENDIF\n')).toEqual([
+      beforeLayout('IF', 'start'),
+    ]);
+    expect(errorsOf('    ORG 0x8000\nstart:\n    REPT start & 3\n    nop\n    ENDR\n')).toEqual([beforeLayout('REPT', 'start')]);
+    // A constant computed from $ or a label is just as unknown before layout.
+    expect(errorsOf('    ORG 0x8000\nhere EQU $\n    IF here == 0x8000\n    db 1\n    ENDIF\n')).toEqual([
+      beforeLayout('IF', 'here'),
+    ]);
+    expect(errorsOf('    ORG 0x8000\n    nop\n    DEFINE AT $\n    IF AT\n    ENDIF\n')).toEqual([beforeLayout('IF', 'AT')]);
+    // A constant that only resolves later is unknown, not seeded with a partial value
+    // (B+1 read as 1, so the IF below silently took the wrong branch).
+    expect(errorsOf('A EQU B+1\nB EQU 5\n    IF A == 1\n    db 1\n    ENDIF\n')).toEqual([beforeLayout('IF', 'A')]);
+    // A symbol that is simply not defined (yet) is still "Label not found".
+    expect(errorsOf('    IF LATER\n    ENDIF\nLATER EQU 1\n')).toEqual(['Label not found: LATER']);
+    // EQU/DEFL constants, DEFINE values and API defines still work, and a DEFINE of $ or a
+    // label still works in code (it is evaluated at its address during layout).
+    expect(
+      bytesOf('K EQU 2\nM = K*2\n    DEFINE D 3\n    IF K == 2 && M == 4 && D == 3\n    db 1\n    ENDIF\n    DUP K\n    db 2\n    EDUP\n')
+    ).toBe('010202');
+    expect(bytesOf('    IF MODE == 2\n    db 1\n    ENDIF\n', { defines: { MODE: '2' } })).toBe('01');
+    expect(bytesOf('    ORG 0x8000\n    nop\n    DEFINE HERE $\n    dw HERE\n')).toBe('000180');
+    expect(bytesOf('    ORG 0x8000\nstart:\n    nop\n    DEFINE AT start\n    dw AT\n')).toBe('000080');
+  });
+
+  it('ORG: a forward-referenced first ORG sets the origin, and bytes never land below emitted output', () => {
+    // `ORG BASE` with BASE defined later froze origin 0 and emitted 32 KB of zeros.
+    const forward = assemble('    ORG BASE\nstart:\n    nop\n    jp start\nBASE EQU 0x8000\n');
+    expect(forward.ok, JSON.stringify(forward.errors)).toBe(true);
+    expect(forward.origin).toBe(0x8000);
+    expect(hex(forward.bytes)).toBe('00C30080');
+
+    // A backwards ORG appended its bytes at the end, so `mid` (0x8002) and its byte disagreed.
+    const back = assemble('    ORG 0x8000\n    db 1\n    ORG 0x8004\n    db 2\n    ORG 0x8002\nmid:\n    db 3\n');
+    expect(back.ok).toBe(false);
+    expect(back.errors.map((e) => [e.line, e.message])).toEqual([
+      [5, 'ORG 0x8002 moves backwards into code or data already emitted (the output ends at 0x8005)'],
+    ]);
+
+    // Code before the first ORG is laid out at the origin, so the ORG put later bytes over it.
+    const before = assemble('    db 1\n    ORG 0x8000\nstart:\n    db 2\n    dw start\n');
+    expect(before.ok).toBe(false);
+    expect(before.errors.map((e) => [e.line, e.message])).toEqual([
+      [2, 'ORG 0x8000 follows code or data emitted before the first ORG; put the ORG before any instruction or data'],
+    ]);
+
+    expect(errorsOf('    ORG 0x10000\n    nop\n')).toEqual(['ORG address out of range: 0x10000']);
+    // Unchanged: a forward ORG pads, an ORG back to define labels only is fine, and labels,
+    // EQUs and DEVICE before the first ORG take the origin's address.
+    expect(bytesOf('    ORG 0x8000\n    db 1\n    ORG 0x8004\n    db 2\n')).toBe('0100000002');
+    expect(bytesOf('    ORG 0x8000\n    db 1\n    ORG 0x5000\nbuf:\n    ORG 0x8001\n    dw buf\n')).toBe('010050');
+    expect(bytesOf('start:\n    DEVICE ZXSPECTRUM48\nK EQU 3\n    ORG 0x8000\n    db K\n    dw start\n')).toBe('030080');
+  });
+
+  it('a code label cannot share its name with an EQU/DEFL, and an EQU cannot change value', () => {
+    // The label reference used to take the EQU value silently.
+    expect(errorsOf('    ORG 0x8000\nFOO:\n    db FOO & 0xFF\nFOO EQU 5\n    db FOO\n')).toEqual([
+      'Duplicate symbol: FOO is both a code label and an EQU constant',
+    ]);
+    expect(errorsOf('    ORG 0x8000\nFOO DEFL 1\nFOO:\n    nop\n')).toEqual([
+      'Duplicate symbol: FOO is both a code label and a DEFL/= variable',
+    ]);
+    const redefined = 'EQU FOO redefined with a different value (0x0001, then 0x0002); use DEFL or = for a symbol that changes';
+    expect(errorsOf('FOO EQU 1\n    db FOO\nFOO EQU 2\n    db FOO\n')).toEqual([redefined]);
+    expect(errorsOf('FOO EQU 1\nFOO DEFL 2\n')).toEqual([redefined]);
+    // The same value twice (a header included twice) is fine; DEFL and = stay reassignable.
+    expect(bytesOf('FOO EQU 1\nFOO EQU 1\n    db FOO\n')).toBe('01');
+    expect(bytesOf('X DEFL 1\n    db X\nX DEFL 2\n    db X\nY = 3\n    db Y\nY = 4\n    db Y\n')).toBe('01020304');
+  });
+
+  it('a literal 0xFFFF does not fit an 8-bit slot, while true and negative constants do', () => {
+    expect(errorsOf('    db 0xFFFF\n')).toEqual(['8-bit value out of range: 0xFFFF']);
+    expect(errorsOf('    ld a,65535\n')).toEqual(['8-bit value out of range: 65535']);
+    expect(errorsOf('X EQU 0xFFFF\n    cp X\n')).toEqual(['8-bit value out of range: X']);
+    // Unchanged: true is 0xFF in a byte and 0xFFFF in wider data; IF truthiness.
+    expect(bytesOf('    db 1==1, 1==2, !0, 0||2\n    dw 1==1\n    d24 1==1\n')).toBe('FF00FFFF' + 'FFFF' + 'FFFF00');
+    expect(bytesOf('T EQU 1==1\nN EQU -1\n    ld a,T\n    ld b,N\n    db T, N\n')).toBe('3EFF06FFFFFF');
+    expect(bytesOf('    IF 1==1\n    db 1\n    ENDIF\n    IF 1==2\n    db 2\n    ENDIF\n')).toBe('01');
+    expect(bytesOf('    ld a,X\n', { defines: { X: '-1' } })).toBe('3EFF');
+    for (const value of ['1==1', '!0', -1]) {
+      expect(bytesOf('    db X\n    ld a,X\n    dw X\n', { defines: { X: value } }), String(value)).toBe('FF' + '3EFF' + 'FFFF');
+    }
+    expect(errorsOf('    db X\n', { defines: { X: '0xFFFF' } })).toEqual(['8-bit value out of range: X']);
+    expect(bytesOf('    DEFINE NEG -1\n    ld a,NEG\n    DEFINE T 1==1\n    db T\n')).toBe('3EFF' + 'FF');
+    // Any negative byte constant fits (X EQU -2 was a false "out of range"), also as a displacement.
+    expect(bytesOf('M EQU -2\n    ld a,M\n    ld b,(ix+M)\n')).toBe('3EFE' + 'DD46FE');
+    expect(errorsOf('M EQU -129\n    ld a,M\n')).toEqual(['8-bit value out of range: M']);
+  });
+
+  it('macro arity, empty list elements, invalid define values and other devices are errors', () => {
+    expect(errorsOf('Pair MACRO left,right\n    db left,right\nENDM\n    Pair 1\n')).toEqual([
+      'Macro Pair expects 2 argument(s), got 1',
+    ]);
+    expect(errorsOf('    db 1,\n')).toEqual(['DB has an empty argument: 1,']);
+    expect(errorsOf('    dw 1,,2\n')).toEqual(['DW has an empty argument: 1,,2']);
+    expect(errorsOf('    ret z,\n')).toEqual(['RET has an empty operand: z,']);
+
+    const text = assemble('    db MODE\n', { defines: { MODE: 'fast' } });
+    expect(text.ok).toBe(false);
+    expect(text.errors.map((e) => [e.file, e.message])).toEqual([
+      ['<define>', "Invalid value for define MODE: 'fast' (Label not found: fast)"],
+    ]);
+    expect(errorsOf('    db X\n', { defines: { X: '0x' } })).toEqual([
+      "Invalid value for define X: '0x' (Unexpected token 'x' in expression: 0x)",
+    ]);
+    expect(bytesOf('    db A, B, C, D\n', { defines: { A: '', B: true, C: 2, D: '0x10+1' } })).toBe('01010211');
+
+    expect(errorsOf('    DEVICE ZXSPECTRUM128\n')).toEqual([
+      'Unsupported DEVICE: ZXSPECTRUM128 (only ZXSPECTRUM48 is supported; use sjasmplus for other devices)',
+    ]);
+    expect(errorsOf('    DEVICE NONE\n')).toEqual([
+      'Unsupported DEVICE: NONE (only ZXSPECTRUM48 is supported; use sjasmplus for other devices)',
+    ]);
+    expect(bytesOf('    device zxspectrum48\n    ORG 0x8000\n    nop\n')).toBe('00');
+  });
+
+  it('disassembles a run of four or more DD/FD prefixes as a one-byte DB, not as CALL nn', () => {
+    const reader = (bytes: number[]) => (addr: number) => bytes[addr] ?? 0;
+    expect(disassembleOne(reader([0xdd, 0xdd, 0xdd, 0xdd, 0x00, 0x00]), 0)).toEqual({ addr: 0, bytes: [0xdd], text: 'DB 0xDD' });
+    expect(disassembleOne(reader([0xfd, 0xfd, 0xfd, 0xfd, 0x34, 0x12]), 0).text).toBe('DB 0xFD');
+    // One to three prefixes decode as before: the last prefix applies.
+    expect(disassembleOne(reader([0xdd, 0x21, 0x34, 0x12]), 0)).toMatchObject({ bytes: [0xdd, 0x21, 0x34, 0x12], text: 'LD IX,0x1234' });
+    expect(disassembleOne(reader([0xdd, 0xdd, 0xdd, 0x21, 0x34, 0x12]), 0)).toMatchObject({ text: 'LD IX,0x1234' });
+    expect(disassembleOne(reader([0xdd, 0xfd, 0x21, 0x34, 0x12]), 0).text).toBe('LD IY,0x1234');
+    // Decoding resumes after the DB.
+    const lines = disassemble(reader([0xdd, 0xdd, 0xdd, 0xdd, 0x21, 0x34, 0x12]), 0, 2);
+    expect(lines.map((line) => [line.addr, line.text])).toEqual([
+      [0, 'DB 0xDD'],
+      [1, 'LD IX,0x1234'],
+    ]);
+  });
+
+  it('a missing or extra operand reports one arity error, and a bare RST is not RST 0', () => {
+    const cases: Array<[string, string]> = [
+      ['ld a', 'LD expects 2 operand(s), got 1'],
+      ['push', 'PUSH expects 1 operand(s), got 0'],
+      ['inc', 'INC expects 1 operand(s), got 0'],
+      ['ex de', 'EX expects 2 operand(s), got 1'],
+      ['in', 'IN expects 2 operand(s), got 0'],
+      ['out (c)', 'OUT expects 2 operand(s), got 1'],
+      ['im', 'IM expects 1 operand(s), got 0'],
+      ['add', 'ADD expects 2 operand(s), got 0'],
+      ['sub', 'SUB expects 1 operand(s), got 0'],
+      ['ld a,b,c', 'LD expects 2 operand(s), got 3'],
+      ['rst', 'RST expects 1 operand(s), got 0'],
+      ['rst 8,1', 'RST expects 1 operand(s), got 2'],
+      ['djnz l,1', 'DJNZ expects 1 operand(s), got 2'],
+    ];
+    for (const [line, message] of cases) {
+      expect(errorsOf(`l:\n    ${line}\n`), line).toEqual([message]);
+    }
+  });
+
+  it('sandbox containment ignores drive-letter case and does not follow links out of the project', () => {
+    const root = mkdtempSync(join(tmpdir(), 'zxasm-sandbox-real-'));
+    const project = join(root, 'project');
+    mkdirSync(project);
+    writeFileSync(join(project, 'inc.asm'), 'V EQU 0x42\n');
+    writeFileSync(join(project, 'main.asm'), '    INCLUDE "inc.asm"\n    db V\n');
+    if (process.platform === 'win32') {
+      // A lowercase drive letter in cwd made every sibling INCLUDE "outside the sandbox".
+      const flip = (path: string) => (path[0] === path[0]!.toUpperCase() ? path[0]!.toLowerCase() : path[0]!.toUpperCase()) + path.slice(1);
+      const result = assembleFile(join(project, 'main.asm'), { cwd: flip(project), sandbox: true });
+      expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+      expect(hex(result.bytes)).toBe('42');
+    }
+    // A directory link (a junction on Windows, which needs no privileges) inside the project
+    // pointing outside it used to be followed.
+    writeFileSync(join(root, 'secret.asm'), 'SECRET EQU 0x99\n');
+    symlinkSync(root, join(project, 'up'), 'junction');
+    writeFileSync(join(project, 'linked.asm'), '    INCLUDE "up/secret.asm"\n    db SECRET\n');
+    const linked = assembleFile(join(project, 'linked.asm'), { cwd: project, sandbox: true });
+    expect(linked.ok).toBe(false);
+    expect(linked.errors.map((e) => e.message)).toEqual(['INCLUDE path is outside the sandbox roots: up/secret.asm']);
+    expect(assembleFile(join(project, 'linked.asm'), { cwd: project }).ok).toBe(true);
+  });
+
+  it('h-suffix hex beats the 0b prefix, % after an operand is MOD, and ( hl ) means (HL)', () => {
+    expect(bytesOf('    ld a,0B0h\n    dw 0B1Fh\n    db 0b101, 101b, 0bh\n')).toBe('3EB0' + '1F0B' + '05050B');
+    expect(bytesOf('K EQU 7\n    db 7%10, K%4, (9)%5, %101, 1+%10, LOW %1\n')).toBe('070304050301');
+    expect(
+      bytesOf('    ld a,( hl )\n    ld (hl ),a\n    inc ( hl )\n    ld ( hl ),5\n    add a,( hl )\n    bit 1,( hl )\n    ld a,( ix + 5 )\n')
+    ).toBe('7E' + '77' + '34' + '3605' + '86' + 'CB4E' + 'DD7E05');
+  });
+
+  it('an unresolved operand is reported once', () => {
+    // JR/DJNZ added "Relative branch out of range"; a binary operator added "Missing right operand".
+    expect(errorsOf('    ORG 0x8000\n    jr nowhere\n')).toEqual(['Label not found: nowhere']);
+    expect(errorsOf('    ORG 0x8000\n    djnz nowhere\n')).toEqual(['Label not found: nowhere']);
+    expect(errorsOf('    db 1+nowhere\n')).toEqual(['Label not found: nowhere']);
+    expect(errorsOf('    db 4/nowhere\n')).toEqual(['Label not found: nowhere']);
+    // A really missing operand is still a syntax error.
+    expect(errorsOf('    db 1+\n')).toEqual(["Missing right operand after '+'"]);
+  });
+
+  it('a diagnostic inside a macro expansion names the call site', () => {
+    const single = assemble('Pair MACRO left,right\n    db left,right\nENDM\n    nop\n    Pair 1,2\n    Pair 3,missing_sym\n', {
+      entryPath: 'macro-site.asm',
+    });
+    expect(single.errors.map((e) => [e.line, e.message])).toEqual([
+      [2, 'Label not found: missing_sym (in macro Pair called at line 6)'],
+    ]);
+    const nested = assemble('Inner MACRO v\n    db v\nENDM\nOuter MACRO w\n    Inner w\nENDM\n    Outer nothere\n');
+    expect(nested.errors.map((e) => [e.line, e.message])).toEqual([
+      [2, 'Label not found: nothere (in macro Inner called at line 5, in macro Outer called at line 7)'],
+    ]);
+  });
+
+  it('INCBIN rejects ranges past the end of the file; a label may precede a macro call or INCLUDE', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'zxasm-incbin-range-'));
+    writeFileSync(join(dir, 'f.bin'), Buffer.from([1, 2, 3, 4]));
+    writeFileSync(join(dir, 'part.asm'), '    db 9\n');
+    const at = (source: string) => assemble(source, { cwd: dir });
+    expect(at('    INCBIN "f.bin", 1, 10\n').errors.map((e) => e.message)).toEqual([
+      'INCBIN length out of range: 10 (3 byte(s) available from offset 1)',
+    ]);
+    expect(at('    INCBIN "f.bin", 5\n').errors.map((e) => e.message)).toEqual(['INCBIN offset out of range: 5 (the file has 4 byte(s))']);
+    expect(hex(at('    INCBIN "f.bin", 1, 3\n').bytes)).toBe('020304');
+    expect(at('    INCBIN "f.bin", 4\n').ok).toBe(true);
+
+    // `here: M 7` used to fail as "Unsupported instruction: M 7"; `here: INCLUDE` skipped the file.
+    expect(bytesOf('    ORG 0x8000\nM MACRO v\n    db v\nENDM\nhere: M 7\nthere M 8\n    dw here, there\n')).toBe('0708' + '0080' + '0180');
+    expect(bytesOf('    ORG 0x8000\n    nop\nhere: INCLUDE "part.asm"\n    dw here\n', { cwd: dir })).toBe('00' + '09' + '0180');
+  });
+
+  it('SLD source-line records cover data directives as well as instructions', () => {
+    const result = assemble(
+      '    DEVICE ZXSPECTRUM48\n    ORG 0x6000\ncode: ld a,1\ndata: db 1,2,3\n    dw 0x1234\n    ds 2\n    ds 0\n    nop\n',
+      { entryPath: 'sld-data.asm' }
+    );
+    expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+    expect(result.sourceMap.map((m) => [m.line, m.addr])).toEqual([
+      [3, 0x6000],
+      [4, 0x6002],
+      [5, 0x6005],
+      [6, 0x6007],
+      [8, 0x6009],
+    ]);
+    expect(result.sld).toContain('|4||0|2|24578|T|');
+    expect(result.sld).toContain('pages.size:16384,pages.count:4');
+    // DEVICE followed by a tab still records the 48K page metadata.
+    expect(assemble('    DEVICE\tZXSPECTRUM48\n    ORG 0x8000\n    nop\n').sld).toContain('pages.size:16384,pages.count:4');
+  });
+
+  it('zxasm assemble prints hints and warnings when it fails, and doctor runs a real probe', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'zxasm-cli-fail-'));
+    writeFileSync(
+      join(dir, 'bad.asm'),
+      '    ORG 0x8000\n    DISPLAY "probe"\n    call draw_sprtie\ndraw_sprite:\n    ret\n'
+    );
+    const res = asmCli('assemble', join(dir, 'bad.asm'), '--out-dir', join(dir, 'build'));
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('warning: DISPLAY: probe');
+    expect(res.stderr).toContain('error: Label not found: draw_sprtie');
+    expect(res.stderr).toContain("  hint: Did you mean 'draw_sprite'?");
+
+    expect(checkAssemblerRuntime()).toEqual({ ok: true });
+    const wrongBytes = { ...assemble('    nop\n'), bytes: Uint8Array.from([0x00]) };
+    expect(checkAssemblerRuntime(() => wrongBytes)).toEqual({ ok: false, message: 'the probe assembled to 00 instead of 3E2A' });
+    const failed = assemble('    jp nowhere\n');
+    expect(checkAssemblerRuntime(() => failed)).toEqual({ ok: false, message: 'the probe failed to assemble: Label not found: nowhere' });
+    expect(
+      checkAssemblerRuntime(() => {
+        throw new Error('boom');
+      })
+    ).toEqual({ ok: false, message: 'assembling the probe threw: boom' });
   });
 });

@@ -2,8 +2,9 @@
 //
 // Projection of the normalized Z80 opcode table (the single authority,
 // dna/domain/z80-opcodes.yaml) produced via the conformance normalizeTable().
-// The assembler (encode: mnemonic -> row -> bytes) and disassembler (decode:
-// bytes -> row -> mnemonic) consume this one table (ADR-0025, W12 Phase C).
+// The assembler's encoder (mnemonic -> row -> bytes) consumes this table (ADR-0025,
+// W12 Phase C). The disassembler (src/disasm.ts) is a hand-coded x/y/z decoder that
+// does not read it; the round-trip gate (ASM-ROUNDTRIP-001) keeps the two in step.
 //
 //   Regenerate:  node scripts/gen-opcode-table.mjs
 //   Drift-gated: node scripts/check-opcode-table-drift.mjs  (run by `pnpm check:drift`)
