@@ -1694,7 +1694,8 @@ BEHAVIOR so the copies can no longer diverge silently.
 
 ### ADR-0029 — Repository review fixes (2026-11-11): fail loud at the toolkit boundary; continue semantics for resumed sessions
 
-**Status:** recorded by the review session, **pending owner ratification**.
+**Status:** accepted (ratified by the user 2026-11-12 by merging PR #40, which carries
+these fixes); recorded by the review session.
 
 **Context.** A whole-repository review (six parallel read-only reviewers; the lead
 reproduced most claims before acting, and the rest were fixed from code reading plus
@@ -1746,9 +1747,9 @@ loop is `run --state` → `screen --state`.
 
 ### ADR-0030 — Fidelity pass (2026-11-11): DNA-pinned fixes for the 48K core, tape and snapshot formats
 
-**Status:** recorded by the review session at the owner's request ("apply your
-recommendations for a result more faithful to the original machine and free of
-bugs"), **pending owner ratification**.
+**Status:** accepted (ratified by the user 2026-11-12 by merging PR #40); recorded by
+the review session at the owner's request ("apply your recommendations for a result
+more faithful to the original machine and free of bugs").
 
 **Context.** ADR-0029 left several fidelity findings open. Items 1–5 follow ADR-0001
 in full: a DNA claim, a conformance fixture with a coverage row, and a check that the
