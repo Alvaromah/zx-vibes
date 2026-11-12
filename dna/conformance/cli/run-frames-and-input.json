@@ -1,0 +1,200 @@
+[
+  {
+    "id": "CLI-RUN-OVERRUNS-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0031",
+    "input": {
+      "kind": "cli-exit",
+      "note": "cli.md CLI-PROD-OUT-RUN-001 / toolkit-runtime.md RT-PROD-RUN-FRAME-BUDGET-001: frameBudget lists the overrun frames (the first 32) as { frame, busyTStates }, with overrunsTruncated. A HALT loop that is late on exactly two frames reports both, numbered like worstFrame.frame. The program burns ~78,000 T-states after its 10th and 20th HALT; the overruns are frames 10 and 21 because the interrupt that lands mid-delay does not bump the program's own counter.",
+      "cases": [
+        {
+          "name": "two-late-frames",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\n    ld sp, 0xFF00\n    ei\nmain:\n    halt\n    ld hl, count\n    inc (hl)\n    ld a, (hl)\n    cp 10\n    jr z, slow\n    cp 20\n    jr nz, main\nslow:\n    ld bc, 3000        ; 3000 x 26 T = 78,000 T\ndelay:\n    dec bc\n    ld a, b\n    or c\n    jr nz, delay\n    jr main\ncount:\n    defb 0\n"
+            }
+          ],
+          "command": "zxs run --frames 40 --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "two-late-frames",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "run",
+            "status": "ok",
+            "frameBudget": {
+              "overrunFrames": 2,
+              "overrunsTruncated": false,
+              "overruns": [
+                {
+                  "frame": 10
+                },
+                {
+                  "frame": 21
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  },
+  {
+    "id": "CLI-RUN-FRAMES-PLAN-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0031",
+    "input": {
+      "kind": "cli-exit",
+      "note": "toolkit-runtime.md RT-PROD-RUN-007: an explicit `run --frames N` stops at frame N even when the --keys/--joy plan runs longer, and the report says so (input.planFrames, input.truncated); without --frames the run extends to the end of the plan.",
+      "cases": [
+        {
+          "name": "explicit-frames-cuts-the-plan",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "ORG 0x8000\n  ld sp, 0xFF00\n  ld a, 2\n  out (0xFE), a\n  ei\nmain:\n  halt\n  jr main\n"
+            }
+          ],
+          "command": "zxs run --frames 100 --keys 0:SPACE*500 --json"
+        },
+        {
+          "name": "no-frames-runs-to-the-plan-end",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "ORG 0x8000\n  ld sp, 0xFF00\n  ld a, 2\n  out (0xFE), a\n  ei\nmain:\n  halt\n  jr main\n"
+            }
+          ],
+          "command": "zxs run --keys 0:SPACE*500 --json"
+        },
+        {
+          "name": "joy-plan-cut-too",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "ORG 0x8000\n  ld sp, 0xFF00\n  ld a, 2\n  out (0xFE), a\n  ei\nmain:\n  halt\n  jr main\n"
+            }
+          ],
+          "command": "zxs run --frames 50 --joy 10:RF*200 --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "explicit-frames-cuts-the-plan",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "run",
+            "framesRun": 100,
+            "input": {
+              "planFrames": 500,
+              "truncated": true
+            }
+          }
+        },
+        {
+          "name": "no-frames-runs-to-the-plan-end",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "run",
+            "framesRun": 500,
+            "input": {
+              "planFrames": 500,
+              "truncated": false
+            }
+          }
+        },
+        {
+          "name": "joy-plan-cut-too",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "run",
+            "framesRun": 50,
+            "input": {
+              "planFrames": 210,
+              "truncated": true
+            }
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  },
+  {
+    "id": "CLI-TRACE-KEYS-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0031",
+    "input": {
+      "kind": "cli-exit",
+      "note": "cli.md CLI-PROD-TRACE-002: trace takes --keys/--joy like coverage; the plan extends the traced run to its end and reaches the program (a SPACE poll leaves the loop and stops on the HALT at 0x800B).",
+      "cases": [
+        {
+          "name": "trace-keys-reach-the-program",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\nwait:\n    ld a, 0x7F\n    in a, (0xFE)\n    rra\n    jr c, wait\n    ld a, 2\n    out (0xFE), a\ndone:\n    halt            ; 0x800B\n    jr done\n"
+            }
+          ],
+          "command": "zxs trace --frames 2 --keys 0:SPACE*5 --last 1 --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "trace-keys-reach-the-program",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "trace",
+            "framesRun": 5,
+            "last": [
+              {
+                "addr": 32779
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  }
+]

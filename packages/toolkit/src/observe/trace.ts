@@ -126,6 +126,10 @@ export interface TraceOptions {
   sna?: string | undefined;
   org?: string | undefined;
   frames?: number | undefined;
+  /** `--keys`: scheduled keyboard input, as on `run`/`coverage` (CLI-PROD-TRACE-002). */
+  keys?: string | undefined;
+  /** `--joy`: scheduled Kempston input, as on `run`/`coverage` (CLI-PROD-TRACE-002). */
+  joy?: string | undefined;
   top?: number | undefined;
   last?: number | undefined;
   out?: string | undefined;
@@ -165,6 +169,9 @@ export function runTrace(options: TraceOptions = {}): TraceEnvelope {
   // in RAM (the RAM floor, not wherever it paused).
   const result = runProgram(machine, resumed ? RAM_BASE : org, {
     frames,
+    // The plan extends the traced run to its end, as on `coverage` (CLI-PROD-TRACE-002).
+    keys: options.keys,
+    joy: options.joy,
     detectHangs: false,
     border,
     resume: resumed,
@@ -369,6 +376,8 @@ export function traceCommand(context: CommandContext): TraceEnvelope {
     org: options.org as string | undefined,
     ...snapshotSourceFlags(options),
     frames: options.frames !== undefined ? parsePositive(options.frames as string, '--frames') : undefined,
+    keys: options.keys as string | undefined,
+    joy: options.joy as string | undefined,
     top: options.top !== undefined ? parseNonNegative(options.top as string, '--top') : undefined,
     last: options.last !== undefined ? parseNonNegative(options.last as string, '--last') : undefined,
     out: options.out as string | undefined,
@@ -398,7 +407,9 @@ export function configureTraceCommand(command: Command): void {
     .description('Run with per-instruction execution tracing')
     .option('--bin <file>', 'trace a raw binary loaded at --org')
     .option('--org <addr>', 'load origin for --bin (default 0x8000)')
-    .option('--frames <n>', `frame budget (default ${DEFAULT_TRACE_FRAMES})`)
+    .option('--frames <n>', `frame budget (default ${DEFAULT_TRACE_FRAMES}; a longer --keys/--joy plan extends it)`)
+    .option('--keys <spec>', 'scheduled keyboard input, as on run, e.g. "60:O*30,120:SPACE*5"')
+    .option('--joy <spec>', 'scheduled Kempston input, as on run, e.g. "60:R*30,90:RF*10"')
     .option('--top <n>', `hot-spots to report (default ${DEFAULT_TRACE_TOP})`)
     .option('--last <n>', `trailing instructions to report (default ${DEFAULT_TRACE_LAST})`)
     .option('--out <file>', 'write the full ordered trace to this file')

@@ -31,6 +31,7 @@ const defaultFixturePaths = [
   path.join(thisDir, "verify-exit.json"),
   path.join(thisDir, "run-beeper-edges.json"),
   path.join(thisDir, "toolkit-fidelity.json"),
+  path.join(thisDir, "run-frames-and-input.json"),
 ];
 
 /** Fixture kinds this runner knows how to drive. */

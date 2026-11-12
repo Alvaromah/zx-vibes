@@ -271,6 +271,34 @@ function isAssertionReference(value: unknown): value is AssertionReferenceEntry[
   );
 }
 
+/** The parts of a `run` `frameBudget` record the human line shows. */
+interface FrameBudgetRecord {
+  measuredFrames: number;
+  overrunFrames: number;
+  overruns?: Array<{ frame: number }>;
+  worstFrame: { frame: number; busyTStates: number } | null;
+}
+
+function isFrameBudgetRecord(value: unknown): value is FrameBudgetRecord {
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Partial<FrameBudgetRecord>;
+  return typeof record.measuredFrames === 'number' && typeof record.overrunFrames === 'number';
+}
+
+/** How many late frames the human `run` line names. */
+const HUMAN_OVERRUN_FRAMES = 8;
+
+/** `{measured=40 overruns=2 frames=10,21 worst=69895T@21}`. */
+function formatFrameBudget(budget: FrameBudgetRecord): string {
+  const parts = [`measured=${budget.measuredFrames}`, `overruns=${budget.overrunFrames}`];
+  const frames = (budget.overruns ?? []).slice(0, HUMAN_OVERRUN_FRAMES).map((overrun) => overrun.frame);
+  if (frames.length > 0) {
+    parts.push(`frames=${frames.join(',')}${budget.overrunFrames > frames.length ? ',…' : ''}`);
+  }
+  if (budget.worstFrame) parts.push(`worst=${budget.worstFrame.busyTStates}T@${budget.worstFrame.frame}`);
+  return `{${parts.join(' ')}}`;
+}
+
 /** The assertion reference as one aligned line per type: `type  {fields}  description`. */
 function formatAssertionReference(entries: readonly AssertionReferenceEntry[]): string[] {
   const typeWidth = Math.max(...entries.map((entry) => entry.type.length));
@@ -333,6 +361,12 @@ function formatHuman(envelope: SuccessEnvelope): string {
     // `next` steps and `deferred` notes are read, not counted: one per line.
     if (LINE_LIST_FIELDS.has(key) && isStringList(value)) {
       blocks.push(`${key}:`, ...value.map((item) => `  ${item}`));
+      continue;
+    }
+    // `run`'s frame-budget record: the facts a human checks, late frames included (the
+    // JSON blob was cut at 120 characters before reaching them).
+    if (key === 'frameBudget' && isFrameBudgetRecord(value)) {
+      parts.push(`${key}=${formatFrameBudget(value)}`);
       continue;
     }
     // `test --list-assertions`: the reference is the answer, so print it as a table.

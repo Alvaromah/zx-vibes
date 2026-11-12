@@ -1919,3 +1919,22 @@ things in `run` and `regs`, and screenshots without the border.
    `tests/envelope.test.ts` (the two cases that pinned `next=2`/`next=1`) and
    `tests/human-output.test.ts` (all 17 types on their own lines; `new` prints its
    three steps).
+3. **Frame-budget diagnostics and keyed runs** (FEEDBACK 8, 9; D3). `runtime/run.ts`
+   lists the first 32 overrun boundaries in `frameBudget.overruns` (`{ frame,
+   busyTStates }`, numbered like `worstFrame.frame`) with `overrunsTruncated`; the
+   `frameBudget` assertion names the first eight late frames, and the human `run` line
+   prints a compact `frameBudget={measured=… overruns=… frames=… worst=…}`. `runProgram`
+   gained `extendToInputPlan` (default true); only the `run` CLI handler turns it off,
+   and only when `--frames` was typed, because the test runner always passes `frames`.
+   The report's `input` gained `planFrames` and `truncated` (the run ended before the
+   plan did). `trace` takes `--keys`/`--joy` (it already extended to the plan through
+   `runProgram`). Claims: new RT-PROD-RUN-007 and CLI-PROD-TRACE-002; amended
+   CLI-PROD-OUT-RUN-001, CLI-PROD-RUN-004, RT-PROD-RUN-004,
+   RT-PROD-RUN-FRAME-BUDGET-001 and ASSERT-PROD-FRAME-BUDGET-001. Fixture file
+   `dna/conformance/cli/run-frames-and-input.json` (coverage rows CLI-RUN-OVERRUNS-001,
+   CLI-RUN-FRAMES-PLAN-001, CLI-TRACE-KEYS-001; five cases), all five run red against
+   the pre-change build first; the 32-entry cap, the plan switch and the assertion text
+   are pinned by `tests/run.test.ts`, `tests/assertions.test.ts` and
+   `tests/human-output.test.ts`. *Known divergence:* the MCP `zx_run` tool keeps
+   extending a `frames` budget to the end of its `keys` plan, as before; only the CLI
+   flag changed meaning. No document or test used `--frames N` with a plan past N.

@@ -79,7 +79,8 @@ most proof-per-line:
   frame boundary counts, including one-off work such as drawing a title or
   building a level. Do slow set-up before your first `HALT`, split it across
   frames, or anchor the spec with `waitFor`: after readiness the measured run
-  starts afresh, and so does its budget.
+  starts afresh, and so does its budget. A failing `frameBudget` names the late
+  frames, and `run --json` lists the first 32 in `frameBudget.overruns`.
 - `at` — temporal checkpoints: assert mid-run state at a named frame, e.g. the
   apex of a jump.
 - `beeperEdges` — sound actually reached port `0xFE` bit 4

@@ -130,6 +130,13 @@ export interface RunFrameBudget {
   interruptFrames: number;
   /** Measured frame boundaries reached while the CPU was still busy rather than halted. */
   overrunFrames: number;
+  /**
+   * The first {@link MAX_REPORTED_OVERRUNS} of those boundaries, in run order: `frame` is
+   * numbered like `worstFrame.frame` (frames elapsed when the boundary was reached).
+   */
+  overruns: FrameOverrun[];
+  /** Whether more overruns happened than `overruns` lists. */
+  overrunsTruncated: boolean;
   /** HALT-wait time across the measured frames in this invocation. */
   idleTStates: {
     min: number;
@@ -139,10 +146,37 @@ export interface RunFrameBudget {
   worstFrame: WorstFrameBudget | null;
 }
 
+/** How many overrun frames a run report lists (`frameBudget.overruns`). */
+export const MAX_REPORTED_OVERRUNS = 32;
+
+/** One measured frame boundary the CPU reached busy instead of halted. */
+export interface FrameOverrun {
+  /** Frames elapsed when the boundary was reached (the `worstFrame.frame` numbering). */
+  frame: number;
+  /** Non-HALT T-states the frame spent. */
+  busyTStates: number;
+}
+
+/** The realized input plan a run reports (RT-PROD-RUN-004, RT-PROD-RUN-007). */
+export interface RunInput {
+  keys: KeyEvent[];
+  joy: JoyEvent[];
+  /** The first frame after the last scheduled event ends (0 without a plan). */
+  planFrames: number;
+  /** Whether the run ended before the plan did (`framesRun < planFrames`). */
+  truncated: boolean;
+}
+
 /** Per-invocation run parameters (RT-PROD-CONFIG-002) — already parsed to numbers/ranges. */
 export interface RunParams {
   /** Frame budget (default {@link DEFAULT_FRAMES}). */
   frames?: number | undefined;
+  /**
+   * Extend the frame budget to the end of a longer `keys`/`joy` plan (default true).
+   * Only `zxs run` with an explicit `--frames` turns it off (RT-PROD-RUN-007): that
+   * budget is a hard stop, and the report says the plan was cut (`input.truncated`).
+   */
+  extendToInputPlan?: boolean | undefined;
   /** Hang watchdog on/off (default true, RT-PROD-RUN-003). */
   detectHangs?: boolean | undefined;
   /** Raw `--keys` schedule spec (CLI-PROD-RUN-004). */
@@ -217,7 +251,7 @@ export interface RunResult {
   audio: RunAudio;
   registers: RegisterSnapshot;
   screen: ScreenSummary;
-  input: { keys: KeyEvent[]; joy: JoyEvent[] };
+  input: RunInput;
   /** The post-run machine (live access for `verify`/`test`/observe commands). */
   machine: Machine;
   /** The observable I/O device (border, beeper edge stream, port-write counts). */
@@ -256,7 +290,8 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
 
   let budget = params.frames ?? DEFAULT_FRAMES;
   if (params.untilBreak || params.untilWatch) budget = Math.max(budget, UNTIL_BREAK_MIN_FRAMES);
-  budget = Math.max(budget, planFrames(keys, joy));
+  const planEnd = planFrames(keys, joy);
+  if (params.extendToInputPlan !== false) budget = Math.max(budget, planEnd);
 
   // `--until-change` is value-based: a per-instruction shadow of the one watched byte.
   const changeAddrs = params.untilChange !== undefined ? [params.untilChange & 0xffff] : [];
@@ -287,6 +322,7 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   let frameBudgetStarted = false;
   let measuredFrames = 0;
   let overrunFrames = 0;
+  const overruns: FrameOverrun[] = [];
   let idleTStatesTotal = 0;
   let minIdleTStates = Number.POSITIVE_INFINITY;
   let worstFrame: WorstFrameBudget | null = null;
@@ -461,7 +497,10 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     if (!stopped && frameBudgetStarted) {
       measuredFrames += 1;
       const frameOverrun = !machine.halted;
-      if (frameOverrun) overrunFrames += 1;
+      if (frameOverrun) {
+        overrunFrames += 1;
+        if (overruns.length < MAX_REPORTED_OVERRUNS) overruns.push({ frame: framesRun, busyTStates });
+      }
       idleTStatesTotal += frameIdleTStates;
       minIdleTStates = Math.min(minIdleTStates, frameIdleTStates);
       if (worstFrame === null || busyTStates > worstFrame.busyTStates) {
@@ -523,6 +562,8 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     measuredFrames,
     interruptFrames,
     overrunFrames,
+    overruns,
+    overrunsTruncated: overrunFrames > overruns.length,
     idleTStates: {
       min: measuredFrames > 0 ? minIdleTStates : 0,
       average: measuredFrames > 0 ? idleTStatesTotal / measuredFrames : 0,
@@ -546,7 +587,7 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     },
     registers: readRegisters(machine),
     screen: summarizeScreen(machine, io.borderColor()),
-    input: { keys, joy },
+    input: { keys, joy, planFrames: planEnd, truncated: framesRun < planEnd },
     machine,
     io,
   };
@@ -584,7 +625,7 @@ type RunReport = {
   audio: RunAudio;
   registers: RegisterSnapshot;
   screen: ScreenSummary;
-  input: { keys: KeyEvent[]; joy: JoyEvent[] };
+  input: RunInput;
 };
 
 export type RunSuccessEnvelope = RunReport & { ok: true };
@@ -754,6 +795,9 @@ export function runCommand(context: CommandContext): RunEnvelope {
 
   const params: RunParams = {
     frames: options.frames !== undefined ? parsePositiveInt(options.frames) : undefined,
+    // An explicit --frames is a hard stop (RT-PROD-RUN-007): a longer --keys/--joy plan is
+    // cut there and the report says so. Without it, the run extends to the plan's end.
+    extendToInputPlan: options.frames === undefined,
     detectHangs: options.detectHangs,
     keys: options.keys,
     joy: options.joy,
@@ -832,7 +876,10 @@ export function configureRunCommand(command: Command): void {
       '--org <addr>',
       'load origin for --bin, or for a built entry with no ORG (default 0x8000; an ORG wins)',
     )
-    .option('--frames <n>', 'frame budget (default 300; 50 frames ≈ 1 second)')
+    .option(
+      '--frames <n>',
+      'frame budget (default 300; 50 frames ≈ 1 second). A --keys/--joy plan that runs longer extends the default, but not an explicit --frames: the run stops at n (input.truncated)',
+    )
     .option('--no-detect-hangs', 'disable the hang watchdog (the CLI form of detectHangs:false)')
     .option('--until-pc <addr>', 'stop when PC reaches this address')
     .option('--until-break', 'run until a breakpoint fires (raises the frame budget)')

@@ -138,3 +138,37 @@ describe('lists a human reads item by item print one per line', () => {
     expect(lines.slice(1)).toEqual(['next:', '  cd pong', '  zxs verify', '  zxs preview --watch']);
   });
 });
+
+describe('run: the frame budget names the late frames', () => {
+  it('prints a compact frameBudget with the overrun frames', async () => {
+    // Late on exactly two frames (the CLI-RUN-OVERRUNS-001 fixture program).
+    project([
+      '    ORG 0x8000',
+      '    ld sp, 0xFF00',
+      '    ei',
+      'main:',
+      '    halt',
+      '    ld hl, count',
+      '    inc (hl)',
+      '    ld a, (hl)',
+      '    cp 10',
+      '    jr z, slow',
+      '    cp 20',
+      '    jr nz, main',
+      'slow:',
+      '    ld bc, 3000',
+      'delay:',
+      '    dec bc',
+      '    ld a, b',
+      '    or c',
+      '    jr nz, delay',
+      '    jr main',
+      'count:',
+      '    defb 0',
+      '',
+    ].join('\n'));
+    const { code, out } = await human(['run', '--frames', '40']);
+    expect(code).toBe(0);
+    expect(out).toMatch(/frameBudget=\{measured=40 overruns=2 frames=10,21 worst=\d+T@21\}/);
+  });
+});

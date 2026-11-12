@@ -1490,6 +1490,33 @@ behaviors:
     status: covered
     notes: "ADR-0030 (2026-11). cli.md CLI-PROD-RUN-007: writes are decoded per instruction (runtime/write-targets.ts) instead of diffing values, so a same-value write is still a write. Before, it was missed."
 
+  - id: CLI-RUN-OVERRUNS-001
+    area: toolkit
+    behavior: "run --json lists the overrun frames: a HALT loop late on exactly two frames reports frameBudget.overruns [{frame 10}, {frame 21}], overrunFrames 2, overrunsTruncated false"
+    tier: contract
+    provenance: decision:ADR-0031
+    fixtures: [conformance/cli/run-frames-and-input.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0031 (2026-11). cli.md CLI-PROD-OUT-RUN-001 / toolkit-runtime.md RT-PROD-RUN-FRAME-BUDGET-001: the first 32 overruns as { frame, busyTStates }, numbered like worstFrame.frame. Before, only the count and the single worst frame were reported. The 32-entry cap is pinned by tests/run.test.ts."
+
+  - id: CLI-RUN-FRAMES-PLAN-001
+    area: toolkit
+    behavior: "run --frames 100 --keys 0:SPACE*500 stops at frame 100 with input.truncated true and input.planFrames 500; without --frames the run extends to frame 500"
+    tier: contract
+    provenance: decision:ADR-0031
+    fixtures: [conformance/cli/run-frames-and-input.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0031 D3 (2026-11). toolkit-runtime.md RT-PROD-RUN-007: an explicit --frames on zxs run is a hard stop; every other caller (test specs, verify, key/type, coverage, trace, MCP) still extends to the plan end. Before, run silently ran to frame 500."
+
+  - id: CLI-TRACE-KEYS-001
+    area: toolkit
+    behavior: "trace --keys reaches the program: a SPACE poll traced with --keys 0:SPACE*5 leaves its loop and stops on the HALT at 0x800B; the plan extends the traced run to 5 frames"
+    tier: contract
+    provenance: decision:ADR-0031
+    fixtures: [conformance/cli/run-frames-and-input.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0031 (2026-11). cli.md CLI-PROD-TRACE-002: trace takes --keys/--joy like coverage. Before, the flags were unknown (exit 1), so a keyed scenario could not be traced."
+
   - id: RUN-BEEPER-001
     area: toolkit
     behavior: "run JSON reports audio.beeperEdges as an integer >= 0"
