@@ -22,22 +22,27 @@ function normalizeEol(text) {
   return text.replace(/\r\n/g, "\n");
 }
 
-export async function checkOpcodeTableDrift() {
+/**
+ * Compares `generatedPath` (default: the committed table) with a fresh generation.
+ * The path parameter lets the self-test run the real comparison against tampered copies.
+ */
+export async function checkOpcodeTableDrift(generatedPath = GENERATED_PATH) {
   const expected = await generateOpcodeTableSource();
+  const shown = path.relative(repoRoot, generatedPath);
   let actual;
   try {
-    actual = await readFile(GENERATED_PATH, "utf8");
+    actual = await readFile(generatedPath, "utf8");
   } catch {
     return {
       ok: false,
-      reason: `missing generated table: ${path.relative(repoRoot, GENERATED_PATH)} (run: node scripts/gen-opcode-table.mjs)`,
+      reason: `missing generated table: ${shown} (run: node scripts/gen-opcode-table.mjs)`,
     };
   }
   if (normalizeEol(actual) !== normalizeEol(expected)) {
     return {
       ok: false,
       reason:
-        `${path.relative(repoRoot, GENERATED_PATH)} is stale (drifts from dna/domain/z80-opcodes.yaml). ` +
+        `${shown} is stale (drifts from dna/domain/z80-opcodes.yaml). ` +
         "Fix: node scripts/gen-opcode-table.mjs && commit the regenerated file.",
     };
   }

@@ -13,7 +13,7 @@ const VALID_PROVENANCE = new Set([
   "manual",
   "UNKNOWN",
 ]);
-const FIXTURE_DIRS = ["assembler", "audio", "cli", "cpu", "fixtures", "formats", "host-io", "keyboard", "machine", "peripherals", "raster", "screen", "timing"];
+const FIXTURE_DIRS = ["assembler", "audio", "cli", "cpu", "formats", "host-io", "keyboard", "machine", "peripherals", "raster", "screen", "tape", "timing"];
 const MARKDOWN_CLAIM_DIRS = ["domain", "product"];
 const FIXTURE_AREA_BY_DIR = new Map([
   ["assembler", "assembler"],
@@ -28,7 +28,7 @@ const FIXTURE_AREA_BY_DIR = new Map([
   ["keyboard", "emulator"],
   ["raster", "gallery"],
   ["screen", "emulator"],
-  ["fixtures", "cross"],
+  ["tape", "emulator"],
 ]);
 
 const thisDir = path.dirname(fileURLToPath(import.meta.url));

@@ -10,7 +10,7 @@ worktrees so captured command snapshots and byte hashes are reproducible.
 ```bash
 pnpm run oracle:capture -- --list
 pnpm run oracle:capture -- --case ORACLE-CLI-ZXS-HELP-001
-pnpm run oracle:capture:self-test
+pnpm run oracle:capture-self-test
 ```
 
 Default outputs go to `.cache/oracle-captures/`, which is intentionally ignored.

@@ -3,7 +3,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const FIXTURE_DIRS = ["assembler", "audio", "cli", "cpu", "formats", "host-io", "keyboard", "machine", "peripherals", "raster", "screen", "timing"];
+export const FIXTURE_DIRS = ["assembler", "audio", "cli", "cpu", "formats", "host-io", "keyboard", "machine", "peripherals", "raster", "screen", "tape", "timing"];
 const VALID_TIERS = new Set(["contract", "fidelity", "incidental"]);
 const VALID_PROVENANCE = new Set([
   "hardware",

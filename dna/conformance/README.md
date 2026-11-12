@@ -10,9 +10,11 @@ Each fixture MUST declare: `id`, `tier` (contract | fidelity | incidental),
 `provenance`, `input`, `expected`, and a normalization profile for
 non-deterministic fields.
 
-The executable schema lives at `schema/fixture.schema.json`. The runner currently
-validates JSON fixtures in `assembler/`, `cli/`, `cpu/`, `formats/`, `machine/`,
-and `timing/`; an empty suite is valid during W0 bootstrap.
+The executable schema lives at `schema/fixture.schema.json`. The runner validates
+the JSON fixtures in the directories listed in `runner.mjs` (`FIXTURE_DIRS`):
+`assembler/`, `audio/`, `cli/`, `cpu/`, `formats/`, `host-io/`, `keyboard/`,
+`machine/`, `peripherals/`, `raster/`, `screen/`, `tape/` and `timing/`; an empty
+suite is valid during W0 bootstrap.
 
 ```bash
 pnpm run conformance
@@ -23,7 +25,7 @@ pnpm run external-suites:self-test
 pnpm run external-suites:adapters-self-test
 pnpm run external-suites:payloads-self-test
 pnpm run external-suites:fuse-reference-self-test
-pnpm run external-suites:zex-cpm-self-test
+pnpm run external-suites:zex-cpm-cpu-self-test
 pnpm run oracle:capture-self-test
 pnpm run distribution:check
 pnpm run domain:z80-opcodes-check

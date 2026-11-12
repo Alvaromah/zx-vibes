@@ -6,8 +6,8 @@ body:
     id: package
     attributes:
       label: Package and version
-      description: e.g. `zx-vibes 0.3.0`, `@zx-vibes/toolkit 0.4.0` (`zxs --version`)
-      placeholder: zx-vibes 0.3.0
+      description: e.g. `zx-vibes x.y.z` (`zxs --version` prints the toolkit version)
+      placeholder: zx-vibes x.y.z
     validations:
       required: true
   - type: input

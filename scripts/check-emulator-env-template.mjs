@@ -11,7 +11,7 @@
 //
 // Repo culture: every claim has a self-test. This is the QUICKSTART anti-drift guard's
 // sibling, scoped to the packaged template instead of the in-repo recipe.
-import { readFileSync, statSync, readdirSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 

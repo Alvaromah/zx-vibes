@@ -1618,7 +1618,12 @@ Tracked so the regeneration's known limitations are **not silent debt (C5)**.
   then CLI-PROD-PREVIEW-002's `.sna` type is intentionally unsatisfiable.
 
 - **W4-GAP-04 — physical cutover DEFERRED (legacy still has live cross-product
-  consumers).** Found at Slice 12 cutover. The v2 `@zx-vibes/toolkit` regeneration
+  consumers).** **RESOLVED (verified 2026-11-11):** `packages/toolkit-legacy`,
+  `@zx-vibes/emulator`, `gallery/` and `check:gallery-bundles` are gone from the tree
+  (the last removed in 0e2b011); the corpus consumers now point at `starters/`
+  (`dna/conformance/assembler/corpus.json`, the asm corpus suite,
+  `scripts/check-version-consistency.js`); and the full `verify` gate is green. The
+  text below is the original record. Found at Slice 12 cutover. The v2 `@zx-vibes/toolkit` regeneration
   is COMPLETE and toolkit-scoped-green (Slices 1–11 + the pre-cutover reconciliation
   of the second-blind-audit divergences; build/typecheck/lint + 284 tests +
   `conformance:check:toolkit` 2/2 + cli/mcp/reveng self-tests). But **deleting the
@@ -1686,3 +1691,168 @@ The player consumes these as pure modules under `packages/toolkit/src/preview/`
 Consolidating the four host-layer copies (demos, player, CLI, conformance
 models) into one shared package is explicitly deferred — this ADR pins the
 BEHAVIOR so the copies can no longer diverge silently.
+
+### ADR-0029 — Repository review fixes (2026-11-11): fail loud at the toolkit boundary; continue semantics for resumed sessions
+
+**Status:** recorded by the review session, **pending owner ratification**.
+
+**Context.** A whole-repository review (six parallel read-only reviewers; the lead
+reproduced most claims before acting, and the rest were fixed from code reading plus
+a new test) found data-loss bugs, silent mis-loads and session bugs. These choices
+shape behaviour beyond a plain bug fix; each is pinned by a package regression test
+(`packages/toolkit/tests/{fail-loud,session-resume}.test.ts` and others, the asm
+regression block).
+
+**Decisions.**
+- **Fail loud at the toolkit boundary, not in the core.** ERR-PROD-EMU-001 says core
+  operations throw on invalid input, but `readZ80` validates nothing. The toolkit now
+  checks every `.z80` it reads (size, v2/v3 header length, page completeness, the
+  48K hardware modes 0–2 for v2 and 0–3 for v3), the `.zxstate` version and inner
+  snapshot, and the `instantLoad` result of each `.tap` CODE block. *Rejected for now:*
+  validating inside `@zx-vibes/machine`, which changes core behaviour and the demos
+  bundle; it stays a review item.
+- **Continue semantics for a resumed session.** `run --state` and the MCP hot session
+  (`RunParams.resume`) execute one instruction before checking a breakpoint or
+  `untilPc` at the current PC; a fresh boot still stops at an entry breakpoint.
+- **Repeated keys need a release.** `type` and MCP `typeText` insert 6 released frames
+  before a repeated key (measured against the real ROM: 3 frames still drop it).
+- **Preview player has a Kempston fitted** (idle `0x00`), like `zxs run`/`test` and the
+  demos, instead of floating `0xFF` (which read as all directions + fire).
+- **Destructive commands are bounded.** `clean` refuses a target that is not strictly
+  inside the project or that contains the entry; `setup --agent codex` merges into an
+  existing `config.toml` (append our table; `--force` replaces only that table).
+- **`zxs screen` stays non-executing.** The documented loop `zxs run` → `zxs screen
+  --text` therefore shows a fresh boot, not the run; adding `--state` to `screen`/
+  `step` (as CLI-PROD-SCOPE-003 / CONV-SOURCE-001 list) or a text view on `run` is
+  left to the owner.
+
+**Consequences.** Malformed inputs that used to "run" now exit 1; resumed debugging
+sessions advance; `clean` no longer accepts an `outDir` outside the project (e.g.
+`../build`). **Debt (C5):** these behaviours are pinned only by package tests, not by
+`dna/` claims or conformance fixtures, so a blind regeneration from `dna/` alone would
+lose them (and reintroduce the assembler misassemblies); each needs a DNA claim and
+fixture per ADR-0001. Open findings that need an owner call
+(core-level validation, CPU `DD/FD 76` = HALT, ROM write protection, the stateless
+`screen` loop, cutover gate not run in CI, demos vs DNA host-layer drift) are listed
+in the review report, not here.
+
+*Update (same day):* the owner then asked for the recommendations to be applied.
+ADR-0030 supersedes the "fail loud at the toolkit boundary, not in the core" choice
+(the core now validates `.z80`) and settles `DD/FD 76`, ROM write protection, the
+instant loader's VERIFY/short-block result, TZX control/info blocks and the resumable
+frame clock (items 1–6). Its item 10 also settles the "`zxs screen` stays
+non-executing" bullet above: the observe commands now take `--state`, so the documented
+loop is `run --state` → `screen --state`.
+
+### ADR-0030 — Fidelity pass (2026-11-11): DNA-pinned fixes for the 48K core, tape and snapshot formats
+
+**Status:** recorded by the review session at the owner's request ("apply your
+recommendations for a result more faithful to the original machine and free of
+bugs"), **pending owner ratification**.
+
+**Context.** ADR-0029 left several fidelity findings open. Items 1–5 follow ADR-0001
+in full: a DNA claim, a conformance fixture with a coverage row, and a check that the
+fixture discriminates (a self-test adversary, or the pre-change code failing it). The
+others are pinned less completely, as each item says: 6 and 9 by package tests only,
+7 is conformance tooling, 8 by assembler claims and new cases in the existing fixture
+files (the old build was checked against them), 10 by claims and 13 CLI fixture cases
+run through the built CLI (not run against the old CLI).
+
+**Decisions.**
+1. **`DD 76` / `FD 76` is `HALT`** (Z80-EXEC-PREFIX-HALT-001; `cpu/prefix/ddfd-halt.json`,
+   `machine/frame-loop.json` case `prefixed-halt-returns-past-76`). The core decoded it
+   as `LD (IX+d),(IX+d)` (19 T, PC + 3, a memory write) through a hole in the FUSE net.
+   Now: 8 T, PC left on the `76`, the machine reports halted, and the interrupt returns
+   past the `76`.
+2. **Read-only ROM as an opt-in** (MACHINE-ROM-READONLY-001; `machine/rom-readonly.json`).
+   `createMachine({ romWriteProtect: true })` drops writes below `0x4000` (instructions,
+   interrupt/NMI pushes, instant loads) while keeping the bus cycle's timing; the CPU
+   takes it as `step({ romTop })`. The toolkit enables it (fresh boot and `.zxstate`
+   resume). *Rejected:* making it the core default — the FUSE/zex oracles and
+   `contention-mcycle.json` model a flat 64 KB RAM and write below `0x4000`.
+3. **Instant load reproduces `LD-BYTES` for VERIFY and odd-sized blocks**
+   (TAPE-INSTANT-VERIFY-001, TAPE-INSTANT-SHORT-001, TAPE-INSTANT-RESULT-001 extended;
+   five new `tape/instant-load.json` fixtures, each also edge-loaded through the real ROM).
+   VERIFY compares and stops at the first mismatch; a short block takes its checksum byte
+   as data and fails; a long block loads `DE` bytes.
+4. **The core validates `.z80`** (FMT-Z80-VALIDATE-001; fixture `FMT-Z80-VALIDATE-001`,
+   16 cases). `readZ80` throws on a file that is not a complete 48K snapshot (short,
+   truncated, unknown extra-header length, 128K-class hardware mode, a page expanding
+   short, a missing 48K page — including 16K snapshots), and applies the flag-byte-255
+   rule to the border. The toolkit's `z80SnapshotProblem` now delegates to it, so the
+   standalone player stops loading 128K snapshots scrambled. The pinned
+   `FMT-Z80-V3-DECODE-001` blob lacked page 4 and gained it (pinning page 4 → `0x8000`).
+   *Rejected:* zero-filling a missing page as some emulators do — that is a silent
+   mis-load (ERR-PROD-NOSILENT-001); running 16K snapshots (COMPAT-Z80-001 keeps
+   non-48K machines out of scope).
+5. **TZX control and informational blocks** (FMT-TZX-CONTROL-001, FMT-TZX-INFO-001;
+   fixture `FORMAT-TZX-CONTROL-INFO-001`, a hand-laid 14-block file). `parseTzx` returns
+   `0x23`–`0x28`, `0x2A`, `0x2B`, `0x31`–`0x33`, `0x35`, `0x5A` in file order instead of
+   rejecting the whole file; none has `data`, so the preview's instant loader skips them.
+   Still rejected: `0x15`, `0x18`, `0x19` and the deprecated IDs. *Rejected:* skipping
+   unknown IDs through the DWORD-length rule — it holds only for post-v1.10 blocks.
+   *Gotcha:* the published spec writes sizes and offsets in hex, so `0x35`'s
+   `CHAR[10]` identification is 16 characters (first implemented as 10; caught by
+   comparing with the demos' own walker, then pinned by the fixture). *Consumers:* the
+   demos keep their own TZX→pulse walker (`examples/tooling/browser-entry.mjs`), which
+   plays loops but not jumps, calls or select; nothing in the toolkit plays control flow.
+6. **`.zxstate` keeps the frame clock and EI delay** (optional `machine.clock` /
+   `machine.eiDelay`, envelope version still 1; package tests in `state.test.ts`). A
+   session stopped mid-frame used to resume at T-state 0 and take its next interrupt at
+   a different point. FF-ZXSTATE-001 keeps the layout incidental, so no DNA claim.
+7. **Conformance runners build packages only when stale** (`dna/conformance/package-build.mjs`)
+   and no longer need corepack.
+8. **Assembler: errors instead of silent misassembly** (19 new `dna/product/assembler.md`
+   claims, e.g. ASM-PROD-COND-003, -SRC-SKELETON-003/004, -CONSTANTS-002, -EXPR-004/005;
+   cases added to the existing assembler fixture files). Where `assembler.md` was silent,
+   wrong output became a diagnostic rather than adopting sjasmplus semantics nobody here can
+   verify: `IF`/`DUP` using `$` or code labels, backwards `ORG` / code before the first
+   `ORG`, conflicting EQUs, a literal `0xFFFF` in a byte slot, missing macro arguments,
+   empty list elements, non-numeric defines, non-48K `DEVICE`. Choices beyond a plain fix:
+   negative constants (`X EQU -2`) fit byte slots; `label: INCLUDE` and `label: Macro`
+   work; `DEVICE` accepts only `ZXSPECTRUM48` (NONE is undocumented). Checked by assembling
+   512 sources with the old and new builds: every byte that assembled before is unchanged.
+9. **Preview tape autoload follows the ROM's timing** (pure modules
+   `packages/toolkit/src/preview/{autoload,frame-step,key-latch,player-boot,deps}.ts`,
+   tested on the real ROM). `LOAD ""` is typed from frame 100 (the ROM first reads the
+   keyboard near frame 86), each key released before the next; the keyboard returns to the
+   host when the typing ends (frame 160) while the LD-BYTES trap keeps serving blocks. A
+   block whose flag does not match is consumed, as a moving tape would be, and once the
+   tape is exhausted the trap stops so the real LD-BYTES waits and BREAK works. The demos
+   now run at the real 50.08 Hz frame rate with a continuous fractional audio grid
+   (BEEPER-PCM-FRACTIONAL-001), the DNA border timing (RASTER-TSTATE-PIXEL-001) and the
+   quick-tap latch (KBD-LATCH-001). *Debt:* the typing window, the trap semantics, the
+   `build-error` event and the dependency-based watch set are pinned only by package
+   tests; they need `toolkit-runtime.md` claims (RT-PROD-PREVIEW-*).
+10. **CLI loop and verdicts** (new claims CLI-PROD-STATE-OBSERVE-001, -COVERAGE-002,
+    -CONV-ORIGIN-001, -INPUT-003, -CONV-ADDR-002, -RUN-007, -DOCTOR-002 and
+    ERR-PROD-HANG-IDLE-001; CLI-PROD-EXIT-003, ERR-PROD-HANG-SHAPE-001,
+    RT-PROD-VERIFY-001, REC-PROD-SPEC-003 and CFG-PROD-FIELD-ORG-001 amended; fixture
+    file `dna/conformance/cli/toolkit-fidelity.json`, 13 cases). The six observe
+    commands take `--state`, which settles ADR-0029's open "stateless `screen` loop"
+    the way CLI-PROD-SCOPE-003 already listed. The hang watchdog treats a frame that runs
+    only ROM code and accepts the frame interrupt as progress, so the ROM idling in BASIC
+    is not a hang. A program that jumps to `0x0000` is still one, and `rom-error` needs
+    the program to have reached the error restart. *Trade-off:* a RAM program that jumps
+    into ROM code which keeps running with interrupts enabled is no longer flagged. One
+    load-origin rule everywhere: first `ORG`, else the configured `org`. `h`-suffixed
+    hex must start with a digit. *Known divergence:* MCP `zx_keys` keeps
+    `detectHangs: false` (MCP-PROD-EDGE-001), so CLI `key`/`type` and MCP disagree on a
+    hang.
+
+**Consequences.** Every surface rejects the same malformed `.z80` files; real-world TZX
+files with archive info, loops or messages now load; a ROM-protected machine can no
+longer corrupt its ROM through a stray write or a stack below `0x4000`. Verified on
+2026-11-12, after all changes: the full `pnpm run verify` gate passed (drift checks,
+all conformance incl. 1393 CPU cases + the FUSE oracle and 16 CLI cases, build,
+typecheck, lint, every package's tests — toolkit 484, asm 78), with provenance-lint at
+1033 items and coverage at 176/177 (the one open row, SCAFFOLD-VERIFY-001, unchanged).
+A headless-Chrome smoke (DevTools protocol, not committed) passed on the demos (frame rate
+~50 fps, a 15 ms key tap, the string-aware auto-typer, a real-time `LOAD ""` of the
+sample tape, Eject, a bad file, a 48K and a refused 128K `.z80`) and on `zxs preview`
+(the scaffolded project, a BASIC `.tap` that autoloads and runs, the 128K `.z80`
+refused before serving). After that run the `0x35` fix (item 5) changed the TZX parser,
+its fixture and self-test, the DNA table and the demo bundle; the TZX runner and
+self-test, the fixture-schema check, provenance, coverage, the knowledge-pack drift check,
+the preview tests and the demo tests were re-run green, and a `.tzx` (archive info, text,
+custom info, two data blocks) loaded end to end in `zxs preview` and in `full.html`.

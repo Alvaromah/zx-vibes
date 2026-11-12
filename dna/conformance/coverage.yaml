@@ -6,8 +6,8 @@
 #             | decision:<id> | UNKNOWN
 #
 # Gate (CI, R-W0-03): no contract/fidelity row may be uncovered/partial/unknown
-# at its slice cutover. The rows below are SEED examples (status: uncovered) that
-# show the intended shape; real rows are added as behaviors/fixtures are authored.
+# at its slice cutover. Real rows are added as behaviors/fixtures are authored;
+# `node dna/conformance/coverage-check.mjs --by-area` reports the live counts.
 
 behaviors:
   # --- DNA conformance foundations (W0) ---
@@ -1041,6 +1041,15 @@ behaviors:
     status: covered
     notes: "4 cases (DD/FD ED 44 = NEG; DD/FD ED 57 = LD A,I), run-to-budget. Closes a FUSE net hole (no DDED/FDED upstream) that let a consumer regeneration decode the ED byte as a base PUSH-like op. Expected = documented NONI decode (z80-spec) + the FUSE 4 T NONI timing (as ddfd00), corroborated by the zex-validated @zx-vibes/cpu via run-fuse-suite. Consumer feedback 2026-06-28; resolves UNKNOWN:emulator:CPU-PREFIX-DDED-001."
 
+  - id: CPU-PREFIX-HALT-001
+    area: emulator
+    behavior: "DD/FD + HALT: an index prefix before HALT (76) is one extra 4 T M1; DD 76 / FD 76 halt like 76 (8 T, R+2, PC left on the 76 byte, no displacement, no memory access)"
+    tier: fidelity
+    provenance: z80-spec
+    fixtures: [conformance/cpu/prefix/ddfd-halt.json, conformance/machine/frame-loop.json, conformance/cpu/run-cpu-exec-fixtures.mjs, conformance/cpu/run-fuse-suite.mjs, conformance/machine/run-machine-fixtures.mjs]
+    status: covered
+    notes: "Closes a FUSE net hole (fuse/dd.json has no dd76/fd76), through which the core decoded DD 76 as LD (IX+d),(IX+d): 19 T, PC + 3, a memory write. Z80-EXEC-PREFIX-HALT-001. frame-loop.json case prefixed-halt-returns-past-76 pins the machine side: the interrupt returns to the byte after 76. Review 2026-11-11 (ADR-0030)."
+
   - id: CPU-RETI-IFF-001
     area: emulator
     behavior: "RETI (ED 4D) restores the maskable-interrupt flip-flop IFF1 from IFF2, exactly like RETN"
@@ -1124,6 +1133,15 @@ behaviors:
     status: covered
     notes: "@zx-vibes/machine exactContention mode via run-machine-fixtures; DNA in dna/domain/machine-execution.md (MACHINE-CONTENTION-MCYCLE-001/-SCHEDULE-001/-MCYCLE-SCOPE-001). The CPU emits a bus-cycle schedule (clock.mcycle/internal/inexact) validated against the pinned FUSE per-instruction memory timeline by dna/conformance/cpu/validate-mcycle-schedule.mjs (1265 exact, 80 inexact-fallback, 0 silent). The 1366 FUSE/zex single-step cases (no clock) and the per-access model (MACHINE-CONTENTION-001) stay unchanged. ADR-0012."
 
+  - id: MACHINE-ROM-READONLY-001
+    area: emulator
+    behavior: "with romWriteProtect, a write to 0x0000-0x3FFF (CPU write, interrupt push) is a normal timed bus cycle that stores nothing; timing is unchanged"
+    tier: fidelity
+    provenance: hardware
+    fixtures: [conformance/machine/rom-readonly.json, conformance/machine/run-machine-fixtures.mjs, conformance/machine/run-machine-fixtures-self-test.mjs]
+    status: covered
+    notes: "MACHINE-ROM-READONLY-001 (machine-execution.md). Opt-in so the flat-RAM CPU/machine oracles keep their semantics; the toolkit, preview player and demos opt in. Each protected case has a flat twin proving the timing is unchanged. Review 2026-11-11 (ADR-0030)."
+
   - id: MACHINE-FRAME-001
     area: emulator
     behavior: "one frame of the machine loop accepts at most one interrupt at a boundary, honoring HALT and the post-EI delay"
@@ -1168,7 +1186,16 @@ behaviors:
     provenance: contract
     fixtures: [conformance/formats/z80-v3-roundtrip.json, conformance/formats/run-format-fixtures.mjs, conformance/formats/run-format-fixtures-self-test.mjs]
     status: covered
-    notes: "Pins the on-disk format (header offsets FMT-Z80-HEADER-001, the PC=0 v2/3 marker + 54-byte v3 extra header FMT-Z80-VERSION-001, the page-block layout FMT-Z80-PAGES-001, the ED ED RLE FMT-Z80-RLE-001) to the documented spec independently of writeZ80()."
+    notes: "Pins the on-disk format (header offsets FMT-Z80-HEADER-001, the PC=0 v2/3 marker + 54-byte v3 extra header FMT-Z80-VERSION-001, the page-block layout FMT-Z80-PAGES-001, the ED ED RLE FMT-Z80-RLE-001) to the documented spec independently of writeZ80(). ADR-0030 (2026-11) added the page-4 block the pinned blob lacked (a 48K snapshot stores pages 8, 4 and 5), which also pins page 4 -> 0x8000."
+
+  - id: FMT-Z80-VALIDATE-001
+    area: emulator
+    behavior: "readZ80 throws on a file that is not a complete 48K snapshot (shorter than the 30-byte header; a v1 RAM image short or expanding short; an unknown v2/v3 extra-header length or one the file ends inside; a 128K-class hardware mode; a page block truncated or expanding short; a missing 48K page, including a 16K snapshot) and still decodes 48K + M.G.T., v2 SamRam, flag byte 255 (border 0), a foreign page and short trailing bytes; a reader that never rejects fails"
+    tier: contract
+    provenance: contract
+    fixtures: [conformance/formats/z80-v3-roundtrip.json, conformance/formats/run-format-fixtures.mjs, conformance/formats/run-format-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0030 (2026-11). dna/domain/snapshot-z80.md FMT-Z80-VALIDATE-001 (+ the FMT-Z80-HEADER-001 flag-byte rule, which the pre-2026-11 reader applied to R and the compression bit but not the border). Before this the core reader decoded every malformed file into a partly zeroed machine; only the toolkit guarded it (runtime/z80-check.ts), so the standalone player loaded 128K snapshots scrambled. The toolkit check now delegates to the core. Kind z80-decode with expected.error patterns (run-format-fixtures.mjs); the pre-change reader fails 12 of the 16 cases; the self-test proves a never-rejecting reader fails."
 
   - id: FORMAT-SCR-001
     area: emulator
@@ -1190,12 +1217,12 @@ behaviors:
 
   - id: FORMAT-TZX-001
     area: emulator
-    behavior: "a .tzx file is a 10-byte header (\"ZXTape!\" + 0x1A + major + minor, v1.20) followed by typed blocks each introduced by a 1-byte block ID; every multi-byte field is little-endian, the 0x10 data length is a 2-byte WORD while the 0x11/0x14 data lengths are 3-byte LE values; parseTzx validates the signature and walks the modeled blocks (0x10/0x11/0x12/0x13/0x14/0x20/0x21/0x22/0x30), rejecting a bad signature, a truncated block, or an unsupported ID; serializeTzx is its exact inverse and the two round-trip; a big-endian word reader, a model that reads the turbo/pure-data length as a WORD, a version-swap, or a parser that skips the signature check all fail"
+    behavior: "a .tzx file is a 10-byte header (\"ZXTape!\" + 0x1A + major + minor, v1.20) followed by typed blocks each introduced by a 1-byte block ID; every multi-byte field is little-endian, the 0x10 data length is a 2-byte WORD while the 0x11/0x14 data lengths are 3-byte LE values; parseTzx validates the signature and walks the modeled blocks (data/signal 0x10-0x14 and 0x20; control 0x23-0x28, 0x2A, 0x2B; informational 0x21/0x22, 0x30-0x33, 0x35, 0x5A), returning the control blocks in file order rather than dropping them, and rejecting a bad signature, a truncated block, or an unsupported ID; serializeTzx is its exact inverse and the two round-trip; a big-endian word reader, a model that reads the turbo/pure-data length as a WORD, a version-swap, a parser that skips the signature check, or one that drops the control blocks all fail"
     tier: contract
     provenance: contract
     fixtures: [conformance/formats/tzx-format.json, conformance/formats/run-tzx-fixtures.mjs, conformance/formats/run-tzx-fixtures-self-test.mjs]
     status: covered
-    notes: "W10.7 (Track C/B2, fidelity-tier method). dna/domain/file-formats.md FMT-TZX-HEADER-001 / FMT-TZX-ENDIAN-001 / FMT-TZX-BLOCK-STREAM-001 / FMT-TZX-DATA-0x10-001 / FMT-TZX-TURBO-0x11-001 / FMT-TZX-TONE-0x12-001 / FMT-TZX-PULSES-0x13-001 / FMT-TZX-PUREDATA-0x14-001 / FMT-TZX-PAUSE-0x20-001 / FMT-TZX-GROUP-0x21-0x22-001 / FMT-TZX-TEXT-0x30-001 / FMT-TZX-ROUNDTRIP-001. parseTzx/serializeTzx + TZX_SIGNATURE/TZX_VERSION modeled in @zx-vibes/machine (packages/machine/src/tzx-format.mjs, beside the .tap/.z80 codecs), driven via run-tzx-fixtures.mjs (kind tzx-format-query: a hand-authored 87-byte on-disk `file` is the parse authority and `tzx` is the serialize input; serializeMatchesFile + the serialize-byte cases pin the 0x10 WORD length vs the 0x11/0x14 3-byte length). Provenance contract: like .tap/.z80/.sna, .tzx is an external community file-format specification (pinned TZX v1.20, https://worldofspectrum.net/TZXformat.html), transcribed in full into the DNA (C2) — the URL is the layout authority, never a runtime fetch. Scope: header + the nine common block IDs; the remaining v1.20 IDs are rejected (later slices may extend). FIDELITY-TIER verification: two blind regenerations from the spec agreed byte-for-byte with the shipped model over thousands of differential checks (no DNA gap), and the self-test rejects a big-endian word reader, a turbo/pure-data length read as a WORD, a version-swap, and a parser that skips the signature check. Three malformed-rejection fixtures (bad signature / truncated block / unsupported ID) pin parseTzx throwing. The pulse-level tape→EAR consumption of these blocks is authored separately at W10.9 (TAPE-EAR-PULSES-001)."
+    notes: "W10.7 (Track C/B2, fidelity-tier method). dna/domain/file-formats.md FMT-TZX-HEADER-001 / FMT-TZX-ENDIAN-001 / FMT-TZX-BLOCK-STREAM-001 / FMT-TZX-DATA-0x10-001 / FMT-TZX-TURBO-0x11-001 / FMT-TZX-TONE-0x12-001 / FMT-TZX-PULSES-0x13-001 / FMT-TZX-PUREDATA-0x14-001 / FMT-TZX-PAUSE-0x20-001 / FMT-TZX-GROUP-0x21-0x22-001 / FMT-TZX-TEXT-0x30-001 / FMT-TZX-CONTROL-001 / FMT-TZX-INFO-001 / FMT-TZX-ROUNDTRIP-001. parseTzx/serializeTzx + TZX_SIGNATURE/TZX_VERSION modeled in @zx-vibes/machine (packages/machine/src/tzx-format.mjs, beside the .tap/.z80 codecs), driven via run-tzx-fixtures.mjs (kind tzx-format-query: a hand-authored 87-byte on-disk `file` is the parse authority and `tzx` is the serialize input; serializeMatchesFile + the serialize-byte cases pin the 0x10 WORD length vs the 0x11/0x14 3-byte length). Provenance contract: like .tap/.z80/.sna, .tzx is an external community file-format specification (pinned TZX v1.20, https://worldofspectrum.net/TZXformat.html), transcribed in full into the DNA (C2) — the URL is the layout authority, never a runtime fetch. Scope: header + the nine common block IDs at W10.7; ADR-0030 (2026-11) adds the v1.20 control blocks (0x23-0x28, 0x2A, 0x2B) and informational blocks (0x31-0x33, 0x35, 0x5A), pinned by FORMAT-TZX-CONTROL-INFO-001 (a 112-byte, 14-block file laid out by hand from the spec tables; 0x35 carries the 16-character identification the spec writes as hex CHAR[10]); 0x15/0x18/0x19 and the deprecated IDs are still rejected. FIDELITY-TIER verification: two blind regenerations from the spec agreed byte-for-byte with the shipped model over thousands of differential checks (no DNA gap), and the self-test rejects a big-endian word reader, a turbo/pure-data length read as a WORD, a version-swap, a parser that skips the signature check, and (ADR-0030) a parser that drops the control blocks. Three malformed-rejection fixtures (bad signature / truncated block / unsupported ID) pin parseTzx throwing. The pulse-level tape→EAR consumption of these blocks is authored separately at W10.9 (TAPE-EAR-PULSES-001)."
 
   - id: ROM-ARTIFACT-001
     area: emulator
@@ -1235,12 +1262,12 @@ behaviors:
 
   - id: TAPE-INSTANT-LOAD-001
     area: emulator
-    behavior: "the instant/trap loader reproduces the real ROM LD-BYTES result for the same tape block WITHOUT running the ROM or the pulse stream, in zero machine time: given the block body [flag][data..][checksum] and the IX=destination/DE=data count/A=flag contract it stores the DE data bytes to RAM, XOR-checksums flag+data+checksum, and returns the carry result; for the SAME block an instant load and the real-ROM edge load agree on the observable {ok, bytesLoaded, RAM} (including the flag-mismatch and corrupt-checksum failure cases) and both equal the source bytes; a model that ignores a flag mismatch, skips the checksum, stores the flag/checksum, or loads the wrong byte count diverges from the real ROM and fails"
+    behavior: "the instant/trap loader reproduces the real ROM LD-BYTES result for the same tape block WITHOUT running the ROM or the pulse stream, in zero machine time: given the block body [flag][data..][checksum] and the IX=destination/DE=data count/A=flag contract it stores the DE data bytes to RAM, XOR-checksums flag+data+checksum, and returns the carry result; for the SAME block an instant load and the real-ROM edge load agree on the observable {ok, bytesLoaded, RAM} (including the flag-mismatch and corrupt-checksum failure cases) and both equal the source bytes; with carry reset (VERIFY) nothing is stored and the load stops at the first mismatching byte; a block shorter than DE+2 bytes stores its checksum byte as data and fails, a longer one loads DE bytes and checks parity over the first DE+1; with ROM protection a destination below 0x4000 is not written; a model that ignores a flag mismatch, skips the checksum, stores the flag/checksum, loads the wrong byte count, loads during VERIFY, or drops a short block's checksum byte diverges from the real ROM and fails"
     tier: fidelity
     provenance: hardware
     fixtures: [conformance/tape/instant-load.json, conformance/tape/run-tape-instant-load-fixtures.mjs, conformance/tape/run-tape-instant-load-fixtures-self-test.mjs]
     status: covered
-    notes: "W10.11 (Track D/B5, fidelity-tier; ADR-0024). dna/domain/tape-loading.md 'Instant / trap loading' TAPE-INSTANT-CONCEPT-001 (decision:ADR-0024 — the trap mechanism: a software shortcut that loads in zero machine time) / TAPE-INSTANT-RESULT-001 / -FLAG-001 / -EQUIV-001 (provenance hardware — what it must PRODUCE is the documented LD-BYTES result, pinned by the equivalence to the real ROM, not an invented constant). instantLoad modeled in @zx-vibes/machine (packages/machine/src/tape-edge-load.mjs, beside edgeLoad). The oracle is instant == edge (TAPE-INSTANT-EQUIV-001): the CI runner run-tape-instant-load-fixtures.mjs (kind tape-instant-load-query) loads each block BOTH by the instant trap (no ROM, tStates 0) AND by the real ROM LD-BYTES edge-load (0x0556 over the W10.9 EAR pulse stream) and asserts they agree on {ok, bytesLoaded, RAM} and both equal the SOURCE bytes — a mutual cross-check against the real ROM, FABRICATION-FREE (expected.ram IS the source). Only the observable triplet is the contract; the loaders' internal `reason` string is not (the ROM may time out where instant names the cause). Two fixtures: a 24-byte data block (edge half ~7.5M T, budget 12M) + an 8-byte header block (8063-pilot leader, budget 25M). FIDELITY-TIER verification: the self-test anchors instant == edge against the real ROM on 5 judge blocks (well-formed data/header + flag-mismatch leaving RAM untouched + corrupt-checksum where data reaches RAM but carry resets — instant matches on the failure cases too), agrees with an independent spec-derived reference over 3072 cases across all 256 flags, and rejects four adversarial broken instant models (ignore-flag-mismatch / skip-checksum / store-flag-and-checksum / wrong-byte-count) that each diverge from the real ROM. Two blind regenerations from the spec agreed with the shipped model AND the real ROM over 3584 cases + the real-ROM anchors (no DNA gap). Closes the last open ADR-0024 gap (B5)."
+    notes: "W10.11 (Track D/B5, fidelity-tier; ADR-0024). dna/domain/tape-loading.md 'Instant / trap loading' TAPE-INSTANT-CONCEPT-001 (decision:ADR-0024 — the trap mechanism: a software shortcut that loads in zero machine time) / TAPE-INSTANT-RESULT-001 / -FLAG-001 / -EQUIV-001 (provenance hardware — what it must PRODUCE is the documented LD-BYTES result, pinned by the equivalence to the real ROM, not an invented constant). instantLoad modeled in @zx-vibes/machine (packages/machine/src/tape-edge-load.mjs, beside edgeLoad). The oracle is instant == edge (TAPE-INSTANT-EQUIV-001): the CI runner run-tape-instant-load-fixtures.mjs (kind tape-instant-load-query) loads each block BOTH by the instant trap (no ROM, tStates 0) AND by the real ROM LD-BYTES edge-load (0x0556 over the W10.9 EAR pulse stream) and asserts they agree on {ok, bytesLoaded, RAM} and both equal the SOURCE bytes — a mutual cross-check against the real ROM, FABRICATION-FREE (expected.ram IS the source). Only the observable triplet is the contract; the loaders' internal `reason` string is not (the ROM may time out where instant names the cause). Two fixtures: a 24-byte data block (edge half ~7.5M T, budget 12M) + an 8-byte header block (8063-pilot leader, budget 25M). FIDELITY-TIER verification: the self-test anchors instant == edge against the real ROM on 5 judge blocks (well-formed data/header + flag-mismatch leaving RAM untouched + corrupt-checksum where data reaches RAM but carry resets — instant matches on the failure cases too), agrees with an independent spec-derived reference over 3072 cases across all 256 flags, and rejects four adversarial broken instant models (ignore-flag-mismatch / skip-checksum / store-flag-and-checksum / wrong-byte-count) that each diverge from the real ROM. Two blind regenerations from the spec agreed with the shipped model AND the real ROM over 3584 cases + the real-ROM anchors (no DNA gap). Closes the last open ADR-0024 gap (B5). ADR-0030 (2026-11): TAPE-INSTANT-VERIFY-001 / TAPE-INSTANT-SHORT-001 and the extended TAPE-INSTANT-RESULT-001 add five fixtures (TAPE-INSTANT-VERIFY-MATCH / -VERIFY-MISMATCH / -SHORT-BLOCK / -LONG-BLOCK / -ROM-PROTECTED), two more real-ROM judge blocks (verify-mismatch, short-block; 7 in all), a 7680-case reference battery, and two more adversaries (verify-as-load, short-drops-checksum). Before this, instantLoad in VERIFY mode neither compared the bytes nor stopped at the first mismatch, and on a short block it left out the checksum byte that LD-BYTES stores as data (reporting success whenever that byte was 0)."
 
   # --- emulator: host-I/O event surface (W8 / ADR-0016) ---
   - id: HOST-IO-PORT-FE-001
@@ -1408,6 +1435,60 @@ behaviors:
     fixtures: [conformance/cli/verify-exit.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
     status: covered
     notes: "Covered at the toolkit slice cutover (R-W4-05): the cli-fixtures runner executes the REGENERATED `zxs verify --json` against verify-exit.json — a passing project exits 0 with {ok:true,stage:verify}; an assembly-error project exits non-zero with {ok:false,stage:verify}. Asserts the exit-code + JSON-shape contract only, normalized via the cli-snapshot profile (ADR-0013, ADR-0015) — never byte-for-byte legacy output."
+
+  - id: CLI-HANG-IDLE-001
+    area: toolkit
+    behavior: "a power-on boot that ends idling in the ROM BASIC editor runs ok (exit 0); a program that jumps to 0x0000 is still a pc-in-rom hang and di + jr $ a tight-loop hang (exit 2)"
+    tier: contract
+    provenance: decision:ADR-0030
+    fixtures: [conformance/cli/toolkit-fidelity.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0030 (2026-11). errors.md ERR-PROD-HANG-IDLE-001: a frame that runs only ROM code and accepts the frame interrupt is progress, the ROM power-on boot is not a program left in ROM, and rom-error fires only when the error restart is reached from the program. Before, every fresh boot or finished BASIC program was reported as a hang."
+
+  - id: CLI-RUN-ORIGIN-001
+    area: toolkit
+    behavior: "a built entry with ORG 0x9000 runs from 0x9000 even when zx.config.json org is 0x8000"
+    tier: contract
+    provenance: decision:ADR-0030
+    fixtures: [conformance/cli/toolkit-fidelity.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0030 (2026-11). cli.md CLI-PROD-CONV-ORIGIN-001: one load-origin rule (first ORG, else the configured org) for run, verify, the observe/state commands, test specs, build formats and preview. Before, run/verify loaded at the configured org, so the absolute jumps of an ORG 0x9000 program went to the wrong place."
+
+  - id: CLI-INPUT-HANG-001
+    area: toolkit
+    behavior: "zxs key into a di + halt program exits 2 with status hang (kind di-halt); a healthy program exits 0"
+    tier: contract
+    provenance: decision:ADR-0030
+    fixtures: [conformance/cli/toolkit-fidelity.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0030 (2026-11). cli.md CLI-PROD-INPUT-003 (+ CLI-PROD-EXIT-003, ERR-PROD-HANG-SHAPE-001 amended). Before, key/type exited 0 over a hung machine. MCP zx_keys keeps detectHangs:false (MCP-PROD-EDGE-001)."
+
+  - id: CLI-ADDR-HSUFFIX-001
+    area: toolkit
+    behavior: "break add each resolves the label each; FFh is not an address (exit 1); 0FFh is 0x00FF"
+    tier: contract
+    provenance: decision:ADR-0030
+    fixtures: [conformance/cli/toolkit-fidelity.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0030 (2026-11). cli.md CLI-PROD-CONV-ADDR-002: an h-suffixed hex literal starts with a digit, as in assembler syntax. Before, `each` parsed as 0x0EAC."
+
+  - id: CLI-STATE-OBSERVE-001
+    area: toolkit
+    behavior: "zxs screen --state reads the saved session; zxs step --state with a missing session exits 1 instead of booting fresh"
+    tier: contract
+    provenance: decision:ADR-0030
+    fixtures: [conformance/cli/toolkit-fidelity.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0030 (2026-11). cli.md CLI-PROD-STATE-OBSERVE-001 / CLI-PROD-COVERAGE-002: screen, step, disasm, trace, symbols and coverage accept --state (CLI-PROD-SCOPE-003 / CLI-PROD-CONV-SOURCE-001 already listed them), so the documented run --state -> screen --state loop works. step/trace/coverage persist the advanced session; screen/disasm/symbols never write."
+
+  - id: CLI-RUN-WATCH-WRITE-001
+    area: toolkit
+    behavior: "a write watchpoint fires on a write of the byte already stored there; --until-change does not"
+    tier: contract
+    provenance: decision:ADR-0030
+    fixtures: [conformance/cli/toolkit-fidelity.json, conformance/cli/run-cli-fixtures.mjs, conformance/cli/run-cli-fixtures-self-test.mjs]
+    status: covered
+    notes: "ADR-0030 (2026-11). cli.md CLI-PROD-RUN-007: writes are decoded per instruction (runtime/write-targets.ts) instead of diffing values, so a same-value write is still a write. Before, it was missed."
 
   - id: RUN-BEEPER-001
     area: toolkit

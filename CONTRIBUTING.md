@@ -28,9 +28,13 @@ locally, CI should be green too.
   truth: a change that alters emulator/assembler/CLI behavior needs a matching
   fixture or spec update in `dna/`, with `tier` and `provenance` metadata.
   See [`dna/README.md`](dna/README.md).
-- **Generated files are drift-checked.** If you touch
-  `dna/domain/z80-opcodes.yaml`, regenerate with
-  `pnpm run gen:opcode-table`; `check:drift` fails on any mismatch.
+- **Generated files are drift-checked**, and `check:drift` fails on any mismatch.
+  Regenerate after editing their sources:
+  - `dna/domain/z80-opcodes.yaml` → `pnpm run gen:opcode-table`
+  - `starters/` → `pnpm run gen:scaffold-templates`
+  - `dna/domain/*.md`, the render specs and `palette.yaml` in `dna/product/`,
+    `dna/product/skills/` or `dna/product/recipes/` →
+    `pnpm run gen:knowledge-pack`
 - Keep starter projects compatible with the embedded assembler unless the
   change is explicitly about optional `sjasmplus` support.
 - Match the surrounding code style; `pnpm run lint` must pass with no warnings.
