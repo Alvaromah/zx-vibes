@@ -1999,3 +1999,23 @@ things in `run` and `regs`, and screenshots without the border.
    `screen --state` has no frame log (a `.zxstate` keeps only the final border colour),
    so it gets no `--border`; no assertion type or MCP tool changed (17 and 7 stay
    pinned).
+
+**Consequences.** Every FEEDBACK item but one has a fix or a documented answer; the
+exception (Codex not loading an untrusted project's `.codex/config.toml`) is the
+client's rule and is reported, not changed. Output that scripts may read changed in two
+places: an explicit `run --frames` now stops a longer key plan (D3), and `boot` reports
+`pc` instead of `org` for sessions, snapshots and fresh boots. The MCP surface keeps its
+seven tools and input schemas, and the assertion vocabulary stays at 17. Verified on
+Windows 11 (Node 24.22.1, npm 12.0.2) on 2026-11-12: each commit passed the full
+`pnpm run verify` gate and `pnpm run pack` (final: toolkit 517 tests, asm 78, coverage
+180/181 with the open row unchanged, provenance 1048 items); then the six tarballs went
+into the consumer project from the original test with one `npm install` (lockfile: six
+`file:` entries, none from the registry). There `doctor` failed on the old `.mcp.json`
+and named the fix, `setup --force` wrote the `node` launch and `doctor` passed 5/5,
+the registered command started the server with the seven tools, `zxs verify` passed
+9/9 with no overruns, and each FEEDBACK repro gave the new result: `new` prints its
+steps, `--list-assertions` prints 17 rows, a failing `frameBudget` names frames 10 and
+21, `run --frames 100 --keys "0:SPACE*500"` stops at 100 with `input.truncated`,
+`trace --keys` runs, `rst 0x10` gets the start-up hint, `run --state` and
+`regs --state` report the same `boot`, and `run --screenshot --border` shows the
+title's border stripes and SAVE's bands.
