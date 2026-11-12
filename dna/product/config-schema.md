@@ -20,7 +20,7 @@ defaults, resolution precedence, validation) captured exactly.
 ## Fields
 
 - [id: CFG-PROD-FIELD-ENTRY-001] `entry` (string) — path to the entry `.asm` file (e.g. `src/main.asm`). No default; the build needs it from `entry` or a CLI file argument. [provenance: contract]
-- [id: CFG-PROD-FIELD-ORG-001] `org` (string) — load/origin address as a hex string; default `"0x8000"`. [provenance: contract]
+- [id: CFG-PROD-FIELD-ORG-001] `org` (string) — load/origin address as a hex string; default `"0x8000"`. A built entry loads at its own first `ORG`; `org` places only an entry with no `ORG` (and `preview`'s raw `.bin` files) — cli.md CLI-PROD-CONV-ORIGIN-001. [provenance: contract]
 - [id: CFG-PROD-FIELD-ASM-001] `assembler` (`"builtin"` | `"sjasmplus"`) — the assembler backend; default `"builtin"` = the embedded `@zx-vibes/asm` (ADR-0027 D3). The legacy value `"spectral"` is accepted as a deprecated back-compat alias for `"builtin"`; `"sjasmplus"` is the external escape hatch. [provenance: decision:ADR-0027]
 - [id: CFG-PROD-FIELD-OUTDIR-001] `outDir` (string) — output directory for `.bin`/`.sld`; default `"build"`. [provenance: contract]
 - [id: CFG-PROD-FIELD-TESTS-001] `tests` (string) — the declarative-test suite directory the `verify` gate runs (cli.md CLI-PROD-VERIFY-001); default `"tests"`. `zxs test [path]` is unaffected (its path is an argument). [provenance: contract]

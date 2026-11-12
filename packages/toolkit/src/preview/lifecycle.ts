@@ -9,14 +9,21 @@
 // missing/foreign token is a USER_ERROR (exit 1). The on-disk byte layout is Incidental
 // (RT-PROD-FREE-001); only this observable contract matters.
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { ZXS_DIR } from '../state/persist.js';
 
-/** The `.zxs` session/cache dir (shared with the persistent-session slice). */
-export const ZXS_DIR = '.zxs';
+/** The `.zxs` session/cache dir — the persistent-session slice's, re-exported for the preview API. */
+export { ZXS_DIR };
 /** The detached-preview record file name. */
 export const PREVIEW_RECORD_FILE = 'preview-server.json';
-/** The `owner` marker that identifies a record as a zx-vibes preview server. */
+/** Where a detached preview server's stdout/stderr go (its rebuild failures, a crash). */
+export const PREVIEW_LOG_FILE = 'preview-server.log';
+/**
+ * The `owner` marker of a zx-vibes preview server: written into the record and
+ * answered by the server's `/control/ping`, so a liveness probe can tell our
+ * server from whatever else holds the port.
+ */
 export const PREVIEW_OWNER = 'zx-vibes-preview';
 
 /** The detached preview-server record (RT-PROD-PREVIEW-003). */
@@ -33,6 +40,11 @@ export interface PreviewRecord {
 /** Absolute path of the preview record under a project's `.zxs/` dir. */
 export function previewRecordPath(cwd: string): string {
   return resolve(cwd, ZXS_DIR, PREVIEW_RECORD_FILE);
+}
+
+/** Absolute path of the detached server's log under a project's `.zxs/` dir. */
+export function previewLogPath(cwd: string): string {
+  return resolve(cwd, ZXS_DIR, PREVIEW_LOG_FILE);
 }
 
 /** Read the preview record, or `null` when absent/unreadable/not-a-zx-vibes record. */
@@ -60,15 +72,16 @@ export function writePreviewRecord(cwd: string, record: PreviewRecord): string {
   const path = previewRecordPath(cwd);
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
-  // rename is atomic within a dir; fall back to a direct write if rename is unavailable.
+  const body = `${JSON.stringify(record, null, 2)}\n`;
+  writeFileSync(tmp, body, 'utf8');
+  // rename is atomic within a dir, so a concurrent `--list`/`--stop` never sees a missing
+  // or half-written record; fall back to a direct write if rename is unavailable.
   try {
-    rmSync(path, { force: true });
+    renameSync(tmp, path);
   } catch {
-    /* ignore */
+    writeFileSync(path, body, 'utf8');
+    rmSync(tmp, { force: true });
   }
-  writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
-  rmSync(tmp, { force: true });
   return path;
 }
 
@@ -82,11 +95,17 @@ function controlUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/$/, '')}/control/${path}`;
 }
 
-/** Liveness probe: whether the server at `baseUrl` answers `/control/ping`. */
+/**
+ * Liveness probe: whether a zx-vibes preview server answers `/control/ping` at
+ * `baseUrl` — an HTTP 200 whose JSON `owner` is {@link PREVIEW_OWNER}. Any other
+ * answer (another program that reused the port, a non-JSON page) is "not ours".
+ */
 export async function pingServer(baseUrl: string, timeoutMs = 1500): Promise<boolean> {
   try {
-    const res = await fetchWithTimeout(controlUrl(baseUrl, 'ping'), { method: 'GET' }, timeoutMs);
-    return res.ok;
+    const { status, body } = await fetchWithTimeout(controlUrl(baseUrl, 'ping'), { method: 'GET' }, timeoutMs);
+    if (status !== 200) return false;
+    const parsed = JSON.parse(body) as { owner?: unknown } | null;
+    return parsed !== null && typeof parsed === 'object' && parsed.owner === PREVIEW_OWNER;
   } catch {
     return false;
   }
@@ -111,7 +130,7 @@ export async function stopServer(baseUrl: string, token: string, timeoutMs = 300
       },
       timeoutMs,
     );
-    if (res.ok) return 'stopped';
+    if (res.status >= 200 && res.status < 300) return 'stopped';
     if (res.status === 403) return 'foreign';
     return 'unreachable';
   } catch {
@@ -119,11 +138,17 @@ export async function stopServer(baseUrl: string, token: string, timeoutMs = 300
   }
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+/** Fetch `url` and read its body, all within `timeoutMs` (a stalled body counts too). */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<{ status: number; body: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    return { status: res.status, body: await res.text() };
   } finally {
     clearTimeout(timer);
   }
@@ -137,9 +162,4 @@ export function newToken(): string {
 /** The base URL for a bound port on the loopback host. */
 export function baseUrlFor(port: number): string {
   return `http://127.0.0.1:${port}`;
-}
-
-/** The `.zxs/` directory path (for callers that want to ensure it exists). */
-export function zxsDir(cwd: string): string {
-  return join(cwd, ZXS_DIR);
 }

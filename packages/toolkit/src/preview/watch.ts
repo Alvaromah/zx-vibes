@@ -29,7 +29,7 @@ function signature(path: string): string {
  * process alive on its own, and {@link stop} clears it (no leaked handles).
  */
 export class SourceWatcher {
-  private readonly paths: string[];
+  private paths: string[];
   private readonly intervalMs: number;
   private readonly onChange: () => void;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -39,6 +39,19 @@ export class SourceWatcher {
     this.paths = [...new Set(paths)];
     this.onChange = onChange;
     this.intervalMs = intervalMs;
+  }
+
+  /**
+   * Replace the watched set (e.g. a rebuild found a new INCLUDE). A path already
+   * watched keeps its last signature, so a change that lands while the set is being
+   * swapped is still reported; a newly added path is baselined now, so adding it is
+   * not itself a change.
+   */
+  setPaths(paths: readonly string[]): void {
+    this.paths = [...new Set(paths)];
+    const next = new Map<string, string>();
+    for (const p of this.paths) next.set(p, this.last.get(p) ?? signature(p));
+    this.last = next;
   }
 
   /** Begin polling. Captures the baseline signatures first so the first poll is a no-op. */
@@ -70,7 +83,7 @@ export class SourceWatcher {
     }
   }
 
-  /** The watched paths (deduped) — for diagnostics/tests. */
+  /** The watched paths (deduped) — the server unions a failed rebuild's scan into them. */
   watchedPaths(): readonly string[] {
     return this.paths;
   }

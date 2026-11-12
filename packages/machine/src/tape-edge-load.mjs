@@ -45,6 +45,13 @@ const TRAILING_EDGE_PULSE_T = 3500;
 // fixed start convention. Once the cursor runs past the last pulse the tape is silent and
 // bit 6 falls back to the issue-3 idle rule: it tracks the last bit-4 (speaker/EAR-out)
 // written to port 0xFE.
+/**
+ * @param {ArrayLike<number> | Iterable<number>} pulses
+ * @param {object} [options]
+ * @param {() => number} [options.clock] returns the tape T-state cursor (required)
+ * @param {number} [options.startLevel]
+ * @param {number} [options.keyboard]
+ */
 export function createTapeDeck(pulses, { clock, startLevel = 0, keyboard = 0x1f } = {}) {
   if (typeof clock !== "function") {
     throw new Error("createTapeDeck: a clock() returning the tape T-state cursor is required");
@@ -101,6 +108,17 @@ export function createTapeDeck(pulses, { clock, startLevel = 0, keyboard = 0x1f 
 // sentinel (success/failure) or the T-state budget is hit. `deck` (already the machine's
 // io) supplies the tape edge stream. Returns { ok, reason, bytesLoaded, tStates }; ok is
 // the CARRY flag the ROM reports (set = the block loaded and its checksum verified).
+/**
+ * @param {import("./machine.mjs").Machine} machine
+ * @param {ReturnType<typeof createTapeDeck>} deck
+ * @param {object} [options]
+ * @param {number} [options.ix] LD-BYTES destination address (required)
+ * @param {number} [options.de] LD-BYTES byte count (required)
+ * @param {number} [options.flag] expected flag byte (required)
+ * @param {boolean} [options.load] LOAD (true) or VERIFY (false)
+ * @param {number} [options.tStateBudget]
+ * @param {number} [options.sentinel]
+ */
 export function edgeLoadWithDeck(machine, deck, { ix, de, flag, load = true, tStateBudget = DEFAULT_T_STATE_BUDGET, sentinel = DEFAULT_SENTINEL } = {}) {
   if (typeof ix !== "number" || typeof de !== "number" || typeof flag !== "number") {
     throw new Error("edgeLoadWithDeck: ix, de and flag are required numbers");
@@ -152,6 +170,20 @@ export function edgeLoadWithDeck(machine, deck, { ix, de, flag, load = true, tSt
 // machine's io, and drive LD-BYTES. `pulses` is the EAR pulse stream of a single block
 // body (blockToPulses); `de` is the data byte count (the body length minus the flag and
 // checksum), `flag` the block's flag byte, `ix` the RAM destination.
+/**
+ * @param {import("./machine.mjs").Machine} machine
+ * @param {ArrayLike<number> | Iterable<number>} pulses
+ * @param {object} [options]
+ * @param {number} [options.ix] LD-BYTES destination address (required)
+ * @param {number} [options.de] LD-BYTES byte count (required)
+ * @param {number} [options.flag] expected flag byte (required)
+ * @param {boolean} [options.load] LOAD (true) or VERIFY (false)
+ * @param {number} [options.tStateBudget]
+ * @param {number} [options.sentinel]
+ * @param {number} [options.startLevel]
+ * @param {number} [options.keyboard]
+ * @param {number} [options.trailingPulse]
+ */
 export function edgeLoad(machine, pulses, { ix, de, flag, load = true, tStateBudget = DEFAULT_T_STATE_BUDGET, sentinel = DEFAULT_SENTINEL, startLevel = 0, keyboard = 0x1f, trailingPulse = TRAILING_EDGE_PULSE_T } = {}) {
   const startT = machine.tStatesTotal;
   // Append the closing edge (TAPE-EDGE-TRAILING-001) so the final bit terminates.
@@ -178,6 +210,15 @@ export function edgeLoad(machine, pulses, { ix, de, flag, load = true, tStateBud
 // `bytesLoaded`, and the bytes written to RAM — is the contract and matches `edgeLoad`; the
 // `reason` string is the instant loader's own diagnosis and is NOT part of the contract (the
 // real ROM may instead time out or report a generic load error for the same failure).
+/**
+ * @param {import("./machine.mjs").Machine} machine
+ * @param {ArrayLike<number>} body
+ * @param {object} [options]
+ * @param {number} [options.ix] LD-BYTES destination address (required)
+ * @param {number} [options.de] LD-BYTES byte count (required)
+ * @param {number} [options.flag] expected flag byte (required)
+ * @param {boolean} [options.load] LOAD (true) or VERIFY (false)
+ */
 export function instantLoad(machine, body, { ix, de, flag, load = true } = {}) {
   if (typeof ix !== "number" || typeof de !== "number" || typeof flag !== "number") {
     throw new Error("instantLoad: ix, de and flag are required numbers");
@@ -186,8 +227,10 @@ export function instantLoad(machine, body, { ix, de, flag, load = true } = {}) {
   const expectedFlag = flag & 0xff;
   const dest = ix & 0xffff;
   const want = de & 0xffff;
-  // The block body is [flag][data…][checksum]; a body shorter than 2 bytes has no checksum.
-  if (bytes.length < 2) {
+  // A write-protected ROM ignores stores below 0x4000, as the CPU writes of an edge load
+  // do (MACHINE-ROM-READONLY-001).
+  const romTop = typeof machine.romTop === "function" ? machine.romTop() : 0;
+  if (bytes.length < 1) {
     return { ok: false, reason: "empty", bytesLoaded: 0, tStates: 0 };
   }
   const blockFlag = bytes[0] & 0xff;
@@ -197,19 +240,31 @@ export function instantLoad(machine, body, { ix, de, flag, load = true } = {}) {
   if (blockFlag !== expectedFlag) {
     return { ok: false, reason: "flag-mismatch", bytesLoaded: 0, tStates: 0 };
   }
-  // Data bytes present in the block body (everything between the flag and the final checksum).
-  const dataAvailable = bytes.length - 2;
-  const n = Math.min(want, Math.max(0, dataAvailable));
-  // TAPE-INSTANT-LOAD-001 / TAPE-INSTANT-CHECKSUM-001: store the DE data bytes (the flag and
-  // checksum are NOT stored, TAPE-EDGE-LDBYTES-001) while accumulating the running XOR parity
-  // over the flag + the data bytes + the checksum byte read after them
-  // (file-formats.md FMT-TAP-CHECKSUM-001). CARRY/ok is set iff the parity is zero.
+  // LD-BYTES reads the flag, DE data bytes and one checksum byte. A block with fewer bytes
+  // runs out of tape: every byte after the flag — its checksum byte included — is taken as
+  // data, then the next read times out and the load fails (TAPE-INSTANT-SHORT-001).
+  const available = bytes.length - 1; // the bytes after the flag
+  const short = available < want + 1;
+  const n = short ? available : want;
+  // TAPE-INSTANT-LOAD-001 / TAPE-INSTANT-CHECKSUM-001: LOAD stores the data bytes (the flag
+  // and checksum are NOT stored, TAPE-EDGE-LDBYTES-001); VERIFY compares each with RAM and
+  // stops at the first difference (TAPE-INSTANT-VERIFY-001). Both accumulate the running XOR
+  // parity over the flag + the data bytes + the checksum byte read after them
+  // (file-formats.md FMT-TAP-CHECKSUM-001); CARRY/ok is set iff the parity is zero.
   let parity = blockFlag;
   for (let i = 0; i < n; i += 1) {
     const value = bytes[1 + i] & 0xff;
-    if (load) machine.memory[(dest + i) & 0xffff] = value;
+    const address = (dest + i) & 0xffff;
+    if (!load) {
+      if ((machine.memory[address] & 0xff) !== value) {
+        return { ok: false, reason: "verify-mismatch", bytesLoaded: i, tStates: 0 };
+      }
+    } else if (address >= romTop) {
+      machine.memory[address] = value;
+    }
     parity ^= value;
   }
+  if (short) return { ok: false, reason: "short-block", bytesLoaded: n, tStates: 0 };
   // The byte LD-BYTES reads as the checksum after exactly DE data bytes.
   parity ^= bytes[1 + want] & 0xff;
   const ok = parity === 0;

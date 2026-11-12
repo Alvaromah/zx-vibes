@@ -24,29 +24,41 @@
 - [id: ASM-PROD-CLI-ASSEMBLE-003] `zxasm assemble` accepts repeatable build defines via `-D` or `--define`; each define is either a name or `NAME=value`. [provenance: contract]
 - [id: ASM-PROD-CLI-ASSEMBLE-004] `zxasm assemble --sandbox` restricts `INCLUDE`, `INCBIN`, `INSERT`, and `BINARY` reads to the project root and include paths. [provenance: contract]
 - [id: ASM-PROD-CLI-ASSEMBLE-005] `zxasm assemble --json` requests machine-readable command output. [provenance: contract]
+- [id: ASM-PROD-CLI-ASSEMBLE-006] A define value, from `-D NAME=value` or the API `defines` option, must be a number, a boolean, empty (meaning true) or a numeric expression; any other value is an error instead of silently becoming 1. [provenance: contract]
+- [id: ASM-PROD-CLI-ASSEMBLE-007] When `zxasm assemble` fails without `--json`, it still prints the warnings, including `DISPLAY` output, and prints each error's did-you-mean hint on an indented `hint:` line. [provenance: contract]
+- [id: ASM-PROD-CLI-ASSEMBLE-008] `--sandbox` containment compares real paths, so a symbolic link or junction inside the project cannot reach a file outside it, and on Windows it ignores path case such as the drive letter's. [provenance: contract]
 - [id: ASM-PROD-CLI-DISASM-001] `zxasm disasm <bin>` accepts a raw binary file and supports `--org <addr>`, defaulting to `0x8000`. [provenance: contract]
 - [id: ASM-PROD-CLI-DISASM-002] `zxasm disasm <bin> --count <n>` limits disassembly to a positive instruction count. [provenance: contract]
 - [id: ASM-PROD-CLI-DOCTOR-001] `zxasm doctor` checks the embedded assembler runtime. [provenance: contract]
 - [id: ASM-PROD-CLI-DOCTOR-002] `zxasm doctor --json` exits 0 and returns JSON containing `ok: true`, `assembler: "@zx-vibes/asm"`, and the package `version`. [provenance: contract]
+- [id: ASM-PROD-CLI-DOCTOR-003] `zxasm doctor` assembles a one-line probe; when the embedded assembler fails it, `doctor` reports `ok: false` with an error message and exits 1. [provenance: contract]
 
 ## Assembly Language Surface
 
 - [id: ASM-PROD-SRC-SKELETON-001] `DEVICE ZXSPECTRUM48` enables ZX Spectrum 48K layout metadata and is required for `SAVEBIN` artifacts. [provenance: contract]
 - [id: ASM-PROD-SRC-SKELETON-002] `ORG expression` sets the assembly address and output origin. [provenance: contract]
+- [id: ASM-PROD-SRC-SKELETON-003] The first `ORG` sets the output origin even when its expression refers to a constant defined later; the output is contiguous from that origin, a forward `ORG` pads the gap with zero bytes, and an `ORG` that would place bytes over output already emitted (an `ORG` that moves backwards, or code or data before the first `ORG`) is an error. [provenance: contract]
+- [id: ASM-PROD-SRC-SKELETON-004] `DEVICE` accepts only `ZXSPECTRUM48`, case-insensitively; a missing or different device name is an error. [provenance: contract]
 - [id: ASM-PROD-LABELS-001] Labels support `label:`, column-0 `label`, and local dotted labels scoped to the previous global label. [provenance: contract]
 - [id: ASM-PROD-LABELS-002] `MODULE name` and `ENDMODULE` scope labels; nested modules qualify labels with dotted module paths. [provenance: contract]
 - [id: ASM-PROD-CONSTANTS-001] Constants support `EQU`, `DEFL`, and `name = expression`, with equals assignment parsed as a `DEFL`-style assignment. [provenance: contract]
+- [id: ASM-PROD-CONSTANTS-002] `EQU` defines a constant: redefining an `EQU` symbol with a different value is an error while repeating the same value is accepted, `DEFL` and `name = expression` symbols stay reassignable, and a code label may not share its name with an `EQU`, `DEFL` or `=` symbol. [provenance: contract]
 - [id: ASM-PROD-EXPR-001] Expressions support labels, `$` for current PC, numeric literals, first-character string or character literals, unary operators, arithmetic, bitwise operators, comparisons, and boolean operators. [provenance: contract]
 - [id: ASM-PROD-EXPR-002] Number forms include `0x12`, `$12`, `#12`, `12h`, `%1010`, `0b1010`, and `1010b`. [provenance: contract]
 - [id: ASM-PROD-EXPR-003] Expression helpers and operators include `LOW`, `HIGH`, `low(...)`, `high(...)`, `/`, `%`, `MOD`, `<<`, `>>`, `SHL`, `SHR`, `&`, `|`, `^`, `~`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, and `!`. [provenance: contract]
+- [id: ASM-PROD-EXPR-004] Comparison and logical operators yield 0 for false and 0xFFFF for true; an 8-bit slot stores true as 0xFF and a symbol defined as a negative byte (`X EQU -2`) as its two's complement, while a literal 0xFFFF or 65535 in an 8-bit slot is an out-of-range error. [provenance: contract]
+- [id: ASM-PROD-EXPR-005] `%` after an operand is the modulo operator (`7%10` is 7) and starts a binary literal only where an operand is expected (`%1010`, `1+%1010`); a hexadecimal literal with an `h` suffix takes precedence over the `0b` binary prefix (`0B0h` is 0xB0). [provenance: contract]
 - [id: ASM-PROD-INCLUDE-001] Quoted includes and binary inputs resolve relative to the including file first, then include paths. [provenance: contract]
 - [id: ASM-PROD-INCLUDE-002] Angle-bracket includes and binary inputs search include paths only. [provenance: contract]
 - [id: ASM-PROD-DEFINES-001] Source directives `DEFINE NAME expression`, `DEFINE NAME`, and `UNDEFINE NAME` are order-sensitive. [provenance: contract]
 - [id: ASM-PROD-DEFINES-002] `DEFINE NAME` defaults the define value to true; `DEFINE NAME=1` is invalid source syntax. [provenance: contract]
 - [id: ASM-PROD-COND-001] Conditional assembly supports `IF`, `IFDEF`, `IFNDEF`, `ELSEIF`, `ELIF`, `ELSE`, and `ENDIF`. [provenance: contract]
 - [id: ASM-PROD-COND-002] `IFDEF` and `IFNDEF` check source or API defines, not `EQU` labels. [provenance: contract]
+- [id: ASM-PROD-COND-003] `IF`/`ELSEIF` conditions and `DUP`/`REPT` counts are evaluated while the source is read, before addresses exist: they may use `EQU`/`DEFL` constants already known above them, source `DEFINE` values and API or CLI defines, and using `$`, a code label, or a constant computed from them or from a later definition is an error instead of a silently wrong branch or count. [provenance: contract]
 - [id: ASM-PROD-MACRO-001] Macro definitions support both `Name MACRO ... ENDM` and indented `MACRO Name ... ENDM` forms. [provenance: contract]
 - [id: ASM-PROD-MACRO-002] Macro parameters are textual replacements, and dotted local labels inside macro bodies are renamed per expansion. [provenance: contract]
+- [id: ASM-PROD-MACRO-003] A macro call must pass exactly as many arguments as the macro has parameters, and a label may precede a macro call or an `INCLUDE` (`here: Name args`), taking the address where the expansion or the included source begins. [provenance: contract]
+- [id: ASM-PROD-MACRO-004] A diagnostic raised inside a macro expansion keeps the macro body's file and line and names the macro and its call site in the message. [provenance: contract]
 - [id: ASM-PROD-REPEAT-001] `DUP` and `REPT` repeat source blocks and may bind an optional zero-based counter symbol. [provenance: contract]
 - [id: ASM-PROD-REPEAT-002] `EDUP`, `ENDR`, and `ENDW` terminate repeat blocks; repeat counts may be zero but not negative. [provenance: contract]
 - [id: ASM-PROD-DATA-001] Byte data directives include `DB`, `DEFB`, `BYTE`, `DEFM`, and `DM`. [provenance: contract]
@@ -55,10 +67,12 @@
 - [id: ASM-PROD-DATA-004] Multi-byte data directives emit little-endian values for `DW`, `DEFW`, `WORD`, `D24`, `DEFD`, `DD`, and `DWORD`. [provenance: contract]
 - [id: ASM-PROD-DATA-005] `DS`, `DEFS`, and `BLOCK` take a length and optional fill byte. [provenance: contract]
 - [id: ASM-PROD-DATA-006] `ALIGN` takes an optional power-of-two boundary from 1 through 32768 and an optional fill byte. [provenance: contract]
+- [id: ASM-PROD-DATA-007] Comma-separated directive arguments and instruction operands may not contain an empty element; `DB 1,` and `RET Z,` are errors. [provenance: contract]
 - [id: ASM-PROD-CHECKS-001] `ASSERT expression, "message"` reports an assembly error when the expression is false. [provenance: contract]
 - [id: ASM-PROD-CHECKS-002] `DISPLAY` emits an assembler warning message. [provenance: contract]
 - [id: ASM-PROD-END-001] Indented `END` terminates source assembly; a label-prefixed `stop END` defines the label and terminates; unindented `END` alone is treated as a label. [provenance: contract]
 - [id: ASM-PROD-BINARY-001] `INCBIN`, `INSERT`, and `BINARY` include bytes from a file, with optional offset and optional length. [provenance: contract]
+- [id: ASM-PROD-BINARY-002] An `INCBIN`, `INSERT` or `BINARY` offset or length that reaches past the end of the file is an error instead of being clamped. [provenance: contract]
 - [id: ASM-PROD-SAVEBIN-001] `SAVEBIN "file", start[, length]` records an additional binary artifact without advancing the PC. [provenance: contract]
 - [id: ASM-PROD-SAVEBIN-002] `SAVEBIN` requires `DEVICE ZXSPECTRUM48`; if length is omitted, it saves through address `0xFFFF`. [provenance: contract]
 
@@ -71,6 +85,7 @@
 - [id: ASM-PROD-OUTPUT-005] Successful assembly writes any requested `SAVEBIN` artifacts under the selected output directory. [provenance: contract]
 - [id: ASM-PROD-OUTPUT-006] `SAVEBIN` artifact paths must remain within the selected output directory. [provenance: contract]
 - [id: ASM-PROD-OUTPUT-007] Table-driven disassembly output must be compatible with zx-vibes debugger output. [provenance: contract]
+- [id: ASM-PROD-OUTPUT-008] The disassembler emits the first prefix of a run of four or more chained `DD`/`FD` prefixes as a one-byte `DB` item instead of decoding the run as an instruction. [provenance: contract]
 
 ## Instruction Compatibility
 
@@ -83,6 +98,7 @@
 - [id: ASM-PROD-INST-007] Indexed CB copy-register forms such as `SET 3,(IX+4),A` are supported. [provenance: contract]
 - [id: ASM-PROD-INST-008] Square brackets are accepted as memory operand aliases in legal memory forms such as `LD A,[HL]`, `LD [0x4000],A`, and `SET 3,[IX+4],A`. [provenance: contract]
 - [id: ASM-PROD-INST-009] Square-bracket I/O port forms such as `IN A,[0xFE]` and `OUT [0xFE],A` are rejected. [provenance: contract]
+- [id: ASM-PROD-INST-010] Whitespace just inside memory-operand brackets is insignificant: `LD A,( HL )` assembles like `LD A,(HL)`. [provenance: contract]
 
 ## Error Behavior
 
@@ -96,6 +112,8 @@
 - [id: ASM-PROD-ERR-008] Negative `DS` lengths emit no bytes and produce a warning. [provenance: contract]
 - [id: ASM-PROD-ERR-009] Malformed conditional, repeat, macro, module, binary-input, and `SAVEBIN` blocks report explicit diagnostics. [provenance: contract]
 - [id: ASM-PROD-ERR-010] `zxasm disasm` exits 1 and writes a validation error for invalid `--org` or non-positive `--count` values. [provenance: contract]
+- [id: ASM-PROD-ERR-011] An instruction with a missing or extra operand reports one arity diagnostic and no internal error; a bare `RST` is an error, not `RST 0`. [provenance: contract]
+- [id: ASM-PROD-ERR-012] An unresolved operand is reported once: an unresolved relative-branch target reports `Label not found` without a second out-of-range error, and an unresolved operand of a binary operator (`1+missing`) does not add a missing-operand error. [provenance: contract]
 
 ## Fixture Candidate Matrix
 

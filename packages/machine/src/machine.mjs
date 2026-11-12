@@ -19,6 +19,8 @@ const REGISTER_NAMES = [
 ];
 
 const HALT_OPCODE = 0x76;
+// The 48K ROM occupies 0x0000-0x3FFF (memory-map.md); RAM starts here.
+const ROM_TOP = 0x4000;
 const EI_OPCODE = 0xfb;
 
 // Power-on / reset register state (dna/domain/machine-execution.md
@@ -34,6 +36,10 @@ export const RESET_REGISTERS = Object.freeze({
   ixh: 0xff, ixl: 0xff, iyh: 0xff, iyl: 0xff,
 });
 
+/**
+ * @param {Record<string, number>} [initial]
+ * @returns {Record<string, number>}
+ */
 function buildRegisters(initial = {}) {
   const reg = {};
   for (const name of REGISTER_NAMES) reg[name] = 0;
@@ -62,12 +68,22 @@ function defaultIo() {
   return { read: () => 0xff, write: () => {} };
 }
 
+/** @param {ConstructorParameters<typeof Machine>[0]} [options] */
 export function createMachine(options = {}) {
   return new Machine(options);
 }
 
 export class Machine {
-  constructor({ registers, memory, io, clock = 0, exactContention = false } = {}) {
+  /**
+   * @param {object} [options]
+   * @param {Record<string, number>} [options.registers] initial register file (8-bit halves; unknown names are ignored, missing ones are 0)
+   * @param {Uint8Array | Record<string, ArrayLike<number>>} [options.memory] a 64 KB image used as-is, or { address: bytes } chunks copied into zeroed RAM
+   * @param {{ read(port: number): number, write(port: number, value: number): void }} [options.io] port I/O (default: reads float 0xFF, writes are dropped)
+   * @param {number} [options.clock] initial frame T-state (taken modulo FRAME_T_STATES)
+   * @param {boolean} [options.exactContention] select the M-cycle-exact contention model
+   * @param {boolean} [options.romWriteProtect] ignore writes to 0x0000-0x3FFF, as the 48K ROM does (MACHINE-ROM-READONLY-001); off by default
+   */
+  constructor({ registers, memory, io, clock = 0, exactContention = false, romWriteProtect = false } = {}) {
     this.registers = buildRegisters(registers);
     this.memory = buildMemory(memory);
     this.io = io ?? defaultIo();
@@ -77,6 +93,10 @@ export class Machine {
     // (MACHINE-CONTENTION-MCYCLE-001), which also charges internal no-MREQ cycles
     // and samples each access at its true in-instruction T-offset.
     this.exactContention = Boolean(exactContention);
+    // On a real 48K, 0x0000-0x3FFF is the ROM chip: a write there is a normal, timed
+    // bus cycle that changes nothing (MACHINE-ROM-READONLY-001). Opt-in, so the CPU
+    // and machine oracles that model a flat 64 KB RAM keep doing so.
+    this.romWriteProtect = Boolean(romWriteProtect);
     this.halted = false;
     // Boundaries to skip interrupt sampling for (the post-EI one-instruction
     // delay, MACHINE-INT-EI-DELAY-001).
@@ -84,6 +104,11 @@ export class Machine {
     // Running totals (across frames), useful for drivers and assertions.
     this.tStatesTotal = 0;
     this.frames = 0;
+  }
+
+  /** The first writable address: 0x4000 when the ROM is write-protected, else 0. */
+  romTop() {
+    return this.romWriteProtect ? ROM_TOP : 0;
   }
 
   // Power-on / reset: restore the documented reset state (MACHINE-RESET-001) —
@@ -171,7 +196,7 @@ export class Machine {
       ? this._exactClock(this.clock)
       : this._contentionClock(this.clock);
 
-    const result = step({ registers: reg, memory: this.memory, io: this.io, clock });
+    const result = step({ registers: reg, memory: this.memory, io: this.io, clock, romTop: this.romTop() });
     this.registers = result.registers;
 
     const contention = this.exactContention ? clock.total() : clock.extra;
@@ -179,9 +204,15 @@ export class Machine {
     this.clock = (this.clock + tStates) % FRAME_T_STATES;
     this.tStatesTotal += tStates;
 
-    // HALT is the only instruction that does not advance PC; the CPU leaves PC on
-    // the HALT opcode and reports 4 T per refetch.
-    this.halted = opcode === HALT_OPCODE && (this.registers.pc & 0xffff) === pcBefore;
+    // HALT is the only instruction that does not advance PC past itself; the CPU
+    // leaves PC on the 76 opcode and reports 4 T per refetch. Behind a DD/FD prefix
+    // (Z80-EXEC-PREFIX-HALT-001) PC ends one byte on, on that 76 opcode.
+    const pcAfter = this.registers.pc & 0xffff;
+    this.halted =
+      (opcode === HALT_OPCODE && pcAfter === pcBefore) ||
+      ((opcode === 0xdd || opcode === 0xfd) &&
+        pcAfter === ((pcBefore + 1) & 0xffff) &&
+        this.memory[pcAfter] === HALT_OPCODE);
 
     return { tStates, contention, halted: this.halted };
   }
@@ -193,6 +224,7 @@ export class Machine {
       memory: this.memory,
       halted: this.halted,
       dataBus,
+      romTop: this.romTop(),
     });
     this.registers = result.registers;
     this.halted = false;

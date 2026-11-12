@@ -245,6 +245,27 @@ describe('runClean — removes artifacts, reports them (CLI-PROD-CLEAN-001)', ()
     expect(env.removed).toContain('dist');
     expect(existsSync(join(dir, 'dist'))).toBe(false);
   });
+
+  it('refuses an outDir that is the project root, outside it, or holds the entry', () => {
+    // The project sits one level down, so even a regressed guard deleting `..` would
+    // stay inside this test's own temp directory.
+    const proj = join(dir, 'proj');
+    mkdirSync(join(proj, 'src'), { recursive: true });
+    writeFileSync(join(proj, 'src', 'main.asm'), '    ret\n');
+    writeFileSync(join(dir, 'sibling.txt'), 'keep me');
+    for (const config of [
+      { outDir: '.' },
+      { outDir: '..' },
+      { outDir: 'src', entry: 'src/main.asm' },
+    ]) {
+      writeFileSync(join(proj, 'zx.config.json'), JSON.stringify(config), 'utf8');
+      expect(() => runClean({ cwd: proj }), JSON.stringify(config)).toThrowError(/Refusing to clean/);
+      // Nothing was deleted, not even .zxs/ (targets are checked before any removal).
+      expect(existsSync(join(proj, 'src', 'main.asm'))).toBe(true);
+      expect(existsSync(join(proj, 'zx.config.json'))).toBe(true);
+      expect(existsSync(join(dir, 'sibling.txt'))).toBe(true);
+    }
+  });
 });
 
 // ===========================================================================

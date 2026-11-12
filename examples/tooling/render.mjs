@@ -1,7 +1,7 @@
 // Screen RAM -> pixels. Pure (browser-safe): no Node APIs, so it bundles for the
 // web. Decodes a 6912-byte ZX Spectrum screen image (6144-byte bitmap + 768-byte
-// attribute file, the `.scr` layout, exactly what sits at 0x4000 in RAM) into a
-// 256x192 RGBA framebuffer.
+// attribute file, the `.scr` layout, exactly what sits at 0x4000 in RAM) into the
+// 320x240 bordered RGBA frame.
 
 /** The 16-entry ZX Spectrum palette (index 0..15 -> [r,g,b]); 205 normal, 255 bright. */
 export const PALETTE_RGB = [
@@ -22,13 +22,22 @@ export const OUT_WIDTH = FRAME_WIDTH + BORDER_X * 2; // 320
 export const OUT_HEIGHT = FRAME_HEIGHT + BORDER_Y * 2; // 240
 
 // 48K ULA frame geometry, used to place a border colour change (an `OUT (0xFE)`
-// captured with its frame T-state) onto the right scanline. Fixed for the 48K:
-// 224 T-states per line, and the top-left display pixel is reached 14336 T-states
-// after the frame interrupt. Our 24-row top border therefore begins 24 lines
-// earlier, at T-state 8960.
+// captured with its frame T-state) onto the right scanline — the row-granular reading
+// of dna/product/raster-border.md RASTER-TSTATE-PIXEL-001,
+//   pixelTState(x, y) = 14335 + (y - 24)*224 + floor((x - 32) / 2):
+// 224 T-states per line, the first display byte fetched at T-state 14335 after the
+// frame interrupt (the contended-display anchor), 2 pixels per T-state. A visible row
+// starts at its left border, 32 px = 16 T before its display data, and the 24-row top
+// border begins 24 lines earlier: 14335 - 16 - 24*224 = 8943 (the toolkit player's
+// border-frame.ts ROW0_T).
 export const T_PER_LINE = 224;
-export const DISPLAY_START_T = 14336;
-export const BORDER_TOP_T = DISPLAY_START_T - BORDER_Y * T_PER_LINE; // 8960
+export const DISPLAY_START_T = 14335;
+export const BORDER_TOP_T = DISPLAY_START_T - BORDER_X / 2 - BORDER_Y * T_PER_LINE; // 8943
+
+/** Frame T-state at which visible output row `y` (0..239) begins, at its left border. */
+export function scanlineStartT(y) {
+  return BORDER_TOP_T + y * T_PER_LINE;
+}
 
 function displayOffset(x, y) {
   return ((y & 0xc0) << 5) + ((y & 0x07) << 8) + ((y & 0x38) << 2) + (x >> 3);
@@ -53,28 +62,6 @@ export function pixelIndex(image, x, y, phase) {
   const flash = (attr >> 7) & 0x01;
   const lit = flash && phase ? !pixelOn : Boolean(pixelOn);
   return (lit ? ink : paper) + (bright ? 8 : 0);
-}
-
-/**
- * Render a 6912-byte screen image into a 256x192 RGBA framebuffer (alpha 255).
- * `frame` drives FLASH. Writes into `out` (a Uint8ClampedArray of length
- * 256*192*4) when provided, so a render loop can reuse one ImageData buffer.
- */
-export function scrToRgba(image, frame = 0, out) {
-  const phase = flashPhase(frame);
-  const data = out ?? new Uint8ClampedArray(FRAME_WIDTH * FRAME_HEIGHT * 4);
-  let cursor = 0;
-  for (let y = 0; y < FRAME_HEIGHT; y += 1) {
-    for (let x = 0; x < FRAME_WIDTH; x += 1) {
-      const rgb = PALETTE_RGB[pixelIndex(image, x, y, phase)];
-      data[cursor] = rgb[0];
-      data[cursor + 1] = rgb[1];
-      data[cursor + 2] = rgb[2];
-      data[cursor + 3] = 255;
-      cursor += 4;
-    }
-  }
-  return data;
 }
 
 /**
@@ -121,7 +108,7 @@ export function borderRowsFromLog(log, carryIn = 7, rows) {
   let cursor = 0;
   let colour = carryIn & 0x07;
   for (let y = 0; y < OUT_HEIGHT; y += 1) {
-    const rowStart = BORDER_TOP_T + y * T_PER_LINE;
+    const rowStart = scanlineStartT(y);
     while (cursor + 1 < log.length && log[cursor] <= rowStart) {
       colour = log[cursor + 1] & 0x07;
       cursor += 2;

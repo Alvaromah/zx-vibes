@@ -41,7 +41,8 @@ your-repo/
 ```
 
 Copy `dna/` whole (it is self-contained — no network, the FUSE suite is committed
-JSON, runners use only `node:` builtins). Do **not** copy `AGENTS.md`,
+JSON, and the emulator runners use only `node:` builtins; the domain opcode check
+`domain/z80-opcodes-check.mjs` in the core gate also needs `js-yaml`). Do **not** copy `AGENTS.md`,
 `specs-plan.md`, or `.harness/` — those are factory scaffolding, not the DNA —
 with one exception: `.harness/decisions.md` is the ADR/provenance log that
 `conformance/provenance-lint.mjs` validates `decision:<id>` references against,
@@ -58,6 +59,9 @@ with **exit 2** — so the gate genuinely fails if your code is absent or mis-sh
 | `timing/run-timing-fixtures.mjs` | `packages/ula/src/index.mjs` | the ULA timing API the runner invokes |
 | `machine/run-machine-fixtures.mjs` | `packages/machine/src/index.mjs` | the integrated 48K machine API the runner invokes |
 | `formats/run-format-fixtures.mjs` | `packages/machine/src/index.mjs` | the `.z80` read/write API the runner invokes |
+| `timing/run-floating-bus-fixtures.mjs`, `peripherals/run-kempston-fixtures.mjs`, `screen/run-screen-fixtures.mjs`, `formats/run-scr-fixtures.mjs` | `packages/ula/src/index.mjs` | the floating-bus, Kempston, screen-decode and `.scr` APIs each runner invokes |
+| `host-io/run-host-io-fixtures.mjs`, `formats/run-tap-fixtures.mjs`, `formats/run-tzx-fixtures.mjs`, `tape/run-tape-{pulses,edge-load,instant-load}-fixtures.mjs` | `packages/machine/src/index.mjs` | the port-`0xFE`, `.tap`/`.tzx` and tape pulse/loading APIs each runner invokes |
+| `keyboard/run-keyboard-fixtures.mjs`, `rom/run-rom-fixtures.mjs` | a reference model / the pinned ROM blob, both under `dna/conformance/` | nothing — they check the host keyboard model and the ROM artifact |
 
 The runner **source is the precise contract** — open the one you are implementing
 against; its argument parsing and the calls it makes define the exact surface (the
@@ -71,7 +75,7 @@ can be overridden with `--module <path>`.
   "name": "emu-regen", "private": true, "type": "module",
   "engines": { "node": ">=20" },
   "scripts": {
-    "conformance:emulator": "node dna/conformance/cpu/run-cpu-exec-fixtures-self-test.mjs && node dna/conformance/cpu/run-fuse-suite.mjs --quiet && node dna/conformance/timing/run-timing-fixtures.mjs --quiet && node dna/conformance/machine/run-machine-fixtures.mjs --quiet && node dna/conformance/formats/run-format-fixtures.mjs --quiet",
+    "conformance:emulator": "node dna/conformance/cpu/run-cpu-exec-fixtures-self-test.mjs && node dna/conformance/cpu/run-fuse-suite.mjs --quiet && node dna/conformance/timing/run-timing-fixtures.mjs --quiet && node dna/conformance/timing/run-floating-bus-fixtures.mjs --quiet && node dna/conformance/peripherals/run-kempston-fixtures.mjs --quiet && node dna/conformance/screen/run-screen-fixtures.mjs --quiet && node dna/conformance/machine/run-machine-fixtures.mjs --quiet && node dna/conformance/host-io/run-host-io-fixtures.mjs --quiet && node dna/conformance/keyboard/run-keyboard-fixtures.mjs --quiet && node dna/conformance/formats/run-format-fixtures.mjs --quiet && node dna/conformance/formats/run-scr-fixtures.mjs --quiet && node dna/conformance/formats/run-tap-fixtures.mjs --quiet && node dna/conformance/formats/run-tzx-fixtures.mjs --quiet && node dna/conformance/rom/run-rom-fixtures.mjs --quiet && node dna/conformance/tape/run-tape-pulses-fixtures.mjs --quiet && node dna/conformance/tape/run-tape-edge-load-fixtures.mjs --quiet && node dna/conformance/tape/run-tape-instant-load-fixtures.mjs --quiet",
     "coverage:emulator": "node dna/conformance/coverage-check.mjs --area emulator"
   }
 }
@@ -101,7 +105,7 @@ machine-execution, snapshot-z80, z80-opcodes}.md` + `z80-opcodes.yaml`.
 
 ```bash
 npm run conformance:emulator
-npm run coverage:emulator        # expect: Coverage: 23/23 contract+fidelity rows covered [emulator]
+npm run coverage:emulator        # expect: Coverage: 45/45 contract+fidelity rows covered [emulator]
 ```
 
 The self-tests reject a wrong reference, and the runners exit 2 on a missing/wrong

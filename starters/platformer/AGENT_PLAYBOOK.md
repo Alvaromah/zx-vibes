@@ -24,7 +24,7 @@ zxs run --bin build/main.bin --org 0x8000 --frames 300 --json
 
 Read the JSON. `status` must be `"ok"`, `haltSynced` must be `true`, and
 `frameBudget.overrunFrames` must be `0`.
-Then LOOK at the result: `zxs screen --text` (free) or
+Then LOOK at the result: `zxs state reset`, `zxs run --state .zxs/state.zxstate`, then `zxs screen --text --state .zxs/state.zxstate` (free) or
 `zxs run ... --screenshot s.png` and view the PNG. **Never report success
 without having run and looked.** Exit codes: 0 ok · 1 build error ·
 2 hang detected (the report names the PC and likely cause) · 3 environment.

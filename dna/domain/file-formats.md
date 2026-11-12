@@ -188,13 +188,17 @@ a runtime dependency): `https://worldofspectrum.net/TZXformat.html`. Every offse
 size and default below is restated in full so no normative claim depends on fetching
 that page.
 
-**Scope of this slice.** The header plus the most common nine block IDs are
-modeled: `0x10` standard-speed data, `0x11` turbo-speed data, `0x12` pure tone,
-`0x13` pulse sequence, `0x14` pure data, `0x20` pause/stop-the-tape, `0x21` group
-start, `0x22` group end, `0x30` text description. The remaining v1.20 IDs (`0x15`
-direct recording, `0x18`/`0x19` CSW/generalized, `0x23`–`0x28` flow control,
-`0x2A`/`0x2B`, `0x31`–`0x35` metadata) are **out of scope** for this slice; a parser
-that meets this contract rejects an unmodeled block ID rather than guessing its
+**Scope.** The header plus these block IDs are modeled: the signal/data blocks
+`0x10` standard-speed data, `0x11` turbo-speed data, `0x12` pure tone, `0x13` pulse
+sequence, `0x14` pure data and `0x20` pause/stop-the-tape; the control blocks `0x23`
+jump, `0x24`/`0x25` loop, `0x26`/`0x27` call/return, `0x28` select, `0x2A`
+stop-if-48K and `0x2B` signal level; and the informational blocks `0x21`/`0x22`
+group, `0x30` text, `0x31` message, `0x32` archive info, `0x33` hardware type, `0x35`
+custom info and `0x5A` glue. Real-world `.tzx` files nearly always carry archive info
+or a loop, so a parser limited to the data blocks rejects most of them. Still **out
+of scope**: the signal blocks `0x15` direct recording, `0x18` CSW recording and `0x19`
+generalized data, and the IDs v1.20 deprecates (`0x16`, `0x17`, `0x34`, `0x40`). A
+parser that meets this contract rejects an unmodeled block ID rather than guessing its
 length (later slices may extend the set — see roadmap W10.9+).
 
 ### Header (10 bytes)
@@ -375,6 +379,67 @@ offset  size  field
   Multiple lines within the text are separated by ASCII `0x0D` (carriage return); this
   slice carries the text bytes verbatim and does not normalize line endings.
 
+### Control blocks — `0x23`–`0x28`, `0x2A`, `0x2B`
+
+```text
+0x23 jump to block      0x00  2   relative block offset (signed WORD; -1 = previous, +1 = next)
+0x24 loop start         0x00  2   number of repetitions (WORD)
+0x25 loop end           (no body)
+0x26 call sequence      0x00  2   number of calls N (WORD)
+                        0x02  2N  N relative block offsets (signed WORDs)
+0x27 return             (no body)
+0x28 select block       0x00  2   length of the rest of the block (WORD)
+                        0x02  1   number of selections N
+                        0x03  ..  N x { signed WORD offset, BYTE length L, L ASCII description }
+0x2A stop if 48K        0x00  4   length of the rest of the block (DWORD; v1.20: 0)
+0x2B set signal level   0x00  4   length of the rest of the block (DWORD; v1.20: 1)
+                        0x04  1   signal level (0 = low, 1 = high)
+```
+
+<!-- provenance: contract -->
+- [id: FMT-TZX-CONTROL-001] The control blocks steer playback instead of carrying a
+  signal, laid out as in the table above (every `WORD`/`DWORD` little-endian, the
+  offsets **signed** and relative to the block that holds them). A parser **returns
+  each of them as a block, in file order** — it never consumes one silently, because a
+  player that loses a loop plays its body once and one that loses `0x2A` never stops a
+  48K machine where the tape author meant it to. `0x25` and `0x27` have no body (one
+  byte on disk, like `0x22`). `0x28`'s `WORD` length must equal the size of its
+  entries, or the block is rejected. `0x2A` and `0x2B` begin with a `DWORD` length (the
+  v1.10+ extension rule): the parser consumes exactly that many bytes, so a longer body
+  from a later revision is skipped safely; `0x2B` with no level byte is rejected. The
+  values (offsets, counts, level) are carried verbatim — the player, not the parser,
+  interprets them. None of these blocks has a data section.
+
+### Informational blocks — `0x31`–`0x33`, `0x35`, `0x5A`
+
+```text
+0x31 message            0x00  1   display time (seconds)
+                        0x01  1   length of the message L
+                        0x02  L   message (ASCII; lines separated by 0x0D)
+0x32 archive info       0x00  2   length of the rest of the block (WORD)
+                        0x02  1   number of text strings N
+                        0x03  ..  N x { BYTE text type, BYTE length L, L ASCII text }
+0x33 hardware type      0x00  1   number of entries N
+                        0x01  3N  N x { BYTE hardware type, BYTE hardware id, BYTE information }
+0x35 custom info        0x00  16  identification string (ASCII, space-padded)
+                        0x10  4   length of the custom info L (DWORD)
+                        0x14  L   custom info bytes
+0x5A glue               0x00  9   "XTape!" 0x1A major minor  (a concatenated file's header;
+                                  its leading 'Z' = 0x5A is the block ID)
+```
+
+<!-- provenance: contract -->
+- [id: FMT-TZX-INFO-001] The informational blocks carry archival metadata and no tape
+  signal, laid out as in the table above. A parser returns each of them as a block in
+  file order with its fields (texts as ASCII/Latin-1 strings, `0x35`'s info and
+  `0x5A`'s 9 glue bytes as raw bytes). `0x32`'s `WORD` length must equal the size of
+  its entries, or the block is rejected. `0x35`'s identification is **16** characters
+  (standard ones are `"Instructions    "`, `"Spectrum Screen "`, `"POKEs           "`)
+  and its length a 4-byte `DWORD` at offset `0x10` — the published spec writes every
+  size and offset in hexadecimal, so its `CHAR[10]` is 16 characters, not 10. A `0x5A`
+  glue block is the header of a second `.tzx` appended to the first: its 9 bytes are
+  consumed as a fixed body and reading continues with the next block ID.
+
 ### Round-trip
 
 <!-- provenance: contract -->
@@ -384,6 +449,8 @@ offset  size  field
   `serialize(parse(file)) = file` for every well-formed `file`, and
   `parse(serialize(blocks))` recovers each block's ID and fields. There is no lossy
   normalization step: a parsed-then-serialized file is byte-identical to the original.
+  (The one bounded exception is a `0x2A`/`0x2B` body longer than v1.20 defines: its
+  extra bytes are skipped on parse, so byte identity holds for the v1.20 lengths.)
 
 ### Model contract (the regeneration target)
 
@@ -407,8 +474,15 @@ Each parsed block is `{ id, … }` with the per-ID fields named above (e.g. `0x1
 `{ id, pause, data }`; `0x11` → `{ id, pilot, sync1, sync2, zero, one, pilotPulses,
 usedBits, pause, data }`; `0x12` → `{ id, pulseLength, pulseCount }`; `0x13` →
 `{ id, pulses: [...] }`; `0x14` → `{ id, zero, one, usedBits, pause, data }`; `0x20` →
-`{ id, pause }`; `0x21` → `{ id, name }`; `0x22` → `{ id }`; `0x30` → `{ id, text }`).
-Data sections are `Uint8Array`; group name / text are ASCII (Latin-1) strings.
+`{ id, pause }`; `0x21` → `{ id, name }`; `0x22` → `{ id }`; `0x30` → `{ id, text }`;
+`0x23` → `{ id, offset }`; `0x24` → `{ id, count }`; `0x25`/`0x27`/`0x2A` → `{ id }`;
+`0x26` → `{ id, offsets: [...] }`; `0x28` → `{ id, entries: [{ offset, description }] }`;
+`0x2B` → `{ id, level }`; `0x31` → `{ id, time, text }`; `0x32` → `{ id, entries:
+[{ type, text }] }`; `0x33` → `{ id, entries: [{ type, hardwareId, info }] }`; `0x35` →
+`{ id, ident, info }`; `0x5A` → `{ id, glue }`). Data sections (and `info`/`glue`) are
+`Uint8Array`; names, texts and descriptions are ASCII (Latin-1) strings. Only the data
+blocks `0x10`/`0x11`/`0x14` have a `data` field, so a consumer that loads the blocks
+carrying `data` (the instant loader) passes over every control and informational block.
 
 Acceptance: `dna/conformance/formats/tzx-format.json` (`FMT-TZX-*`, `FORMAT-TZX-001`)
 via `dna/conformance/formats/run-tzx-fixtures.mjs` against the shipped
@@ -418,9 +492,13 @@ order — fidelity-tier per the harness method calibration), the self-test runs 
 machinery: the real fixtures are validated against an **independent reference**
 re-derived from this spec, and adversarial broken models — a **big-endian** word
 reader, a model that reads the turbo/pure-data length as a **2-byte `WORD`** (dropping
-the third length byte), a **version-swap** (minor/major) model, and a parser that
-**skips the signature check** — are each rejected. Two blind regenerations from this
-spec agreed byte-for-byte (no DNA gap).
+the third length byte), a **version-swap** (minor/major) model, a parser that
+**skips the signature check**, and one that **drops the control blocks** from the
+block list — are each rejected. Two blind regenerations from this spec agreed
+byte-for-byte for the original nine block IDs (no DNA gap); the control and
+informational blocks (`FORMAT-TZX-CONTROL-INFO-001`, a 14-block file laid out by hand
+from the v1.20 tables) were added later and checked against the self-test's
+independently written reference.
 
 ## Provenance
 

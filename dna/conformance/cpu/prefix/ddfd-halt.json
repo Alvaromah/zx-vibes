@@ -1,0 +1,24 @@
+{
+  "id": "CPU-PREFIX-HALT-001",
+  "tier": "fidelity",
+  "provenance": "z80-spec",
+  "input": {
+    "kind": "cpu-step",
+    "note": "DD/FD + HALT (Z80-EXEC-PREFIX-HALT-001). An index prefix in front of an opcode that uses neither H, L nor (HL) is one extra M1; HALT (76) is such an opcode, so DD 76 and FD 76 halt like 76: 8 T (4 for the prefix M1, 4 for the HALT M1), R + 2, PC left on the 76 byte, no displacement fetched and no memory written. FUSE upstream has no dd76/fd76 case (fuse/dd.json jumps from dd75 to dd77), so a regeneration was free to decode it as LD (IX+d),(IX+d) — which the pre-2026-11 core did (19 T, PC + 3, a write to IX+d). The second case gives IX/IY and the would-be displacement byte values that expose that misdecode.",
+    "cases": [
+      { "name": "dd76", "registers": { "ixh": "90", "ixl": "00" }, "memory": { "0000": "DD7605", "9005": "AA" } },
+      { "name": "fd76", "registers": { "iyh": "90", "iyl": "00" }, "memory": { "0000": "FD7605", "9005": "AA" } },
+      { "name": "76", "registers": {}, "memory": { "0000": "76" } }
+    ]
+  },
+  "expected": {
+    "cases": [
+      { "name": "dd76", "registers": { "pc": "0001", "r": "02", "ixh": "90", "ixl": "00" }, "memory": { "9005": "AA" }, "tStates": 8 },
+      { "name": "fd76", "registers": { "pc": "0001", "r": "02", "iyh": "90", "iyl": "00" }, "memory": { "9005": "AA" }, "tStates": 8 },
+      { "name": "76", "registers": { "pc": "0000", "r": "01" }, "tStates": 4 }
+    ]
+  },
+  "normalization": {
+    "profile": "custom"
+  }
+}

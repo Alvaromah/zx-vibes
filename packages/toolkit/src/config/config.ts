@@ -94,8 +94,23 @@ export function loadProjectConfig(cwd: string = process.cwd()): ZxProjectConfig 
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw userError(`Invalid ${CONFIG_FILE}: expected a JSON object`);
   }
+  // The resolvable fields are strings (CFG-PROD-FIELD-*). Any other JSON type would
+  // surface later as a crash (`"org": 32768` → "input.trim is not a function") or,
+  // worse, silently: a non-string `tests` made `verify` skip the suite and pass.
+  // `name`/`template`/`toolkit` are informational and stay unvalidated (CFG-PROD-FREE-001).
+  for (const field of STRING_FIELDS) {
+    const value = (parsed as Record<string, unknown>)[field];
+    if (value !== undefined && typeof value !== 'string') {
+      throw userError(
+        `Invalid ${CONFIG_FILE}: "${field}" must be a string, got ${JSON.stringify(value)}`,
+      );
+    }
+  }
   return parsed as ZxProjectConfig;
 }
+
+/** The config fields the toolkit resolves and therefore requires to be strings. */
+const STRING_FIELDS = ['entry', 'org', 'assembler', 'outDir', 'tests'] as const;
 
 /**
  * Normalize the assembler backend (CFG-PROD-RESOLVE-002): case-insensitive;

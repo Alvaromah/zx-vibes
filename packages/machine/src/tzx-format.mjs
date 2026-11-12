@@ -4,10 +4,12 @@
 // A `.tzx` file is a 10-byte header ("ZXTape!" + 0x1A + major + minor) followed by a
 // flat sequence of typed blocks, each introduced by a 1-byte block ID. Every multi-byte
 // field is little-endian; the turbo (0x11) and pure-data (0x14) blocks carry a 3-byte
-// length, NOT a 2-byte WORD. This slice models the nine common block IDs (0x10, 0x11,
-// 0x12, 0x13, 0x14, 0x20, 0x21, 0x22, 0x30) against the pinned TZX v1.20 spec; an
-// unsupported ID is rejected rather than skipped. Tape, like a snapshot, is a file the
-// machine loads, so this lives beside the .tap/.z80 codecs.
+// length, NOT a 2-byte WORD. Modeled against the pinned TZX v1.20 spec: the data/signal
+// blocks 0x10-0x14 and 0x20, the control blocks 0x23-0x28, 0x2A and 0x2B
+// (FMT-TZX-CONTROL-001), and the informational blocks 0x21, 0x22, 0x30-0x33, 0x35 and
+// 0x5A (FMT-TZX-INFO-001). Any other ID — including the signal blocks 0x15/0x18/0x19,
+// which this codec does not decode — is rejected rather than skipped. Tape, like a
+// snapshot, is a file the machine loads, so this lives beside the .tap/.z80 codecs.
 
 // FMT-TZX-HEADER-001: the 7 ASCII signature bytes (the 0x1A end-of-text marker is
 // separate) and the pinned v1.20.
@@ -73,6 +75,18 @@ class Reader {
       (this.bytes[this.offset + 2] << 16);
     this.offset += 3;
     return v >>> 0;
+  }
+  s16(what) {
+    const v = this.u16(what);
+    return v >= 0x8000 ? v - 0x10000 : v;
+  }
+  u32(what) {
+    // FMT-TZX-ENDIAN-001: little-endian DWORD (the v1.10+ extension-rule length).
+    this.need(4, what);
+    const b = this.bytes;
+    const v = (b[this.offset] | (b[this.offset + 1] << 8) | (b[this.offset + 2] << 16)) + b[this.offset + 3] * 0x1000000;
+    this.offset += 4;
+    return v;
   }
   take(n, what) {
     this.need(n, what);
@@ -150,6 +164,96 @@ const BLOCK_READERS = {
     const bytes = r.take(length, "0x30 text");
     return { id: 0x30, text: bytesToLatin1(bytes, 0, bytes.length) };
   },
+  // FMT-TZX-CONTROL-001: jump to block, a signed relative block offset (WORD).
+  0x23(r) {
+    return { id: 0x23, offset: r.s16("0x23 offset") };
+  },
+  // FMT-TZX-CONTROL-001: loop start (repetitions, WORD) / loop end (no body).
+  0x24(r) {
+    return { id: 0x24, count: r.u16("0x24 count") };
+  },
+  0x25() {
+    return { id: 0x25 };
+  },
+  // FMT-TZX-CONTROL-001: call sequence (count WORD, then signed WORD offsets) / return.
+  0x26(r) {
+    const count = r.u16("0x26 count");
+    const offsets = [];
+    for (let i = 0; i < count; i += 1) offsets.push(r.s16(`0x26 offset[${i}]`));
+    return { id: 0x26, offsets };
+  },
+  0x27() {
+    return { id: 0x27 };
+  },
+  // FMT-TZX-CONTROL-001: select block — WORD length of the rest, BYTE count, then per
+  // entry a signed WORD offset, BYTE length and the description text.
+  0x28(r) {
+    const length = r.u16("0x28 length");
+    const body = new Reader(r.take(length, "0x28 body"));
+    const count = body.u8("0x28 count");
+    const entries = [];
+    for (let i = 0; i < count; i += 1) {
+      const offset = body.s16(`0x28 entry[${i}] offset`);
+      const text = body.take(body.u8(`0x28 entry[${i}] length`), `0x28 entry[${i}] text`);
+      entries.push({ offset, description: bytesToLatin1(text, 0, text.length) });
+    }
+    if (body.remaining() !== 0) throw new Error(`parseTzx: 0x28 length ${length} does not match its entries`);
+    return { id: 0x28, entries };
+  },
+  // FMT-TZX-CONTROL-001: stop the tape if in 48K mode — a DWORD length (0) and no body.
+  0x2a(r) {
+    const length = r.u32("0x2a length");
+    r.take(length, "0x2a body");
+    return { id: 0x2a };
+  },
+  // FMT-TZX-CONTROL-001: set signal level — a DWORD length (1), then the level byte.
+  0x2b(r) {
+    const length = r.u32("0x2b length");
+    const body = r.take(length, "0x2b body");
+    if (length < 1) throw new Error("parseTzx: 0x2b body has no signal level");
+    return { id: 0x2b, level: body[0] & 0xff };
+  },
+  // FMT-TZX-INFO-001: message — display time (BYTE, seconds), length (BYTE), text.
+  0x31(r) {
+    const time = r.u8("0x31 time");
+    const bytes = r.take(r.u8("0x31 length"), "0x31 text");
+    return { id: 0x31, time, text: bytesToLatin1(bytes, 0, bytes.length) };
+  },
+  // FMT-TZX-INFO-001: archive info — WORD length of the rest, BYTE count, then per entry
+  // a type byte, a length byte and the text.
+  0x32(r) {
+    const length = r.u16("0x32 length");
+    const body = new Reader(r.take(length, "0x32 body"));
+    const count = body.u8("0x32 count");
+    const entries = [];
+    for (let i = 0; i < count; i += 1) {
+      const type = body.u8(`0x32 entry[${i}] type`);
+      const text = body.take(body.u8(`0x32 entry[${i}] length`), `0x32 entry[${i}] text`);
+      entries.push({ type, text: bytesToLatin1(text, 0, text.length) });
+    }
+    if (body.remaining() !== 0) throw new Error(`parseTzx: 0x32 length ${length} does not match its entries`);
+    return { id: 0x32, entries };
+  },
+  // FMT-TZX-INFO-001: hardware type — a count byte, then 3 bytes per entry.
+  0x33(r) {
+    const count = r.u8("0x33 count");
+    const entries = [];
+    for (let i = 0; i < count; i += 1) {
+      entries.push({ type: r.u8(`0x33 entry[${i}] type`), hardwareId: r.u8(`0x33 entry[${i}] id`), info: r.u8(`0x33 entry[${i}] info`) });
+    }
+    return { id: 0x33, entries };
+  },
+  // FMT-TZX-INFO-001: custom info — a 16-character identification (the spec's CHAR[10] is
+  // hex, like all its sizes and offsets), a DWORD length at offset 0x10, then the bytes.
+  0x35(r) {
+    const ident = r.take(16, "0x35 identification");
+    const info = r.take(r.u32("0x35 length"), "0x35 info");
+    return { id: 0x35, ident: bytesToLatin1(ident, 0, 16), info };
+  },
+  // FMT-TZX-INFO-001: "glue" — the 9-byte header of a concatenated TZX file.
+  0x5a(r) {
+    return { id: 0x5a, glue: r.take(9, "0x5a glue") };
+  },
 };
 
 // FMT-TZX-HEADER-001 / FMT-TZX-BLOCK-STREAM-001: validate the header, then walk blocks.
@@ -189,6 +293,9 @@ function pushU16(out, value) {
 }
 function pushU24(out, value) {
   out.push(value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff);
+}
+function pushU32(out, value) {
+  out.push(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
 }
 
 const BLOCK_WRITERS = {
@@ -244,6 +351,76 @@ const BLOCK_WRITERS = {
     const text = latin1ToBytes(b.text);
     out.push(text.length & 0xff);
     for (const byte of text) out.push(byte & 0xff);
+  },
+  0x23(out, b) {
+    pushU16(out, b.offset ?? 0);
+  },
+  0x24(out, b) {
+    pushU16(out, b.count ?? 0);
+  },
+  0x25() {
+    // no body
+  },
+  0x26(out, b) {
+    const offsets = b.offsets ?? [];
+    pushU16(out, offsets.length);
+    for (const offset of offsets) pushU16(out, offset);
+  },
+  0x27() {
+    // no body
+  },
+  0x28(out, b) {
+    const body = [];
+    const entries = b.entries ?? [];
+    body.push(entries.length & 0xff);
+    for (const entry of entries) {
+      const text = latin1ToBytes(entry.description);
+      pushU16(body, entry.offset ?? 0);
+      body.push(text.length & 0xff);
+      for (const byte of text) body.push(byte & 0xff);
+    }
+    pushU16(out, body.length);
+    out.push(...body);
+  },
+  0x2a(out) {
+    pushU32(out, 0);
+  },
+  0x2b(out, b) {
+    pushU32(out, 1);
+    out.push((b.level ?? 0) & 0xff);
+  },
+  0x31(out, b) {
+    const text = latin1ToBytes(b.text);
+    out.push((b.time ?? 0) & 0xff, text.length & 0xff);
+    for (const byte of text) out.push(byte & 0xff);
+  },
+  0x32(out, b) {
+    const body = [];
+    const entries = b.entries ?? [];
+    body.push(entries.length & 0xff);
+    for (const entry of entries) {
+      const text = latin1ToBytes(entry.text);
+      body.push((entry.type ?? 0) & 0xff, text.length & 0xff);
+      for (const byte of text) body.push(byte & 0xff);
+    }
+    pushU16(out, body.length);
+    out.push(...body);
+  },
+  0x33(out, b) {
+    const entries = b.entries ?? [];
+    out.push(entries.length & 0xff);
+    for (const entry of entries) out.push((entry.type ?? 0) & 0xff, (entry.hardwareId ?? 0) & 0xff, (entry.info ?? 0) & 0xff);
+  },
+  0x35(out, b) {
+    const ident = latin1ToBytes(String(b.ident ?? "").padEnd(16, " ").slice(0, 16));
+    const info = toBytes(b.info);
+    for (const byte of ident) out.push(byte & 0xff);
+    pushU32(out, info.length);
+    for (const byte of info) out.push(byte & 0xff);
+  },
+  0x5a(out, b) {
+    const glue = toBytes(b.glue);
+    for (let i = 0; i < 9; i += 1) out.push((glue[i] ?? 0) & 0xff);
   },
 };
 

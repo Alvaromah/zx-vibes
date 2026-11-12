@@ -198,8 +198,8 @@
       presetsEl.appendChild(b);
     }
 
-    // BASIC text -> flat array of canonical key steps. (Verified headlessly against
-    // the real ROM; see tooling. Ported verbatim.)
+    // ---- BASIC typer (begin) — run headlessly against the real ROM by tooling/pages.test.mjs ----
+    // BASIC text -> flat array of canonical key steps.
     const STMT_KEYWORDS = {
       PLOT: 'Q', DRAW: 'W', REM: 'E', RUN: 'R', RANDOMIZE: 'T', RAND: 'T', RETURN: 'Y',
       IF: 'U', INPUT: 'I', POKE: 'O', PRINT: 'P', NEW: 'A', SAVE: 'S', DIM: 'D', FOR: 'F',
@@ -228,11 +228,17 @@
       for (const rawLine of text.split('\n')) {
         const line = rawLine.replace(/\s+$/, '');
         if (!line.trim()) continue;
-        let i = 0, atStmt = true;
+        let i = 0, atStmt = true, inString = false;
         const m = /^(\s*)(\d+)(\s*)/.exec(line);
         if (m) { for (const d of m[2]) push([d]); i = m[0].length; }
         while (i < line.length) {
           const ch = line[i];
+          // Inside a string literal the editor is in L mode: every character is typed as
+          // itself, letter by letter — "go to bed" must not become the GO TO keyword, and
+          // a ':' there does not start a statement. A '"' opens or closes the literal
+          // (a doubled "" inside it is just two of them).
+          if (ch === '"') { push(['SYM', 'P']); inString = !inString; i += 1; continue; }
+          if (inString) { const k = keysForChar(ch); if (k) push(k); i += 1; continue; }
           const wm = /^[A-Za-z]+/.exec(line.slice(i));
           if (wm) {
             const word = wm[0], upper = word.toUpperCase(), rest = line.slice(i + word.length);
@@ -265,6 +271,7 @@
       }
       return steps;
     }
+    // ---- BASIC typer (end) ----
 
     // Auto-typer: press each step, wait, release, wait — real time, so the 50 Hz
     // emulation loop advances and the ROM debounces each key exactly as verified.

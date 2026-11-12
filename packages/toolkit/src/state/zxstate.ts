@@ -19,22 +19,32 @@
 //     machine: {
 //       z80: "<base64 of writeZ80({registers,memory,border})>",
 //       halted: false,                  // NOT carried by .z80 — preserved here
-//       memptr: 0                       // the WZ register, likewise not in .z80
+//       memptr: 0,                      // the WZ register, likewise not in .z80
+//       clock: 0,                       // frame T-state 0..69887 (optional; absent ⇒ 0)
+//       eiDelay: 0                      // 1 = an EI just ran (optional; absent ⇒ 0)
 //     },
 //     debug: { breakpoints: [...], watchpoints: [...] }   // ride-along debug stores
 //   }
 // The machine snapshot reuses the machine's OWN `.z80` codec (writeZ80/readZ80), so
 // registers + 64 KB memory + border round-trip through a format MCP can reconstruct
 // identically, and `state export --z80` can hand the very same bytes to a `.z80`.
+// `clock` and `eiDelay` keep a session that stopped mid-frame (a breakpoint, a step)
+// on the same interrupt schedule when it resumes: without them the resumed machine
+// restarted the frame at T-state 0 and took its next interrupt at a different point,
+// and an `EI` just before the save no longer delayed that interrupt by one
+// instruction. They were added inside envelope version 1 as optional fields — older
+// files load with both at 0 (the previous behaviour) and older builds ignore them.
 //
 // If conformance later pins the `.zxstate` bytes, author `dna/product/zxstate-format.md`
 // and conform — this is a flagged W4 follow-up, NOT a silent choice (see the package
 // README "The .zxstate session format").
 
 import { createMachine, readZ80, writeZ80, type Machine } from '@zx-vibes/machine';
+import { FRAME_T_STATES } from '@zx-vibes/ula';
 import { userError } from '../output/envelope.js';
 import { DEFAULT_BORDER } from '../runtime/io-device.js';
 import { loadRom, ROM_SIZE } from '../runtime/rom.js';
+import { z80SnapshotProblem } from '../runtime/z80-check.js';
 import type { DebugStore } from './debug-store.js';
 import { emptyDebugStore, normalizeDebugStore } from './debug-store.js';
 
@@ -59,8 +69,28 @@ interface ZxStateEnvelope {
   emulatorId: string;
   format: string;
   version: number;
-  machine: { z80: string; halted: boolean; memptr: number };
+  machine: {
+    z80: string;
+    halted: boolean;
+    memptr: number;
+    /** The frame T-state (0..FRAME_T_STATES-1); optional, absent in pre-2026-11 files. */
+    clock?: number;
+    /** 1 while an `EI` holds off the next interrupt for one instruction; optional. */
+    eiDelay?: number;
+  };
   debug: DebugStore;
+}
+
+/** An optional integer envelope field: absent ⇒ 0; present but malformed ⇒ a USER_ERROR. */
+function optionalMachineInt(value: unknown, max: number, field: string, label: string): number {
+  if (value === undefined) return 0;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > max) {
+    throw userError(
+      `Corrupt ${label} session file: machine.${field} must be an integer 0–${max}, got ${JSON.stringify(value)}`,
+      'state',
+    );
+  }
+  return value;
 }
 
 /**
@@ -83,6 +113,8 @@ export function serializeZxState(state: SessionState): string {
       z80: Buffer.from(snapshot).toString('base64'),
       halted: Boolean(state.machine.halted),
       memptr: (state.machine.registers.memptr ?? 0) & 0xffff,
+      clock: state.machine.clock,
+      eiDelay: state.machine.eiDelay > 0 ? 1 : 0,
     },
     debug: normalizeDebugStore(state.debug),
   };
@@ -121,18 +153,40 @@ export function deserializeZxState(text: string, label = '.zxstate'): SessionSta
       'state',
     );
   }
+  // A version this build does not know, or a body whose snapshot is not a loadable
+  // `.z80`, must fail loud rather than resume a zeroed machine (ERR-PROD-EMU-001).
+  if (env.version !== ZXSTATE_VERSION) {
+    throw userError(
+      `Unsupported ${label} session version ${JSON.stringify(env.version)}; ` +
+        `this build reads version ${ZXSTATE_VERSION}`,
+      'state',
+    );
+  }
   if (!env.machine || typeof env.machine.z80 !== 'string') {
     throw userError(`Invalid ${label} session file: missing machine snapshot`, 'state');
   }
 
-  const snapshot = readZ80(Buffer.from(env.machine.z80, 'base64'));
+  const inner = Buffer.from(env.machine.z80, 'base64');
+  const problem = z80SnapshotProblem(inner);
+  if (problem !== undefined) {
+    throw userError(`Corrupt ${label} session file: its machine snapshot is invalid (${problem})`, 'state');
+  }
+  const clock = optionalMachineInt(env.machine.clock, FRAME_T_STATES - 1, 'clock', label);
+  const eiDelay = optionalMachineInt(env.machine.eiDelay, 1, 'eiDelay', label);
+  const snapshot = readZ80(inner);
   // The `.z80` format snapshots only the three RAM pages (0x4000–0xFFFF); the fixed
   // 48K ROM (0x0000–0x3FFF) is IMPLIED, not stored. Re-map it on load — the standard
   // snapshot-load semantics — so a resumed session can still call ROM routines.
   snapshot.memory.set(loadRom().subarray(0, ROM_SIZE), 0x0000);
-  const machine = createMachine({ registers: snapshot.registers, memory: snapshot.memory });
+  const machine = createMachine({
+    registers: snapshot.registers,
+    memory: snapshot.memory,
+    clock,
+    romWriteProtect: true, // MACHINE-ROM-READONLY-001, as for a fresh boot
+  });
   machine.halted = Boolean(env.machine.halted);
   machine.registers.memptr = (env.machine.memptr ?? 0) & 0xffff;
+  machine.eiDelay = eiDelay;
 
   return {
     machine,

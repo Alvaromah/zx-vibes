@@ -9,18 +9,18 @@
 // its lifecycle (the gated surface). `--detached-child` is the Incidental internal flag
 // (CLI-PROD-FREE-002) the detached child runs.
 
-import { spawn } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
-import { dirname, extname, join, resolve } from 'node:path';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Command } from 'commander';
 import { successEnvelope, userError, type Envelope } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
-import { resolveConfig } from '../config/config.js';
 import { parseNumber } from '../util/address.js';
 import {
   newToken,
   pingServer,
+  previewLogPath,
   readPreviewRecord,
   removePreviewRecord,
   stopServer,
@@ -30,6 +30,12 @@ import {
 } from './lifecycle.js';
 import { resolvePreviewProgram, type PreviewProgram } from './program.js';
 import { createPreviewServer, DEFAULT_PREVIEW_PORT, type PreviewServer } from './server.js';
+import { projectWatchPaths } from './deps.js';
+
+/** How long `--detach` waits for the child to record itself and answer its ping. */
+const DETACH_READY_TIMEOUT_MS = 12000;
+/** How much of the child's log a `--detach` failure quotes. */
+const LOG_TAIL_CHARS = 2000;
 
 interface PreviewCliOptions {
   blank?: boolean;
@@ -148,7 +154,8 @@ async function startServer(params: PreviewParams, token: string, onStop: (() => 
 }> {
   const program = resolvePreviewProgram({ cwd: params.cwd, blank: params.blank, file: params.file });
   const watchPaths = params.watch ? watchPathsFor(params) : undefined;
-  const rebuild = params.watch
+  const watching = watchPaths !== undefined && watchPaths.length > 0;
+  const rebuild = watching
     ? (): PreviewProgram => resolvePreviewProgram({ cwd: params.cwd, blank: params.blank, file: params.file })
     : undefined;
   const server = await createPreviewServer({
@@ -156,7 +163,7 @@ async function startServer(params: PreviewParams, token: string, onStop: (() => 
     port: params.port,
     strictPort: params.strictPort,
     token,
-    ...(watchPaths ? { watchPaths } : {}),
+    ...(watching ? { watchPaths, refreshWatchPaths: () => watchPathsFor(params) } : {}),
     ...(rebuild ? { rebuild } : {}),
     ...(onStop ? { onStop } : {}),
   });
@@ -225,8 +232,34 @@ async function runDetachedChild(params: PreviewParams): Promise<Envelope> {
  * `preview --detach`: spawn a detached child that runs the server, wait for it to record
  * `.zxs/preview-server.json` (RT-PROD-PREVIEW-003) and answer its control endpoint, then print
  * the record and exit — leaving the server running.
+ *
+ * - A server this project already recorded, and that still answers as a zx-vibes preview
+ *   server, is reported as running (with its URL) instead of starting a second one that
+ *   would overwrite — and so orphan — its record.
+ * - The program is resolved (built) HERE first, so a build error or a bad file fails at
+ *   once with the real message rather than after a timeout.
+ * - The child's stdout/stderr go to `.zxs/preview-server.log`; if the child exits before it
+ *   is ready, the wait stops and the error quotes that log.
  */
-async function runPreviewDetach(params: PreviewParams): Promise<Envelope> {
+export async function runPreviewDetach(params: PreviewParams): Promise<Envelope> {
+  const existing = readPreviewRecord(params.cwd);
+  if (existing && (await pingServer(existing.url))) {
+    return successEnvelope('preview', {
+      action: 'detach',
+      detached: true,
+      alreadyRunning: true,
+      pid: existing.pid,
+      port: existing.port,
+      url: existing.url,
+      owner: existing.owner,
+      note: `a preview server for this project is already running at ${existing.url}; ` +
+        '`zxs preview --stop` stops it',
+    });
+  }
+
+  // Fail fast with the real error (build diagnostics, a corrupt file, an unsupported type).
+  resolvePreviewProgram({ cwd: params.cwd, blank: params.blank, file: params.file });
+
   const bin = findCliBin();
   const childArgs = [bin, 'preview', '--detached-child', '--port', String(params.port)];
   if (params.blank) childArgs.push('--blank');
@@ -234,74 +267,125 @@ async function runPreviewDetach(params: PreviewParams): Promise<Envelope> {
   if (params.watch) childArgs.push('--watch');
   if (params.file !== undefined) childArgs.push(params.file);
 
-  const child = spawn(process.execPath, childArgs, {
-    cwd: params.cwd,
-    detached: true,
-    stdio: 'ignore',
-  });
+  const logPath = previewLogPath(params.cwd);
+  mkdirSync(dirname(logPath), { recursive: true });
+  const logFd = openSync(logPath, 'w');
+  let child: ChildProcess;
+  try {
+    child = spawn(process.execPath, childArgs, {
+      cwd: params.cwd,
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+      windowsHide: true,
+    });
+  } finally {
+    closeSync(logFd); // the child holds its own handle
+  }
   child.unref();
 
-  const record = await waitForChildRecord(params.cwd, child.pid ?? -1, 12000);
-  if (!record) {
-    try {
-      if (child.pid) process.kill(child.pid);
-    } catch {
-      /* best effort */
-    }
+  const outcome = await waitForChildReady(params.cwd, child, DETACH_READY_TIMEOUT_MS);
+  if (outcome.kind === 'ready') {
+    const record = outcome.record;
+    return successEnvelope('preview', {
+      action: 'detach',
+      detached: true,
+      pid: record.pid,
+      port: record.port,
+      url: record.url,
+      owner: record.owner,
+    });
+  }
+  const log = logTail(logPath);
+  if (outcome.kind === 'exited') {
     throw userError(
-      'preview --detach: the detached server did not report ready in time ' +
-        '(no .zxs/preview-server.json). Check the project builds and the port is bindable.',
+      `preview --detach: the detached server exited (${outcome.reason}) before it was ready` +
+        (log ? `:\n${log}` : ` (no output; see ${logPath})`),
       'preview',
     );
   }
-  return successEnvelope('preview', {
-    action: 'detach',
-    detached: true,
-    pid: record.pid,
-    port: record.port,
-    url: record.url,
-    owner: record.owner,
-  });
+  try {
+    if (child.pid) process.kill(child.pid);
+  } catch {
+    /* best effort */
+  }
+  throw userError(
+    'preview --detach: the detached server did not report ready in time ' +
+      `(no live .zxs/preview-server.json after ${DETACH_READY_TIMEOUT_MS / 1000} s)` +
+      (log ? `. Its output:\n${log}` : `. See ${logPath}.`),
+    'preview',
+  );
 }
 
-/** Poll for the detached child's record (matching its pid) + a live server, up to `timeoutMs`. */
-async function waitForChildRecord(cwd: string, childPid: number, timeoutMs: number): Promise<PreviewRecord | null> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const record = readPreviewRecord(cwd);
-    if (record && (childPid < 0 || record.pid === childPid) && (await pingServer(record.url))) {
-      return record;
+type ChildOutcome =
+  | { kind: 'ready'; record: PreviewRecord }
+  | { kind: 'exited'; reason: string }
+  | { kind: 'timeout' };
+
+/**
+ * Poll for the detached child's record (matching its pid) + a live server, up to
+ * `timeoutMs` — or until the child exits, whichever comes first.
+ */
+async function waitForChildReady(cwd: string, child: ChildProcess, timeoutMs: number): Promise<ChildOutcome> {
+  let exited: string | undefined;
+  let wake: (() => void) | undefined;
+  const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+    exited = signal ? `signal ${signal}` : `exit code ${code ?? 'unknown'}`;
+    wake?.();
+  };
+  // A spawn failure is reported as 'error' (and may never 'exit'); the listener stays
+  // attached so a late error can never surface as an unhandled event.
+  child.on('error', (error: Error) => {
+    exited ??= `could not start: ${error.message}`;
+    wake?.();
+  });
+  child.once('exit', onExit);
+  try {
+    const deadline = Date.now() + timeoutMs;
+    const childPid = child.pid ?? -1;
+    while (Date.now() < deadline) {
+      const record = readPreviewRecord(cwd);
+      if (record && (childPid < 0 || record.pid === childPid) && (await pingServer(record.url))) {
+        return { kind: 'ready', record };
+      }
+      if (exited !== undefined) return { kind: 'exited', reason: exited };
+      await new Promise<void>((resolveWait) => {
+        const timer = setTimeout(resolveWait, 150);
+        wake = () => {
+          clearTimeout(timer);
+          resolveWait();
+        };
+      });
+      wake = undefined;
     }
-    await delay(150);
+    return exited !== undefined ? { kind: 'exited', reason: exited } : { kind: 'timeout' };
+  } finally {
+    child.removeListener('exit', onExit);
   }
-  return null;
+}
+
+/** The last part of the detached child's log ('' when absent or empty). */
+function logTail(path: string): string {
+  try {
+    const text = readFileSync(path, 'utf8').trim();
+    return text.length > LOG_TAIL_CHARS ? `…${text.slice(-LOG_TAIL_CHARS)}` : text;
+  } catch {
+    return '';
+  }
 }
 
 // --- helpers ---------------------------------------------------------------
 
-/** The source files `--watch` polls for the current mode (RT-PROD-PREVIEW-005). */
+/**
+ * The source files `--watch` polls for the current mode (RT-PROD-PREVIEW-005): the
+ * served file, nothing for a blank screen, or the project build's dependency set
+ * (./deps.ts — config, entry, INCLUDEs wherever they live, INCBIN data).
+ */
 function watchPathsFor(params: PreviewParams): string[] {
   if (params.file !== undefined) {
     return [resolve(params.cwd, params.file)];
   }
   if (params.blank) return []; // nothing to rebuild for a blank boot screen
-  // Default mode: the configured entry, the project config, and sibling .asm sources.
-  const resolved = resolveConfig({ cwd: params.cwd });
-  const paths = new Set<string>();
-  paths.add(resolve(params.cwd, 'zx.config.json'));
-  if (resolved.entry) {
-    const entry = resolve(params.cwd, resolved.entry);
-    paths.add(entry);
-    const dir = dirname(entry);
-    try {
-      for (const name of readdirSync(dir)) {
-        if (extname(name).toLowerCase() === '.asm') paths.add(join(dir, name));
-      }
-    } catch {
-      /* entry dir unreadable — just watch the entry + config */
-    }
-  }
-  return [...paths];
+  return projectWatchPaths(params.cwd);
 }
 
 /** Locate the `zxs` CLI bin (`bin/zxs.js`) by walking up from this module (built or src). */
@@ -315,10 +399,6 @@ function findCliBin(): string {
     dir = parent;
   }
   throw userError('preview --detach: could not locate the zxs CLI bin to spawn the detached server.', 'preview');
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 /** Declare the `preview` command's modes + flags (CLI-PROD-PREVIEW-002). */

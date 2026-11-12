@@ -30,6 +30,7 @@ import {
   DEFAULT_BIN_ORG,
   RAM_BASE,
 } from './session.js';
+import { z80SnapshotProblem } from './z80-check.js';
 
 /** The concrete file-image source kinds (CLI-PROD-CONV-SOURCE-001). */
 export type FileSourceKind = 'bin' | 'z80' | 'tap' | 'sna';
@@ -144,6 +145,10 @@ export function loadMachineFromSource(options: MachineSourceOptions): LoadedMach
 /** Read + decode a `.z80` snapshot onto a fresh ROM machine (RAM overlaid, ROM preserved). */
 function loadZ80(given: string, cwd: string, stage: string): LoadedMachine {
   const bytes = readSourceFile(given, cwd, stage, '.z80 snapshot');
+  const problem = z80SnapshotProblem(bytes);
+  if (problem !== undefined) {
+    throw userError(`Cannot load .z80 snapshot "${given}": ${problem}`, stage);
+  }
   const snap = readZ80(bytes);
   const machine = bootFreshMachine();
   // The `.z80` memory image carries the 48K RAM (0x4000–0xFFFF); the ROM region it omits
@@ -188,9 +193,21 @@ function loadTap(given: string, cwd: string, stage: string): LoadedMachine {
     if (header && header.type === TAPE_TYPE_CODE && i + 1 < blocks.length) {
       const data = blocks[i + 1]!;
       const dest = header.param1 & 0xffff;
-      instantLoad(machine, data, { ix: dest, de: header.length & 0xffff, flag: 0xff, load: true });
+      const want = header.length & 0xffff;
+      const loaded = instantLoad(machine, data, { ix: dest, de: want, flag: 0xff, load: true });
+      // A data block with the wrong flag, too few bytes, or a bad checksum is exactly
+      // what the ROM's LD-BYTES rejects; booting it anyway runs a partial program
+      // (ERR-PROD-NOSILENT-001).
+      if (!loaded.ok || loaded.bytesLoaded !== want) {
+        throw userError(
+          `Cannot boot .tap "${given}": the CODE block at tape block ${i + 2} did not load ` +
+            `(${loaded.ok ? `${loaded.bytesLoaded} of ${want} bytes` : loaded.reason}, ` +
+            `header declares ${want} bytes at 0x${dest.toString(16).padStart(4, '0')})`,
+          stage,
+        );
+      }
       if (entry === undefined) entry = dest;
-      loadedTotal += header.length & 0xffff;
+      loadedTotal += want;
       i += 2;
     } else {
       i += 1;

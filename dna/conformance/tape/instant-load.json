@@ -40,5 +40,50 @@
       "instantEqualsEdge": true
     },
     "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "TAPE-INSTANT-VERIFY-MATCH",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {"kind":"tape-instant-load-query","note":"VERIFY (load: false, TAPE-INSTANT-VERIFY-001) against RAM already holding the same 8 bytes: the real ROM compares every byte, stores nothing, and succeeds. Expected recorded from the real ROM edge load (the runner re-checks edge == expected).","flag":255,"ix":32768,"data":"1021324354657687","load":false,"preload":"1021324354657687","tStateBudget":14000000},
+    "expected": {"ok":true,"bytesLoaded":8,"ram":"1021324354657687","instantEqualsEdge":true},
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "TAPE-INSTANT-VERIFY-MISMATCH",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {"kind":"tape-instant-load-query","note":"VERIFY against RAM that differs at byte 3 (0xEE instead of 0x43): the real ROM stops at the first difference with carry reset and bytesLoaded = 3 (DE decremented once per verified byte), storing nothing. The pre-2026-11 instantLoad ignored VERIFY and returned ok.","flag":255,"ix":32768,"data":"1021324354657687","load":false,"preload":"102132ee54657687","tStateBudget":14000000},
+    "expected": {"ok":false,"bytesLoaded":3,"ram":"102132ee54657687","instantEqualsEdge":true},
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "TAPE-INSTANT-SHORT-BLOCK",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {"kind":"tape-instant-load-query","note":"A block shorter than DE (TAPE-INSTANT-SHORT-001): 4 data bytes + checksum 0xBF, DE = 8. The real ROM stores all 5 bytes after the flag (the checksum byte as data), then times out: carry reset, bytesLoaded 5. The pre-2026-11 instantLoad stored 4 and could report success.","flag":255,"ix":32768,"data":"10213243","de":8,"tStateBudget":14000000},
+    "expected": {"ok":false,"bytesLoaded":5,"ram":"10213243bf00000000","instantEqualsEdge":true},
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "TAPE-INSTANT-LONG-BLOCK",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {"kind":"tape-instant-load-query","note":"A block longer than DE: 8 data bytes, DE = 4. The real ROM stores 4 bytes, reads the 5th data byte as the checksum (parity fails) and stops: carry reset, bytesLoaded 4.","flag":255,"ix":32768,"data":"1021324354657687","de":4,"tStateBudget":14000000},
+    "expected": {"ok":false,"bytesLoaded":4,"ram":"1021324300000000","instantEqualsEdge":true},
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "TAPE-INSTANT-ROM-PROTECTED",
+    "area": "emulator",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {"kind":"tape-instant-load-query","note":"A load at IX = 0x3FFE on a machine with a write-protected ROM (MACHINE-ROM-READONLY-001): the two bytes that land in ROM are dropped (0x3FFE/0x3FFF keep the ROM bytes 42 3C), the two in RAM are stored, and the load succeeds — on both the real-ROM edge load and the instant loader.","flag":255,"ix":16382,"data":"10213243","romWriteProtect":true,"tStateBudget":14000000},
+    "expected": {"ok":true,"bytesLoaded":4,"ram":"423c3243","instantEqualsEdge":true},
+    "normalization": { "profile": "custom" }
   }
 ]

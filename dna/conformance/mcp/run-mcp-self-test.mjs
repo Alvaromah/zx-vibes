@@ -18,10 +18,11 @@
 //   - the `emulatorId` interop guard + the path sandbox reject bad inputs in-band.
 
 import { spawn, execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ensurePackageBuilt } from '../package-build.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..', '..');
@@ -184,13 +185,15 @@ function runCli(args, cwd) {
 // --- the run ----------------------------------------------------------------
 
 async function main() {
-  if (!existsSync(join(TOOLKIT, 'dist', 'mcp.js')) || !existsSync(join(TOOLKIT, 'dist', 'cli.js'))) {
-    console.log('  building @zx-vibes/toolkit (dist missing) ...');
-    execFileSync('pnpm', ['--filter', '@zx-vibes/toolkit', 'run', 'build'], {
-      cwd: REPO_ROOT,
-      stdio: 'inherit',
-    });
-  }
+  // Build the toolkit when its dist is missing or stale (shared helper: no corepack,
+  // and `pnpm` resolved through a shell on Windows, where it is a .cmd shim).
+  ensurePackageBuilt({
+    root: REPO_ROOT,
+    packageDir: join('packages', 'toolkit'),
+    packageName: '@zx-vibes/toolkit',
+    artifact: join('dist', 'mcp.js'),
+    label: 'the MCP self-test',
+  });
 
   const dir = mkdtempSync(join(tmpdir(), 'zxs-mcp-selftest-'));
   try {

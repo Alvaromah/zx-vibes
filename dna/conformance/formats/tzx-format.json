@@ -219,5 +219,433 @@
     },
     "expected": { "cases": [{ "name": "unsupported-id-rejected", "value": true }] },
     "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "FORMAT-TZX-CONTROL-INFO-001",
+    "tier": "contract",
+    "provenance": "contract",
+    "input": {
+      "kind": "tzx-format-query",
+      "note": "TZX v1.20 control blocks (FMT-TZX-CONTROL-001: 0x23 jump, 0x24/0x25 loop, 0x26/0x27 call/return, 0x28 select, 0x2A stop-if-48K, 0x2B signal level) and informational blocks (FMT-TZX-INFO-001: 0x31 message, 0x32 archive info, 0x33 hardware type, 0x35 custom info, 0x5A glue). The file is laid out by hand from the spec block tables: 0x32 archive info: WORD 11 = rest of block; 2 entries: (type 00 \"Demo\") (type 02 \"ZX\"); 0x33 hardware type: 1 entry (type 00, id 00, info 01); 0x31 message: 5 s, \"Hi\"; 0x35 custom info: 16-character ident \"POKEs\" + 11 spaces (the spec writes CHAR[10] in hex), DWORD 3, 3 bytes; 0x5A glue: \"XTape!\" 1A 01 14; 0x24 loop start: 3 repetitions; 0x12 pure tone inside the loop: 2168 T x 2 pulses; 0x25 loop end; 0x2B set signal level: DWORD 1, level 1 (high); 0x2A stop the tape if in 48K mode: DWORD 0; 0x23 jump to block: -1; 0x26 call sequence: 2 calls, +1 and -2; 0x27 return from sequence; 0x28 select block: WORD 10 = rest; 2 entries: (+1 \"A\") (+2 \"BC\"). Real-world .tzx files nearly always carry these; the pre-2026-11 parser rejected every one of them. The parser returns them as blocks (never silently dropped); none has a `data` field, so a consumer that loads `data` blocks (the instant loader) skips them, while a signal player must honour the control blocks.",
+      "file": "5a5854617065211a0114320b0002000444656d6f02025a583301000001310502486935504f4b45732020202020202020202020030000000102035a5854617065211a01142403001278080200252b01000000012a0000000023ffff2602000100feff27280a0002010001410200024243",
+      "tzx": {
+        "blocks": []
+      },
+      "cases": [
+        {
+          "name": "file-length",
+          "query": "fileLength"
+        },
+        {
+          "name": "block-count",
+          "query": "blockCount"
+        },
+        {
+          "name": "block0-id",
+          "query": "blockId",
+          "args": [
+            0
+          ]
+        },
+        {
+          "name": "block1-id",
+          "query": "blockId",
+          "args": [
+            1
+          ]
+        },
+        {
+          "name": "block2-id",
+          "query": "blockId",
+          "args": [
+            2
+          ]
+        },
+        {
+          "name": "block3-id",
+          "query": "blockId",
+          "args": [
+            3
+          ]
+        },
+        {
+          "name": "block4-id",
+          "query": "blockId",
+          "args": [
+            4
+          ]
+        },
+        {
+          "name": "block5-id",
+          "query": "blockId",
+          "args": [
+            5
+          ]
+        },
+        {
+          "name": "block6-id",
+          "query": "blockId",
+          "args": [
+            6
+          ]
+        },
+        {
+          "name": "block7-id",
+          "query": "blockId",
+          "args": [
+            7
+          ]
+        },
+        {
+          "name": "block8-id",
+          "query": "blockId",
+          "args": [
+            8
+          ]
+        },
+        {
+          "name": "block9-id",
+          "query": "blockId",
+          "args": [
+            9
+          ]
+        },
+        {
+          "name": "block10-id",
+          "query": "blockId",
+          "args": [
+            10
+          ]
+        },
+        {
+          "name": "block11-id",
+          "query": "blockId",
+          "args": [
+            11
+          ]
+        },
+        {
+          "name": "block12-id",
+          "query": "blockId",
+          "args": [
+            12
+          ]
+        },
+        {
+          "name": "block13-id",
+          "query": "blockId",
+          "args": [
+            13
+          ]
+        },
+        {
+          "name": "archive-entries",
+          "query": "blockItemCount",
+          "args": [
+            0,
+            "entries"
+          ]
+        },
+        {
+          "name": "archive-entry0-type",
+          "query": "blockItem",
+          "args": [
+            0,
+            "entries",
+            0,
+            "type"
+          ]
+        },
+        {
+          "name": "archive-entry0-text",
+          "query": "blockItem",
+          "args": [
+            0,
+            "entries",
+            0,
+            "text"
+          ]
+        },
+        {
+          "name": "archive-entry1-text",
+          "query": "blockItem",
+          "args": [
+            0,
+            "entries",
+            1,
+            "text"
+          ]
+        },
+        {
+          "name": "hardware-entry0-info",
+          "query": "blockItem",
+          "args": [
+            1,
+            "entries",
+            0,
+            "info"
+          ]
+        },
+        {
+          "name": "message-time",
+          "query": "blockField",
+          "args": [
+            2,
+            "time"
+          ]
+        },
+        {
+          "name": "message-text",
+          "query": "blockText",
+          "args": [
+            2
+          ]
+        },
+        {
+          "name": "custom-ident",
+          "query": "blockField",
+          "args": [
+            3,
+            "ident"
+          ]
+        },
+        {
+          "name": "custom-info-length",
+          "query": "blockBytesLength",
+          "args": [
+            3,
+            "info"
+          ]
+        },
+        {
+          "name": "glue-length",
+          "query": "blockBytesLength",
+          "args": [
+            4,
+            "glue"
+          ]
+        },
+        {
+          "name": "loop-count",
+          "query": "blockField",
+          "args": [
+            5,
+            "count"
+          ]
+        },
+        {
+          "name": "tone-pulse-count",
+          "query": "blockField",
+          "args": [
+            6,
+            "pulseCount"
+          ]
+        },
+        {
+          "name": "signal-level",
+          "query": "blockField",
+          "args": [
+            8,
+            "level"
+          ]
+        },
+        {
+          "name": "jump-offset",
+          "query": "blockField",
+          "args": [
+            10,
+            "offset"
+          ]
+        },
+        {
+          "name": "call-count",
+          "query": "blockItemCount",
+          "args": [
+            11,
+            "offsets"
+          ]
+        },
+        {
+          "name": "call-offset1",
+          "query": "blockItem",
+          "args": [
+            11,
+            "offsets",
+            1
+          ]
+        },
+        {
+          "name": "select-entry1-offset",
+          "query": "blockItem",
+          "args": [
+            13,
+            "entries",
+            1,
+            "offset"
+          ]
+        },
+        {
+          "name": "select-entry1-text",
+          "query": "blockItem",
+          "args": [
+            13,
+            "entries",
+            1,
+            "description"
+          ]
+        },
+        {
+          "name": "roundtrip",
+          "query": "roundtripParseSerialize"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "file-length",
+          "value": 112
+        },
+        {
+          "name": "block-count",
+          "value": 14
+        },
+        {
+          "name": "block0-id",
+          "value": 50
+        },
+        {
+          "name": "block1-id",
+          "value": 51
+        },
+        {
+          "name": "block2-id",
+          "value": 49
+        },
+        {
+          "name": "block3-id",
+          "value": 53
+        },
+        {
+          "name": "block4-id",
+          "value": 90
+        },
+        {
+          "name": "block5-id",
+          "value": 36
+        },
+        {
+          "name": "block6-id",
+          "value": 18
+        },
+        {
+          "name": "block7-id",
+          "value": 37
+        },
+        {
+          "name": "block8-id",
+          "value": 43
+        },
+        {
+          "name": "block9-id",
+          "value": 42
+        },
+        {
+          "name": "block10-id",
+          "value": 35
+        },
+        {
+          "name": "block11-id",
+          "value": 38
+        },
+        {
+          "name": "block12-id",
+          "value": 39
+        },
+        {
+          "name": "block13-id",
+          "value": 40
+        },
+        {
+          "name": "archive-entries",
+          "value": 2
+        },
+        {
+          "name": "archive-entry0-type",
+          "value": 0
+        },
+        {
+          "name": "archive-entry0-text",
+          "value": "Demo"
+        },
+        {
+          "name": "archive-entry1-text",
+          "value": "ZX"
+        },
+        {
+          "name": "hardware-entry0-info",
+          "value": 1
+        },
+        {
+          "name": "message-time",
+          "value": 5
+        },
+        {
+          "name": "message-text",
+          "value": "Hi"
+        },
+        {
+          "name": "custom-ident",
+          "value": "POKEs           "
+        },
+        {
+          "name": "custom-info-length",
+          "value": 3
+        },
+        {
+          "name": "glue-length",
+          "value": 9
+        },
+        {
+          "name": "loop-count",
+          "value": 3
+        },
+        {
+          "name": "tone-pulse-count",
+          "value": 2
+        },
+        {
+          "name": "signal-level",
+          "value": 1
+        },
+        {
+          "name": "jump-offset",
+          "value": -1
+        },
+        {
+          "name": "call-count",
+          "value": 2
+        },
+        {
+          "name": "call-offset1",
+          "value": -2
+        },
+        {
+          "name": "select-entry1-offset",
+          "value": 2
+        },
+        {
+          "name": "select-entry1-text",
+          "value": "BC"
+        },
+        {
+          "name": "roundtrip",
+          "value": true
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "custom"
+    }
   }
 ]

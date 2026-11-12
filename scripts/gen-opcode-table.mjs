@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Codegen: project the normalized Z80 opcode table (the single authority,
 // dna/domain/z80-opcodes.yaml) into a committed TypeScript data module that the
-// assembler (encode) and disassembler (decode) consume. ADR-0025 / W12 Phase C1,
-// decision D2 (committed codegen + drift gate, reusing the conformance
+// assembler's table-driven encoder consumes. The disassembler
+// (packages/asm/src/disasm.ts) is a hand-coded x/y/z decoder that does not read this
+// table; the round-trip gate (ASM-ROUNDTRIP-001) keeps the two in step. ADR-0025 /
+// W12 Phase C1, decision D2 (committed codegen + drift gate, reusing the conformance
 // normalizeTable() so there is exactly one normalization).
 //
 //   Regenerate:  node scripts/gen-opcode-table.mjs
@@ -87,8 +89,9 @@ const HEADER = `// GENERATED FILE — DO NOT EDIT BY HAND.
 //
 // Projection of the normalized Z80 opcode table (the single authority,
 // ${SOURCE_REL}) produced via the conformance normalizeTable().
-// The assembler (encode: mnemonic -> row -> bytes) and disassembler (decode:
-// bytes -> row -> mnemonic) consume this one table (ADR-0025, W12 Phase C).
+// The assembler's encoder (mnemonic -> row -> bytes) consumes this table (ADR-0025,
+// W12 Phase C). The disassembler (src/disasm.ts) is a hand-coded x/y/z decoder that
+// does not read it; the round-trip gate (ASM-ROUNDTRIP-001) keeps the two in step.
 //
 //   Regenerate:  node scripts/gen-opcode-table.mjs
 //   Drift-gated: node scripts/check-opcode-table-drift.mjs  (run by \`pnpm check:drift\`)

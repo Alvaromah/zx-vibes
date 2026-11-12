@@ -49,10 +49,14 @@ use by hand — is:
 
 1. Edit `src/main.asm`.
 2. `zxs build`
-3. `zxs run --json` — check `status: "ok"`, `haltSynced: true`, and
-   `frameBudget.overrunFrames: 0`.
-4. `zxs screen --text` — look at the result. Never trust, always look.
-5. `zxs verify` — the acceptance gate (build → run → screenshot → tests).
+3. `zxs state reset` — put this build, fresh, into a session
+   (`.zxs/state.zxstate`).
+4. `zxs run --state .zxs/state.zxstate --json` — check `status: "ok"`,
+   `haltSynced: true`, and `frameBudget.overrunFrames: 0`.
+5. `zxs screen --text --state .zxs/state.zxstate` — look at what that run
+   drew. Never trust, always look. (Without `--state`, every command boots
+   fresh, so a bare `zxs screen` shows a machine that has not run yet.)
+6. `zxs verify` — the acceptance gate (build → run → screenshot → tests).
 
 ## Recipes
 
@@ -82,7 +86,7 @@ there when you (or your agent) want to:
   server, with `.z80`/`.tap`/`.scr` export.
 - `zxs-mcp` — MCP server for Claude, Codex, and other MCP-capable agents.
 - `zxasm` — the embedded TypeScript Z80 assembler/disassembler (no native
-  dependencies), with optional `sjasmplus` support.
+  dependencies), accepting sjasmplus-style syntax.
 - `zxs snapshot` / `scan` / `xref` — reverse-engineering extras behind
   `ZXS_REVENG=on`.
 - `@zx-vibes/cpu`, `@zx-vibes/ula`, `@zx-vibes/machine` — standalone emulator
@@ -96,7 +100,9 @@ The everyday commands:
 zxs doctor                  # check runtime assets and ambiguous PATH installs
 zxs build
 zxs run --frames 120 --keys "5:P*40" --screenshot screen.png
-zxs screen --text           # the 32×24 grid as text — cheap eyes for agents
+zxs state reset             # a session holding this build (.zxs/state.zxstate)
+zxs run --frames 120 --state .zxs/state.zxstate
+zxs screen --text --state .zxs/state.zxstate   # the 32×24 grid that run drew
 zxs test tests
 zxs verify
 zxs preview game.z80        # also .tap/.tzx/.bin, or --blank for a clean 48K
@@ -114,7 +120,7 @@ zxs step 10
 zxs trace --frames 5 --profile
 zxs state save session.zxstate
 zxs state export --z80 session.z80
-zxs gfx screen --out screen.png
+zxs screen --png screen.png
 zxs gfx attrs --out attrs.png
 ```
 
@@ -130,7 +136,7 @@ Reverse-engineering commands are gated behind an environment flag:
 
 ```bash
 ZXS_REVENG=on zxs snapshot info game.z80
-ZXS_REVENG=on zxs scan --z80 game.z80 --opcode "ED B0"
+ZXS_REVENG=on zxs scan --z80 game.z80 --bytes "ED B0"
 ZXS_REVENG=on zxs xref 0x5c00 --z80 game.z80
 ZXS_REVENG=on zxs gfx find --z80 game.z80
 ```
@@ -151,13 +157,18 @@ does the wiring in one shot:
   knowledge pack under `.codex/zx-vibes/`.
 
 Setup is idempotent and non-destructive: existing files are reported as
-`skipped` unless you pass `--force`, and other MCP servers in `.mcp.json`
-are left alone. The only content still reported under `deferred` is the
-worked-examples pack.
+`skipped` unless you pass `--force`. The `zx-vibes` server is merged into an
+existing `.mcp.json` or Codex `config.toml`, leaving the other servers and
+settings alone (`--force` refreshes only the `zx-vibes` entry). An existing
+`AGENTS.md` (the one `zxs new` writes, or your own) keeps its text and gets
+the knowledge-pack section appended, so Codex finds `.codex/zx-vibes/`. The only
+content still reported under `deferred` is the worked-examples pack.
 
 No MCP? No problem — agents can drive the plain CLI; every command supports
-`--json`, and most inspection commands can read a session, a `.z80`, or a
-raw `--bin` without touching project state.
+`--json`, and the inspection commands can read a `.z80`, a raw `--bin`, or a
+`--state` session. `screen`, `disasm` and `symbols` only read the session;
+`step`, `trace` and `coverage` advance it and save it back, as `run --state`
+does, unless you pass `--no-save`.
 
 ## Assembler backends
 
@@ -170,12 +181,14 @@ zxasm disasm build/main.bin --org 0x8000 --count 32
 zxasm doctor
 ```
 
-The embedded backend keeps the name `spectral` in `zxs build --assembler`,
-and `spectral-asm` remains a bin alias for `zxasm`, for compatibility with
-older configurations.
+The embedded backend is `builtin` in `zxs build --assembler` and
+`zx.config.json`; the older name `spectral` is still accepted, and
+`spectral-asm` remains a bin alias for `zxasm`, for compatibility with older
+configurations.
 
-Need a `sjasmplus`-only feature? Install `sjasmplus` separately and select
-it with `zxs build --assembler sjasmplus` or `ZXS_ASSEMBLER=sjasmplus`.
+`sjasmplus` is reserved as an external backend name, but this version does
+not implement it: selecting it (`--assembler sjasmplus` or
+`ZXS_ASSEMBLER=sjasmplus`) fails with an environment error (exit 3).
 
 ## Try the emulator in your browser
 
@@ -274,8 +287,8 @@ CI runs `check:drift`, `conformance:check`, build, a clean `git diff`,
 typecheck, lint, and tests on Ubuntu, macOS, and Windows across Node 20
 and 22. Releases use Changesets; the release workflow validates on both
 Node versions and only publishes when manually dispatched with
-`publish=true`. Root pnpm overrides pin patched floors for `form-data`,
-`js-yaml`, and `read-yaml-file`.
+`publish=true`. pnpm overrides in `pnpm-workspace.yaml` pin patched releases
+of vulnerable transitive dependencies.
 
 ## License
 

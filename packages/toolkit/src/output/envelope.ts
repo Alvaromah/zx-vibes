@@ -151,8 +151,72 @@ export function printEnvelope(envelope: Envelope, options: PrintOptions): void {
   if (envelope.ok) {
     streams.out(`${formatHuman(envelope)}\n`);
   } else {
-    streams.err(`error: ${envelope.error.message}\n`);
+    // The message alone hid WHY a build or test failed: the diagnostics, failing specs
+    // and hang verdicts were only in --json. Print them under the error line.
+    const details = errorDetails(envelope as unknown as Record<string, unknown>);
+    streams.err(`${[`error: ${envelope.error.message}`, ...details].join('\n')}\n`);
   }
+}
+
+// --- human-mode error details (Incidental wording, CLI-PROD-FREE-001) ---------------
+
+/**
+ * The reasons behind a failed envelope, as indented lines: assembler diagnostics
+ * (`build`), failing specs (`test`), the watchdog verdict (`run`/`key`/`type`), a
+ * `screen --diff` result, and — for `verify` — the same for its failed stages.
+ */
+function errorDetails(envelope: Record<string, unknown>, indent = '  '): string[] {
+  const lines: string[] = [];
+  const errors = envelope.errors;
+  if (Array.isArray(errors)) {
+    for (const d of errors as Array<Record<string, unknown>>) {
+      if (d === null || typeof d !== 'object' || typeof d.message !== 'string') continue;
+      const where = typeof d.file === 'string' ? `${d.file}:${String(d.line ?? '?')}: ` : '';
+      lines.push(`${indent}${where}${d.message}`);
+      if (typeof d.sourceLine === 'string' && d.sourceLine.trim() !== '') {
+        lines.push(`${indent}    ${d.sourceLine.trim()}`);
+      }
+      if (typeof d.hint === 'string') lines.push(`${indent}    hint: ${d.hint}`);
+    }
+  }
+  const results = envelope.results;
+  if (Array.isArray(results)) {
+    for (const r of results as Array<Record<string, unknown>>) {
+      if (r === null || typeof r !== 'object' || r.ok !== false) continue;
+      lines.push(`${indent}FAIL ${String(r.spec ?? '?')}`);
+      for (const failure of Array.isArray(r.failures) ? r.failures : []) {
+        lines.push(`${indent}    ${String(failure)}`);
+      }
+    }
+  }
+  const hang = envelope.hang as Record<string, unknown> | undefined;
+  if (hang !== null && typeof hang === 'object' && typeof hang.kind === 'string') {
+    const pc = typeof hang.pc === 'number' ? ` at PC ${hex(hang.pc, 4)}` : '';
+    const confidence = typeof hang.confidence === 'string' ? ` (${hang.confidence})` : '';
+    const detail = typeof hang.detail === 'string' ? `: ${hang.detail}` : '';
+    lines.push(`${indent}hang: ${hang.kind}${pc}${confidence}${detail}`);
+    if (typeof hang.likelyCause === 'string') lines.push(`${indent}likely cause: ${hang.likelyCause}`);
+  }
+  const diff = envelope.diff as Record<string, unknown> | undefined;
+  if (diff !== null && typeof diff === 'object' && typeof diff.baseline === 'string') {
+    const pixels = typeof diff.diffPixels === 'number' ? String(diff.diffPixels) : 'dimension mismatch:';
+    lines.push(
+      `${indent}diff: ${pixels} differing pixel(s), maxDiff ${String(diff.maxDiff ?? 0)}, baseline ${diff.baseline}`,
+    );
+  }
+  // `verify` composes stage envelopes: explain each failed one.
+  for (const key of ['build', 'run', 'tests']) {
+    const stage = envelope[key];
+    if (isEnvelopeLike(stage) && !stage.ok) {
+      lines.push(`${indent}${key} failed:`);
+      lines.push(...errorDetails(stage as unknown as Record<string, unknown>, `${indent}  `));
+    }
+  }
+  return lines;
+}
+
+function hex(value: number, digits: number): string {
+  return `0x${value.toString(16).toUpperCase().padStart(digits, '0')}`;
 }
 
 /**
@@ -187,18 +251,46 @@ function summarizeList(items: readonly unknown[]): string {
 }
 
 /**
- * Human-readable (Incidental, CLI-PROD-FREE-001) one-line rendering of a success
- * envelope: the scalar facts inline, bulk payloads as counts. The full data is
- * always one `--json` away, so nothing is lost — only the wall of text.
+ * Human-readable (Incidental, CLI-PROD-FREE-001) rendering of a success envelope:
+ * one summary line with the scalar facts inline and bulk payloads as counts, then
+ * any text grid as a block below it. The full data is always one `--json` away,
+ * so nothing is lost — only the wall of text.
  */
 function formatHuman(envelope: SuccessEnvelope): string {
   const { ok: _ok, stage, ...rest } = envelope;
   const parts: string[] = [];
+  const blocks: string[] = [];
   for (const [key, value] of Object.entries(rest)) {
     if (value === undefined) continue;
+    // An instruction listing (`disasm`/`step` `instructions`, `trace` `top`/`last`) is the
+    // answer the command exists for: one line per instruction under the summary, never a
+    // count or a JSON blob cut at 120 characters.
+    if (isInstructionList(value)) {
+      parts.push(`${key}=${value.length}`);
+      blocks.push(`${key}:`, ...value.map(formatInstruction));
+      continue;
+    }
+    // The register file is the payload of `regs` / `step`; elsewhere (e.g. `run`) it stays
+    // a compact inline record.
+    if (key === 'registers' && (stage === 'regs' || stage === 'step') && isRegisterSnapshot(value)) {
+      blocks.push('registers:', ...formatRegisters(value));
+      continue;
+    }
+    // `trace --profile`: the routine table is the answer, so print it as one.
+    if (key === 'profile' && isProfile(value)) {
+      blocks.push(...formatProfile(value));
+      continue;
+    }
     if (Array.isArray(value) && SUMMARIZED_FIELDS.has(key)) {
       // Empty bulk lists are noise in human mode — an agent reads them in --json.
       if (value.length > 0) parts.push(`${key}=${summarizeList(value)}`);
+      continue;
+    }
+    // A text grid (`screen` OCR `rows`, `--attrs`) is read as a picture: truncating
+    // it into the line would show nothing, so print it whole under the line.
+    if (isTextGrid(value)) {
+      parts.push(`${key}=${value.length}`);
+      blocks.push(`${key}:`, ...value);
       continue;
     }
     // A nested envelope (`verify` composes build/run/tests) collapses to its
@@ -210,7 +302,128 @@ function formatHuman(envelope: SuccessEnvelope): string {
     }
     parts.push(`${key}=${formatScalar(value)}`);
   }
-  return parts.length > 0 ? `${stage}: ${parts.join(' ')}` : `${stage}: ok`;
+  const line = parts.length > 0 ? `${stage}: ${parts.join(' ')}` : `${stage}: ok`;
+  return [line, ...blocks].join('\n');
+}
+
+/** One reported instruction: `disasm`/`step` lines and `trace` hot-spots / tail. */
+interface InstructionLine {
+  addr: number;
+  text: string;
+  bytes?: number[];
+  label?: string;
+  count?: number;
+}
+
+/** A non-empty list whose every item has a numeric `addr` and a `text` decode. */
+function isInstructionList(value: unknown): value is InstructionLine[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(
+      (item) =>
+        item !== null &&
+        typeof item === 'object' &&
+        typeof (item as { addr?: unknown }).addr === 'number' &&
+        typeof (item as { text?: unknown }).text === 'string',
+    )
+  );
+}
+
+/** `  8000  3E 01         LD A,1  ; label`, or `  8000     x1234  LD A,1` for a hot-spot. */
+function formatInstruction(line: InstructionLine): string {
+  const addr = line.addr.toString(16).toUpperCase().padStart(4, '0');
+  const count = line.count !== undefined ? `${`x${line.count}`.padStart(8)}  ` : '';
+  const bytes = Array.isArray(line.bytes)
+    ? `${line.bytes.map((v) => v.toString(16).toUpperCase().padStart(2, '0')).join(' ').padEnd(12)}  `
+    : '';
+  const label = line.label !== undefined ? `  ; ${line.label}` : '';
+  return `  ${addr}  ${count}${bytes}${line.text}${label}`;
+}
+
+/** The decoded register view (`observe/registers.ts` RegisterSnapshot), structurally. */
+interface RegisterView {
+  pc: number;
+  sp: number;
+  af: number;
+  bc: number;
+  de: number;
+  hl: number;
+  ix: number;
+  iy: number;
+  i: number;
+  r: number;
+  im: number;
+  iff1: boolean;
+  iff2: boolean;
+  halted: boolean;
+  alt: { af: number; bc: number; de: number; hl: number };
+  flags: Record<string, boolean>;
+}
+
+function isRegisterSnapshot(value: unknown): value is RegisterView {
+  if (value === null || typeof value !== 'object') return false;
+  const v = value as Partial<RegisterView>;
+  return (
+    typeof v.pc === 'number' &&
+    typeof v.af === 'number' &&
+    v.alt !== null &&
+    typeof v.alt === 'object' &&
+    v.flags !== null &&
+    typeof v.flags === 'object'
+  );
+}
+
+/** Three lines: the main set, the alternates + control state, the decoded flags. */
+function formatRegisters(r: RegisterView): string[] {
+  const w = (n: number): string => n.toString(16).toUpperCase().padStart(4, '0');
+  const b = (n: number): string => n.toString(16).toUpperCase().padStart(2, '0');
+  const f = r.flags;
+  const flag = (on: boolean | undefined, name: string): string => (on ? name : '-');
+  return [
+    `  PC=${w(r.pc)} SP=${w(r.sp)} AF=${w(r.af)} BC=${w(r.bc)} DE=${w(r.de)} HL=${w(r.hl)} IX=${w(r.ix)} IY=${w(r.iy)}`,
+    `  AF'=${w(r.alt.af)} BC'=${w(r.alt.bc)} DE'=${w(r.alt.de)} HL'=${w(r.alt.hl)} I=${b(r.i)} R=${b(r.r)} ` +
+      `IM=${r.im} IFF1=${r.iff1 ? 1 : 0} IFF2=${r.iff2 ? 1 : 0}${r.halted ? ' HALTED' : ''}`,
+    `  flags: ${flag(f.s, 'S')}${flag(f.z, 'Z')}${flag(f.f5, '5')}${flag(f.h, 'H')}${flag(f.f3, '3')}` +
+      `${flag(f.pv, 'P')}${flag(f.n, 'N')}${flag(f.c, 'C')}`,
+  ];
+}
+
+/** The `trace --profile` summary (observe/trace.ts TraceProfile), structurally. */
+interface ProfileView {
+  activePercentOfRun: number;
+  idlePercentOfRun: number;
+  interruptPercentOfRun: number;
+  entries: Array<{ symbol: string; tStates: number; percentOfActive: number; percentOfFrame: number }>;
+}
+
+function isProfile(value: unknown): value is ProfileView {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    Array.isArray((value as { entries?: unknown }).entries) &&
+    typeof (value as { activePercentOfRun?: unknown }).activePercentOfRun === 'number'
+  );
+}
+
+/** The time split, then one line per routine bucket (attribution is heuristic). */
+function formatProfile(p: ProfileView): string[] {
+  return [
+    `profile: active ${p.activePercentOfRun}%  HALT idle ${p.idlePercentOfRun}%  ` +
+      `interrupt ${p.interruptPercentOfRun}%  (by nearest preceding SLD label, heuristic)`,
+    ...p.entries.map(
+      (e) =>
+        `  ${e.symbol.padEnd(24)} ${String(e.tStates).padStart(10)} T  ` +
+        `${String(e.percentOfActive).padStart(6)}% of active  ${String(e.percentOfFrame).padStart(6)}% of frame`,
+    ),
+  ];
+}
+
+/** Two or more strings of one length: a fixed-width text grid, not a list of items. */
+function isTextGrid(value: unknown): value is string[] {
+  if (!Array.isArray(value) || value.length < 2) return false;
+  const width = typeof value[0] === 'string' ? value[0].length : -1;
+  return width > 0 && value.every((line) => typeof line === 'string' && line.length === width);
 }
 
 /** A nested command envelope — `{ ok, stage, … }` — rather than a plain record. */

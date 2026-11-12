@@ -144,8 +144,16 @@ export function normalizeAgent(value: string | undefined): SetupAgent {
 interface Target {
   abs: string;
   content: string;
-  /** `write` = create-if-absent / skip-if-present; `merge-mcp` = merge the MCP entry. */
-  mode: 'write' | 'merge-mcp';
+  /**
+   * `write` = create-if-absent / skip-if-present; `merge-mcp` = merge the MCP entry into
+   * `.mcp.json`; `merge-toml` = merge the server table into a Codex `config.toml`;
+   * `merge-agents` = write the playbook, or append the pack pointer to an existing one.
+   */
+  mode: 'write' | 'merge-mcp' | 'merge-toml' | 'merge-agents';
+  /** `merge-agents`: the section appended to an existing file that lacks it. */
+  appendix?: string;
+  /** `merge-agents`: text whose presence means the file already points at the pack. */
+  marker?: string;
 }
 
 /**
@@ -213,14 +221,19 @@ function codexTargets(cwd: string, home: string, writeGlobal: boolean): Target[]
   const configAbs = writeGlobal
     ? resolve(home, '.codex', 'config.toml')
     : resolve(cwd, '.codex', 'config.toml');
-  const targets: Target[] = [{ abs: configAbs, content: codexConfigToml(), mode: 'write' }];
+  const targets: Target[] = [{ abs: configAbs, content: codexConfigToml(), mode: 'merge-toml' }];
   // The playbook (the minimal available skill knowledge) always lands in the project,
   // with the pack beside the Codex config and the playbook pointing at it.
   const packRoot = resolve(cwd, '.codex', SKILL_NAME);
+  const packSection = packIndexSection(`.codex/${SKILL_NAME}/`);
   targets.push({
     abs: resolve(cwd, 'AGENTS.md'),
-    content: PLAYBOOK + packIndexSection(`.codex/${SKILL_NAME}/`) + '\n',
-    mode: 'write',
+    content: PLAYBOOK + packSection + '\n',
+    // `zxs new`/`init` already wrote an AGENTS.md (the bare playbook). Skipping it left
+    // Codex — whose only entry point is AGENTS.md — unaware of the installed pack.
+    mode: 'merge-agents',
+    appendix: packSection,
+    marker: `.codex/${SKILL_NAME}/`,
   });
   targets.push(...packTargets(packRoot));
   return targets;
@@ -229,8 +242,76 @@ function codexTargets(cwd: string, home: string, writeGlobal: boolean): Target[]
 /** Apply one target; returns whether it was `installed` (written/merged) or `skipped`. */
 function applyTarget(target: Target, force: boolean): 'installed' | 'skipped' {
   if (target.mode === 'merge-mcp') return mergeMcpRegistration(target.abs, force);
+  if (target.mode === 'merge-toml') return mergeCodexToml(target.abs, target.content, force);
+  if (target.mode === 'merge-agents') return mergeAgentsPlaybook(target, force);
   if (!force && existsSync(target.abs)) return 'skipped';
   writeFileTo(target.abs, target.content);
+  return 'installed';
+}
+
+/**
+ * Make the project `AGENTS.md` point at the installed pack without discarding what is
+ * there: an absent file gets the full playbook; a file that already names the pack root
+ * is `skipped`; any other file (the playbook `zxs new`/`init` wrote, or the user's own)
+ * keeps its text and gets the pack section appended. `--force` rewrites it whole.
+ */
+function mergeAgentsPlaybook(target: Target, force: boolean): 'installed' | 'skipped' {
+  if (force || !existsSync(target.abs)) {
+    writeFileTo(target.abs, target.content);
+    return 'installed';
+  }
+  const text = readFileSync(target.abs, 'utf8');
+  if (target.marker !== undefined && text.includes(target.marker)) return 'skipped';
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const separator = text.length === 0 || text.endsWith('\n') ? '' : eol;
+  const appendix = (target.appendix ?? '').split('\n').join(eol);
+  writeFileSync(target.abs, `${text}${separator}${appendix}${eol}`, 'utf8');
+  return 'installed';
+}
+
+/** The `[mcp_servers.zx-vibes]` header, bare or quoted. */
+const CODEX_TABLE_HEADER = new RegExp(
+  `^\\s*\\[\\s*mcp_servers\\.(?:${MCP_SERVER_NAME}|"${MCP_SERVER_NAME}")\\s*\\]\\s*(?:#.*)?$`,
+);
+
+/** `zx-vibes` used as a TOML key (`zx-vibes = …`, `zx-vibes.command = …`), bare or quoted. */
+const CODEX_SERVER_KEY = new RegExp(
+  `(?:^|[\\s.{,])(?:${MCP_SERVER_NAME}|"${MCP_SERVER_NAME}")\\s*[.=]`,
+  'm',
+);
+
+/**
+ * Register the `zx-vibes` server in a Codex `config.toml` without rewriting the file:
+ * the rest of it is the user's (a global `~/.codex/config.toml` holds the model, profiles
+ * and other MCP servers, which `--force` used to wipe). An absent file is created; a file
+ * without our table gets it appended; a file that already has it is `skipped`, unless
+ * `--force`, which replaces only that table's body (up to the next `[` header).
+ */
+function mergeCodexToml(abs: string, snippet: string, force: boolean): 'installed' | 'skipped' {
+  if (!existsSync(abs)) {
+    writeFileTo(abs, snippet);
+    return 'installed';
+  }
+  const text = readFileSync(abs, 'utf8');
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => CODEX_TABLE_HEADER.test(line));
+  if (start === -1) {
+    // Already defined another way (`zx-vibes = { … }` inside `[mcp_servers]`, or dotted
+    // `mcp_servers.zx-vibes.command = …`): appending our table would duplicate the key
+    // and make the TOML invalid, so leave the file alone.
+    if (CODEX_SERVER_KEY.test(text)) return 'skipped';
+    const separator = text.length === 0 || text.endsWith('\n') ? '' : eol;
+    writeFileSync(abs, `${text}${separator}${eol}${snippet.split('\n').join(eol)}`, 'utf8');
+    return 'installed';
+  }
+  if (!force) return 'skipped';
+  const snippetLines = snippet.split('\n');
+  const body = snippetLines.slice(snippetLines.findIndex((line) => CODEX_TABLE_HEADER.test(line)) + 1);
+  let end = start + 1;
+  while (end < lines.length && !/^\s*\[/.test(lines[end]!)) end += 1;
+  lines.splice(start + 1, end - start - 1, ...body);
+  writeFileSync(abs, lines.join(eol), 'utf8');
   return 'installed';
 }
 

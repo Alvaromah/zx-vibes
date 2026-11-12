@@ -9,8 +9,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeZ80 } from '@zx-vibes/machine';
-import { create } from './browser-entry.mjs';
-import { beeperSamples } from './audio.mjs';
+import { create, MAX_TAPE_PULSES } from './browser-entry.mjs';
+import { CPU_HZ, FRAME_T_STATES, createBeeperStream, renderBeeperSpan } from './audio.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -36,8 +36,10 @@ function assertSampleRan(zx) {
   assert.ok(setPixels > 100, `expected printed text (>100 set pixels), got ${setPixels}`);
 }
 
-// Mirrors full.html's loadAndRun: reset, idle, a priming CAPS tap (the ROM swallows the
-// first keystroke after a reboot), then LOAD "" and play. Guards that exact flow.
+// Mirrors full.html's loadAndRun: insert the tape first (a file that is not a tape fails
+// before anything is reset), reset (the tape stays inserted), idle, a priming CAPS tap
+// (the ROM swallows the first keystroke after a reboot), then LOAD "" and play. Guards
+// that exact flow.
 function bootTypeLoadPlay(bytes) {
   const zx = create();
   const run = (n) => { for (let i = 0; i < n; i += 1) zx.machine.runFrame(); };
@@ -48,15 +50,29 @@ function bootTypeLoadPlay(bytes) {
     }
   };
   run(120);
+  zx.insertTape(bytes);
   zx.reset();
   run(100);                                              // ~2 s idle after the reboot
   type([['CAPS']]);                                      // prime: absorb the first-key drop
   type([['J'], ['SYM', 'P'], ['SYM', 'P'], ['ENTER']]); // LOAD ""
-  zx.insertTape(bytes);
   zx.playTape();
   run(600);                                              // ~12 s: pilot + data + run
   return zx;
 }
+
+const E_LINE = 0x5c59; // system variable: the line being edited
+
+/** The bytes of the ROM's edit line (up to its ENTER). */
+function editLine(zx) {
+  const mem = zx.machine.memory;
+  const start = mem[E_LINE] | (mem[E_LINE + 1] << 8);
+  const out = [];
+  for (let a = start; mem[a] !== 0x0d && out.length < 64; a += 1) out.push(mem[a]);
+  return out;
+}
+
+/** A keyboard event stub for _keyDown/_keyUp. */
+const keyEvent = (code, key) => ({ code, key, prevented: false, preventDefault() { this.prevented = true; } });
 
 test('LOAD "" loads and runs the embedded sample tape through the real ROM', () => {
   const zx = bootTypeLoadPlay(sampleTapeBytes());
@@ -149,17 +165,54 @@ test('OUTs toggling EAR and MIC together still reach the speaker (weighted mix, 
   assert.equal(zx._beeperLog[3], 0, 'both low = zero level');
 });
 
-test('beeperSamples turns bit-4 toggles into an audible swing (the in-game beeper path)', () => {
-  // The game's sound reaches the speaker through beeperSamples, a separate path from the
-  // tape loading sound. Guard it directly: a square wave of OUT (0xFE) bit-4 edges across
-  // one 50 Hz frame must resample to a buffer that swings both above and below zero.
+test('renderBeeperSpan turns bit-4 toggles into an audible swing (the in-game beeper path)', () => {
+  // The game's sound reaches the speaker through renderBeeperSpan, a separate path from
+  // the tape loading sound. Guard it directly: a square wave of OUT (0xFE) bit-4 edges
+  // across one frame must resample to a buffer that swings both above and below zero.
   const log = [];
   let level = 0;
-  for (let t = 0; t < 69888; t += 1400) { log.push(t, level); level ^= 1; } // ~1 kHz square
-  const buf = beeperSamples(log, 0, 960, 0.18);
+  for (let t = 0; t < FRAME_T_STATES; t += 1400) { log.push(t, level); level ^= 1; } // ~1 kHz square
+  const buf = new Float32Array(1000);
+  const count = renderBeeperSpan(createBeeperStream(0), log, FRAME_T_STATES, CPU_HZ / 48000, 0.18, buf);
   let pos = 0, neg = 0;
-  for (const s of buf) { if (s > 0.05) pos += 1; else if (s < -0.05) neg += 1; }
+  for (const s of buf.subarray(0, count)) { if (s > 0.05) pos += 1; else if (s < -0.05) neg += 1; }
   assert.ok(pos > 0 && neg > 0, `in-game beeper should swing both ways (pos=${pos}, neg=${neg})`);
+});
+
+test('the pumped beeper follows the 48K clock: 958.46 samples a frame, not 960 (BEEPER-PCM-FRACTIONAL-001)', () => {
+  const zx = create();
+  let pushed = 0;
+  zx._audioCtx = { sampleRate: 48000, state: 'running' };
+  zx._worklet = { port: { postMessage: (data) => { if (data instanceof Float32Array) pushed += data.length; } } };
+  zx._node = zx._worklet;
+  zx._chunk = 128;
+  zx._audioTarget = 6240;
+  const t0 = zx.machine.tStatesTotal;
+  for (let f = 0; f < 200; f += 1) {
+    zx._workletFill = zx._audioTarget; // a consumer keeping pace: no drift correction
+    zx._fillAvg = zx._audioTarget;
+    zx._advance();
+  }
+  const exact = Math.floor(((zx.machine.tStatesTotal - t0) * 48000) / CPU_HZ);
+  assert.ok(Math.abs(pushed - exact) <= 1, `pushed ${pushed}, exact ${exact}`);
+  assert.ok(pushed < 192000 - 250, 'the old 960-per-frame count would be 192000');
+});
+
+test('emulation runs at 50.08 Hz: one frame per 19.968 ms of wall time, not 20 ms', () => {
+  const zx = create();
+  const saved = [globalThis.requestAnimationFrame, globalThis.cancelAnimationFrame];
+  globalThis.requestAnimationFrame = () => 1; // the test drives _frameStep itself
+  globalThis.cancelAnimationFrame = () => undefined;
+  try {
+    zx.start();
+    // rAF timestamps are never 0 in a browser; the first one only sets the time base.
+    for (let k = 0; k <= 1200; k += 1) zx._frameStep(1000 + (k * 1000) / 60); // 20 s of 60 Hz rAF
+    // 20000 / 19.968 = 1001.6; the old 20 ms pacing made exactly 1000.
+    assert.ok(zx.frames === 1001 || zx.frames === 1002, `ran ${zx.frames} frames in 20 s`);
+  } finally {
+    zx.stop();
+    [globalThis.requestAnimationFrame, globalThis.cancelAnimationFrame] = saved;
+  }
 });
 
 test('a real-world .tzx (metadata, loops, stop-in-48K blocks) still loads', async () => {
@@ -285,4 +338,105 @@ test('a Cobra-style beam-sync spin on IN A,(0xFF) terminates (the in-game hang)'
   zx.machine.registers.iff1 = 0;
   for (let i = 0; i < 5 && mem[0xc000] === 0; i += 1) zx.machine.runFrame();
   assert.equal(mem[0xc000], 0x47, 'the spin loop should see the attribute byte and exit');
+});
+
+// --- the quick-tap latch through the real ROM (KBD-LATCH-001) ------------------
+
+/** Boot to the BASIC prompt and prime the key debounce, as the demos' typers do. */
+function bootToPrompt() {
+  const zx = create();
+  const run = (n) => { for (let i = 0; i < n; i += 1) zx.machine.runFrame(); };
+  run(120);
+  zx.pressed.add('CAPS'); run(4); zx.pressed.clear(); run(8);
+  return { zx, run };
+}
+
+test('a key pressed and released between two frames is still typed (KBD-LATCH-001)', () => {
+  const { zx, run } = bootToPrompt();
+  // P down and up again before the ROM's next keyboard scan: no frame ever ran with
+  // P held, yet the latch shows it to exactly one scan — the ROM types PRINT (0xF5).
+  zx.pressed.add('P');
+  zx.pressed.delete('P');
+  run(10);
+  assert.deepEqual(editLine(zx), [0xf5]);
+});
+
+test('a quick Shift+2 `"` reaches the ROM as SYMBOL SHIFT + P, never CAPS+SYM (EXTENDED mode)', () => {
+  const { zx, run } = bootToPrompt();
+  // UK layout: '"' is Shift+2. The whole chord goes down and up within one frame, the
+  // Shift released last (as every host staggers it).
+  zx._keyDown(keyEvent('ShiftLeft', 'Shift'));
+  zx._keyDown(keyEvent('Digit2', '"'));
+  zx._keyUp(keyEvent('Digit2', '2'));
+  zx._keyUp(keyEvent('ShiftLeft', 'Shift'));
+  // Probe the scan the next frame will make (machine.frames is that frame's number
+  // while it runs, so these reads and the ROM's belong to the same scan).
+  const frame = zx.machine.frames;
+  const row = (high) => zx.pressed.keyBits(high, frame);
+  assert.equal(row(0xfe) & 0x01, 0x01, 'CAPS SHIFT is not latched');
+  assert.equal(row(0xdf) & 0x01, 0x00, 'P is');
+  assert.equal(row(0x7f) & 0x02, 0x00, 'and SYMBOL SHIFT');
+  run(10);
+  assert.deepEqual(editLine(zx), [0x22]); // `"` in K mode
+});
+
+test('Escape is BREAK: a running BASIC program stops with report L', () => {
+  const { zx, run } = bootToPrompt();
+  // 10 GO TO 10 — typed as G (GO TO in K mode), 1, 0, ENTER, then RUN.
+  for (const keys of [['1'], ['0'], ['G'], ['1'], ['0'], ['ENTER'], ['R'], ['ENTER']]) {
+    for (const k of keys) zx.pressed.add(k);
+    run(4);
+    zx.pressed.clear();
+    run(8);
+  }
+  zx._keyDown(keyEvent('Escape', 'Escape'));
+  run(10);
+  zx._keyUp(keyEvent('Escape', 'Escape'));
+  run(10);
+  assert.equal(zx.machine.memory[0x5c3a], 0x14, 'ERR_NR = L BREAK into program');
+});
+
+// --- the read-only ROM (MACHINE-ROM-READONLY-001) -------------------------------
+
+test('the demo machine write-protects the ROM: LD (0x0010),A changes nothing there', () => {
+  const zx = create();
+  const mem = zx.machine.memory;
+  const romByte = mem[0x0010];
+  // LD A,0x55 ; LD (0x0010),A ; LD (0x9000),A ; DI ; HALT
+  mem.set([0x3e, 0x55, 0x32, 0x10, 0x00, 0x32, 0x00, 0x90, 0xf3, 0x76], 0x8000);
+  zx.machine.registers.pc = 0x8000;
+  zx.machine.runFrame();
+  assert.equal(zx.machine.memory[0x0010], romByte, 'the ROM byte is unchanged');
+  assert.equal(zx.machine.memory[0x9000], 0x55, 'RAM still takes the write');
+  zx.reset(); // a reset machine keeps the protection
+  assert.equal(zx.machine.romWriteProtect, true);
+});
+
+// --- bounded tape expansion -----------------------------------------------------
+
+/** A TZX whose loop (0x24, 65535 times) wraps a 65535-pulse tone: ~4.3e9 pulses. */
+function hostileTzx() {
+  const header = [...'ZXTape!'].map((c) => c.charCodeAt(0)).concat([0x1a, 1, 20]);
+  return Uint8Array.from([...header, 0x24, 0xff, 0xff, 0x12, 0x78, 0x08, 0xff, 0xff, 0x25]);
+}
+
+test('a hostile looping .tzx is refused with a clear error instead of exhausting memory', () => {
+  const zx = create();
+  zx.insertTape(sampleTapeBytes(), { name: 'sample' });
+  const deck = zx._tapeDeck;
+  const started = Date.now();
+  assert.throws(() => zx.insertTape(hostileTzx()), /tape too long: it expands to more than 8388608 pulses/);
+  assert.ok(Date.now() - started < 3000, 'refused quickly');
+  assert.equal(MAX_TAPE_PULSES, 1 << 23);
+  assert.equal(zx._tapeDeck, deck, 'the tape already in the deck is untouched');
+});
+
+test('fastLoadTape of a bad tape fails before rebooting, leaving the machine as it was', async () => {
+  const zx = create();
+  for (let i = 0; i < 20; i += 1) zx.machine.runFrame();
+  zx.machine.memory[0x9000] = 0xaa; // a mark a reset would wipe
+  const frames = zx.frames;
+  await assert.rejects(zx.fastLoadTape(hostileTzx(), { name: 'bad' }), /tape too long/);
+  assert.equal(zx.machine.memory[0x9000], 0xaa, 'no reboot happened');
+  assert.equal(zx.frames, frames);
 });

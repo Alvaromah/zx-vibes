@@ -5,11 +5,15 @@ change: build, run, LOOK, then assert.
 
 ```
 zxs build --json
-zxs run --json                                  # 300 frames under the hang watchdog
-zxs screen --text                               # 32x24 ROM-font OCR — cheap eyes
+zxs state reset                                  # this build, fresh, in .zxs/state.zxstate
+zxs run --state .zxs/state.zxstate --json        # 300 frames under the hang watchdog
+zxs screen --text --state .zxs/state.zxstate     # 32x24 ROM-font OCR of what that run drew
 zxs run --frames 200 --keys "60:SPACE*4" --screenshot .zxs/shot.png --scale 3
-zxs verify --json                               # the acceptance gate
+zxs verify --json                                # the acceptance gate
 ```
+
+Every command boots fresh unless you pass `--state`; a bare `zxs screen` shows a
+machine that has not run.
 
 ## Reading the screen
 

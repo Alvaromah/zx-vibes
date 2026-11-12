@@ -155,6 +155,53 @@ describe('runSetup --agent codex (CLI-PROD-SETUP-001)', () => {
       rmSync(home, { recursive: true, force: true });
     }
   });
+
+  it('merges into an existing config.toml instead of skipping or overwriting it', () => {
+    const home = mkdtempSync(join(tmpdir(), 'zxs-home-'));
+    try {
+      const globalConfig = join(home, '.codex', 'config.toml');
+      const userConfig = 'model = "o3"\n\n[mcp_servers.other]\ncommand = "other-mcp"\n';
+      runSetup({ agent: 'codex', cwd: dir, writeGlobal: true, home }); // creates .codex/
+      writeFileSync(globalConfig, userConfig);
+
+      // Without --force: our table is appended; the user's settings survive.
+      const merged = runSetup({ agent: 'codex', cwd: dir, writeGlobal: true, home });
+      expect(merged.installed).toContain(globalConfig.split('\\').join('/'));
+      const afterMerge = readFileSync(globalConfig, 'utf8');
+      expect(afterMerge.startsWith(userConfig)).toBe(true);
+      expect(afterMerge).toMatch(/\[mcp_servers\.zx-vibes\]\ncommand = "zxs-mcp"/);
+
+      // Idempotent: a second run leaves it alone.
+      const again = runSetup({ agent: 'codex', cwd: dir, writeGlobal: true, home });
+      expect(again.skipped).toContain(globalConfig.split('\\').join('/'));
+      expect(readFileSync(globalConfig, 'utf8')).toBe(afterMerge);
+
+      // --force refreshes only our table; the rest of the file is untouched.
+      writeFileSync(globalConfig, afterMerge.replace('command = "zxs-mcp"', 'command = "stale"'));
+      runSetup({ agent: 'codex', cwd: dir, writeGlobal: true, home, force: true });
+      const afterForce = readFileSync(globalConfig, 'utf8');
+      expect(afterForce.startsWith(userConfig)).toBe(true);
+      expect(afterForce).toMatch(/\[mcp_servers\.zx-vibes\]\ncommand = "zxs-mcp"/);
+      expect(afterForce).not.toContain('stale');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves a config.toml alone when it already defines zx-vibes inline or dotted', () => {
+    const configPath = join(dir, '.codex', 'config.toml');
+    runSetup({ agent: 'codex', cwd: dir }); // creates .codex/
+    for (const userConfig of [
+      '[mcp_servers]\nzx-vibes = { command = "zxs-mcp" }\n',
+      'mcp_servers.zx-vibes.command = "zxs-mcp"\n',
+    ]) {
+      writeFileSync(configPath, userConfig);
+      const env = runSetup({ agent: 'codex', cwd: dir });
+      // Appending a [mcp_servers.zx-vibes] table here would duplicate the key (invalid TOML).
+      expect(env.skipped).toContain('.codex/config.toml');
+      expect(readFileSync(configPath, 'utf8')).toBe(userConfig);
+    }
+  });
 });
 
 describe('runSetup — invalid agent (USER_ERROR)', () => {

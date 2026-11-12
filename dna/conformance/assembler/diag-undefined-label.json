@@ -11,6 +11,13 @@
         "options": {
           "entryPath": "bad-label.asm"
         }
+      },
+      {
+        "name": "undefined-branch-target-single-diagnostic",
+        "source": "    ORG 0x8000\nloop:\n    djnz loop\n    jr nowhere\n",
+        "options": {
+          "entryPath": "bad-branch.asm"
+        }
       }
     ]
   },
@@ -24,6 +31,16 @@
           {
             "message": "Label not found: draw_sprtie",
             "hint": "Did you mean 'draw_sprite'?"
+          }
+        ]
+      },
+      {
+        "name": "undefined-branch-target-single-diagnostic",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Label not found: nowhere"
           }
         ]
       }

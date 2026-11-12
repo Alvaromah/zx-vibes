@@ -16,7 +16,7 @@
 // (exit 1, ERR-PROD-ASM-OK-001) carrying the same rich report PLUS the standard
 // `{ message, exitCode }` so the one dispatcher maps it uniformly.
 
-import { isAbsolute, relative, resolve } from 'node:path';
+import { extname, isAbsolute, relative, resolve } from 'node:path';
 import { assembleFile, writeAssemblyOutputs, type Diagnostic } from '@zx-vibes/asm';
 import type { Command } from 'commander';
 import {
@@ -31,6 +31,8 @@ import {
   type Envelope,
 } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
+import { programLoadOrigin } from '../runtime/session.js';
+import { parseAddress } from '../util/address.js';
 import {
   realFormatsEmitter,
   requestedFormats,
@@ -100,8 +102,23 @@ export interface BuildOptions {
   config?: ZxProjectConfig | undefined;
   /** Environment for assembler resolution (`ZXS_ASSEMBLER`). */
   env?: Record<string, string | undefined> | undefined;
-  /** Loadable-format emitter (defaults to the deferred stub; the formats slice injects the real one). */
+  /** Loadable-format emitter (defaults to {@link realFormatsEmitter}; tests may inject another). */
   formatsEmitter?: FormatsEmitter | undefined;
+}
+
+/**
+ * The program a successful build produced, for the commands that go on to run it
+ * (`run`, `verify`). Internal: the `build` envelope itself is unchanged
+ * (CLI-PROD-OUT-BUILD-001).
+ */
+export interface BuiltProgram {
+  /** The bytes written to the `.bin` (contiguous from the assembled origin). */
+  bytes: Uint8Array;
+  /**
+   * The address the source's first ORG assembled it at (0 when it has none). Callers load
+   * it through {@link programLoadOrigin} with their resolved `org` (CLI-PROD-CONV-ORIGIN-001).
+   */
+  origin: number;
 }
 
 /**
@@ -116,6 +133,17 @@ export interface BuildOptions {
  * thrown — they become an `{ ok:false }` report (exit 1, ERR-PROD-ASM-OK-001).
  */
 export function runBuild(options: BuildOptions = {}): BuildEnvelope {
+  return buildProject(options).envelope;
+}
+
+/**
+ * {@link runBuild}, also returning the assembled program on success so a caller that runs
+ * it loads exactly those bytes at the one load origin every command shares.
+ */
+export function buildProject(options: BuildOptions = {}): {
+  envelope: BuildEnvelope;
+  program?: BuiltProgram;
+} {
   const cwd = resolve(options.cwd ?? process.cwd());
   // Resolution precedence + assembler normalization (unknown → USER_ERROR,
   // CFG-PROD-ERR-001) live in the config service.
@@ -144,16 +172,33 @@ export function runBuild(options: BuildOptions = {}): BuildEnvelope {
       'build',
     );
   }
+  // A `--tap`/`--scr`/`--z80` value is an OUTPUT path, and the flags take an optional
+  // value, so `zxs build --tap src/main.asm` binds the entry to `--tap` (the entry then
+  // comes from the config) and the build would overwrite the source with tape bytes.
+  // Refuse a target that is the entry or any `.asm` file instead of destroying it.
+  for (const kind of wanted) {
+    const value = options.formats?.[kind];
+    if (typeof value !== 'string' || value.length === 0) continue;
+    const target = resolve(cwd, value);
+    if (target === resolve(cwd, entry) || extname(target).toLowerCase() === '.asm') {
+      throw userError(
+        `--${kind} "${value}" names a source file, not an output path. Put the entry ` +
+          `before the flag (zxs build ${value} --${kind}) or give a target (--${kind}=out.${kind})`,
+        'build',
+      );
+    }
+  }
 
   const start = Date.now();
 
-  // The external escape hatch (CLI-PROD-BUILD-004): not invoked in this slice.
-  // Selecting an unavailable external backend is an environment error (exit 3),
-  // not a silent fallback (errors.md ERR-PROD-ENV-001 / RT-PROD-ERR-001).
+  // The external escape hatch (CLI-PROD-BUILD-004) is not implemented: no code path
+  // invokes sjasmplus, so installing it would not help. Selecting it is an environment
+  // error (exit 3), not a silent fallback (errors.md ERR-PROD-ENV-001 / RT-PROD-ERR-001).
   if (resolved.assembler === 'sjasmplus') {
     throw envError(
-      'External assembler backend "sjasmplus" is not available in this environment; ' +
-        'use the embedded builtin assembler or install sjasmplus',
+      'The external "sjasmplus" assembler backend is not implemented in this version of zxs; ' +
+        'use the embedded builtin assembler (drop "assembler" from zx.config.json, ' +
+        '--assembler or ZXS_ASSEMBLER)',
       'build',
     );
   }
@@ -169,30 +214,36 @@ export function runBuild(options: BuildOptions = {}): BuildEnvelope {
   if (!result.ok) {
     // ERR-PROD-ASM-OK-001: ≥1 error → exit 1, forward errors/warnings.
     return {
-      ok: false,
-      stage: 'build',
-      entry,
-      errorCount: errors.length,
-      warningCount: warnings.length,
-      errors,
-      warnings,
-      outputs: { bin: null, sld: null, artifacts: [] },
-      durationMs,
-      error: {
-        message: `Assembly failed: ${errors.length} error(s) in ${entry}`,
-        exitCode: ExitCode.USER_ERROR,
+      envelope: {
+        ok: false,
+        stage: 'build',
+        entry,
+        errorCount: errors.length,
+        warningCount: warnings.length,
+        errors,
+        warnings,
+        outputs: { bin: null, sld: null, artifacts: [] },
+        durationMs,
+        error: {
+          message: `Assembly failed: ${errors.length} error(s) in ${entry}`,
+          exitCode: ExitCode.USER_ERROR,
+        },
       },
     };
   }
 
   const outDir = resolve(cwd, resolved.outDir);
   const files = writeAssemblyOutputs(result, { entry, outDir });
+  // The one load-origin rule (CLI-PROD-CONV-ORIGIN-001): the source's first ORG, else the
+  // configured `org` for a source without one.
+  const loadOrigin = programLoadOrigin(result.origin, () => parseAddress(resolved.org, 'build'));
   const formatArtifacts = emitter.emit(options.formats ?? {}, {
     cwd,
     outDir,
     entry,
     binPath: files.bin ?? '',
     result,
+    loadOrigin,
   });
 
   const artifacts = [
@@ -201,19 +252,22 @@ export function runBuild(options: BuildOptions = {}): BuildEnvelope {
   ].map((p) => portablePath(p, cwd));
 
   return {
-    ok: true,
-    stage: 'build',
-    entry,
-    errorCount: 0,
-    warningCount: warnings.length,
-    errors,
-    warnings,
-    outputs: {
-      bin: files.bin ? portablePath(files.bin, cwd) : null,
-      sld: files.sld ? portablePath(files.sld, cwd) : null,
-      artifacts,
+    envelope: {
+      ok: true,
+      stage: 'build',
+      entry,
+      errorCount: 0,
+      warningCount: warnings.length,
+      errors,
+      warnings,
+      outputs: {
+        bin: files.bin ? portablePath(files.bin, cwd) : null,
+        sld: files.sld ? portablePath(files.sld, cwd) : null,
+        artifacts,
+      },
+      durationMs,
     },
-    durationMs,
+    program: { bytes: result.bytes, origin: result.origin },
   };
 }
 
@@ -249,9 +303,9 @@ export function configureBuildCommand(command: Command): void {
     .argument('[file]', 'entry .asm file (defaults to config "entry")')
     .option('--out-dir <dir>', 'output directory for .bin/.sld (default "build")')
     .option('--assembler <name>', 'assembler backend (escape hatch; default builtin)')
-    .option('--tap [path]', 'also emit a loadable .tap (formats slice)')
-    .option('--scr [path]', 'also emit a loadable .scr (formats slice)')
-    .option('--z80 [path]', 'also emit a loadable .z80 snapshot (formats slice)')
+    .option('--tap [path]', 'also emit a loadable .tap (beside the .bin unless a path is given)')
+    .option('--scr [path]', 'also emit a .scr screen image (beside the .bin unless a path is given)')
+    .option('--z80 [path]', 'also emit a .z80 snapshot (beside the .bin unless a path is given)')
     .option('--json', 'emit a single machine-readable JSON envelope');
 }
 

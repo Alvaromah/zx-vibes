@@ -1,9 +1,10 @@
 // `zxs screen` — report the current machine screen WITHOUT executing
 // (cli.md CLI-PROD-SCREEN-001/002/003, RT-PROD-OBSERVE-001).
 //
-// The standalone screen observer: it sources a machine (built entry / `--bin` / fresh)
-// and reads its 6912-byte display image — it never runs the machine (CLI-PROD-SCREEN-001
-// "without executing"). Every render path reuses the shared seams, not a private encoder:
+// The standalone screen observer: it sources a machine (built entry / `--bin` / fresh, or
+// the `--state` session a `run --state` left behind) and reads its 6912-byte display
+// image — it never runs the machine (CLI-PROD-SCREEN-001 "without executing"), so the
+// run→look loop is `run --state <f>` then `screen --state <f>`. Every render path reuses the shared seams, not a private encoder:
 //   - the ROM-font OCR grid + image facts from `observe/screen.ts`,
 //   - the ONE PNG encoder / decoder / scaler from `observe/screenshot.ts`
 //     (CLI-PROD-RULE-SCREENSHOT-001), behind `--png` / `--base64` / `--scale`,
@@ -33,7 +34,9 @@ import { decodePng, encodePng, scaleRgba, writePng } from './screenshot.js';
 import {
   resolveObserveMachine,
   addSnapshotSourceFlags,
+  addStateSessionFlags,
   snapshotSourceFlags,
+  stateSessionFlags,
   type ObserveBoot,
 } from './source.js';
 
@@ -81,6 +84,8 @@ export type ScreenEnvelope = ScreenSuccessEnvelope | ScreenErrorEnvelope;
 
 export interface ScreenOptions {
   cwd?: string | undefined;
+  /** `--state <file>`: read the screen of an opt-in persistent session (never written). */
+  state?: string | undefined;
   bin?: string | undefined;
   z80?: string | undefined;
   tap?: string | undefined;
@@ -129,6 +134,7 @@ export function runScreen(options: ScreenOptions = {}): ScreenEnvelope {
   const scale = normalizeScale(options.scale);
   const { machine, boot } = resolveObserveMachine({
     cwd: options.cwd,
+    state: options.state,
     bin: options.bin,
     z80: options.z80,
     tap: options.tap,
@@ -224,6 +230,7 @@ export function screenCommand(context: CommandContext): ScreenEnvelope {
   const options = context.options as Record<string, unknown>;
   return runScreen({
     cwd: process.cwd(),
+    state: stateSessionFlags(options).state,
     bin: options.bin as string | undefined,
     org: options.org as string | undefined,
     ...snapshotSourceFlags(options),
@@ -239,7 +246,7 @@ export function screenCommand(context: CommandContext): ScreenEnvelope {
 
 /** Declare the `screen` command's flags (CLI-PROD-SCREEN-001..003). */
 export function configureScreenCommand(command: Command): void {
-  addSnapshotSourceFlags(command)
+  addStateSessionFlags(addSnapshotSourceFlags(command), 'read')
     .description('Report the current machine screen without executing')
     .option('--bin <file>', 'read the screen from a raw binary loaded at --org')
     .option('--org <addr>', 'load origin for --bin (default 0x8000)')

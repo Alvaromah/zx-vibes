@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { readZ80 } from '@zx-vibes/machine';
 import { userError } from '../output/envelope.js';
+import { z80SnapshotProblem } from '../runtime/z80-check.js';
 import { parseAddress } from '../util/address.js';
 
 /** Default load origin for a raw `--bin` memory dump (matches core `--bin` / CLI-PROD-CONV-SOURCE-001). */
@@ -80,6 +81,10 @@ function loadZ80(given: string, cwd: string, stage: string): RevengImage {
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw userError(`Cannot read .z80 snapshot "${given}": ${reason}`, stage);
+  }
+  const problem = z80SnapshotProblem(bytes);
+  if (problem !== undefined) {
+    throw userError(`Cannot load .z80 snapshot "${given}": ${problem}`, stage);
   }
   const snap = readZ80(bytes);
   return {

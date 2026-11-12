@@ -54,6 +54,27 @@ describe('loadProjectConfig (CFG-PROD-FILE-002/003)', () => {
     writeConfig('[1,2,3]');
     expect(() => loadProjectConfig(dir)).toThrowError(/zx\.config\.json/);
   });
+
+  it('rejects a non-string resolvable field as a USER_ERROR naming the field', () => {
+    // A numeric org used to crash ("input.trim is not a function"), and a list-valued
+    // `tests` made `verify` skip the suite and pass.
+    for (const [field, value] of [['org', 32768], ['tests', ['tests']], ['entry', null]] as const) {
+      writeConfig(JSON.stringify({ [field]: value }));
+      try {
+        loadProjectConfig(dir);
+        expect.unreachable(`${field} should have been rejected`);
+      } catch (error) {
+        expect(error).toBeInstanceOf(CliError);
+        expect((error as CliError).exitCode).toBe(ExitCode.USER_ERROR);
+        expect((error as CliError).message).toContain(`"${field}" must be a string`);
+      }
+    }
+  });
+
+  it('leaves the informational fields unvalidated (CFG-PROD-FREE-001)', () => {
+    writeConfig(JSON.stringify({ name: 7, template: ['game'], toolkit: null }));
+    expect(loadProjectConfig(dir)).toEqual({ name: 7, template: ['game'], toolkit: null });
+  });
 });
 
 describe('normalizeAssembler (CFG-PROD-RESOLVE-002 / CFG-PROD-ERR-001)', () => {

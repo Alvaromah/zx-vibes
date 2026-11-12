@@ -24,18 +24,22 @@ import { FRAME_T_STATES } from '@zx-vibes/ula';
 import { resolveConfig } from '../config/config.js';
 import { ExitCode, envError, userError } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
-import { runBuild } from '../build/build.js';
+import { buildProject } from '../build/build.js';
 import { captureScreenshot } from '../observe/screenshot.js';
-import { loadBinMachine, RAM_BASE } from './session.js';
+import { loadBytesMachine, programLoadOrigin, RAM_BASE } from './session.js';
 import { loadMachineFromSource, selectedFileSource } from './machine-source.js';
 import { renderBeeperWav } from './wav.js';
 import { loadDebugStore, loadSession, saveSession } from '../state/persist.js';
 import { parseAddress, parseRange, type AddressRange } from '../util/address.js';
 import { HostIo } from './io-device.js';
 import { runFrameObserved, type StepObservation } from './run-loop.js';
+import { decodeWriteSet, newWriteSet, stepWroteWatched } from './write-targets.js';
 import {
   definiteHang,
+  isReturnOpcode,
   newHangStats,
+  noteBootEntry,
+  noteInstructionPc,
   probableHang,
   updateHangStats,
   type HangVerdict,
@@ -167,6 +171,14 @@ export interface RunParams {
   watchWrite?: AddressRange[] | undefined;
   /** Reuse an observable I/O device across a warm-up and its measured run. */
   io?: HostIo | undefined;
+  /** The border colour already in effect (a resumed session / snapshot), seeding a new `io`. */
+  border?: number | undefined;
+  /**
+   * The machine continues a session (`run --state`, the MCP hot session) rather than a
+   * fresh boot: a breakpoint or `untilPc` at the current PC does not fire before the
+   * first instruction, so a run that stopped there can continue past it.
+   */
+  resume?: boolean | undefined;
   /** Per-frame checkpoint hook (seam for the test runner's temporal/`at` snapshots, Slice 4). */
   onFrame?: ((frame: number, machine: Machine, io: HostIo) => void) | undefined;
   /** Stop successfully when an internal condition becomes true after a completed frame. */
@@ -235,7 +247,7 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     throw envError(READ_WATCH_UNAVAILABLE, 'run');
   }
 
-  const io = params.io ?? new HostIo();
+  const io = params.io ?? new HostIo(params.border);
   machine.io = io;
 
   const keys = parseKeySchedule(params.keys);
@@ -246,9 +258,21 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   if (params.untilBreak || params.untilWatch) budget = Math.max(budget, UNTIL_BREAK_MIN_FRAMES);
   budget = Math.max(budget, planFrames(keys, joy));
 
-  // Build the watched-address shadow for the write/change stop conditions.
-  const watchAddrs = collectWatchAddresses(params);
-  const watchInit = watchAddrs.map((addr) => machine.memory[addr]!);
+  // `--until-change` is value-based: a per-instruction shadow of the one watched byte.
+  const changeAddrs = params.untilChange !== undefined ? [params.untilChange & 0xffff] : [];
+  const changeInit = changeAddrs.map((addr) => machine.memory[addr]!);
+  // Write watchpoints (`--until-write`, `--watch-write`, stored `watch add --write`) fire
+  // on any WRITE into their range — including a write of the byte already there, which a
+  // value shadow cannot see (CLI-PROD-RUN-007) — decoded per instruction (write-targets.ts).
+  const writeWatched = collectWriteWatch(params);
+  // Safety net, once per frame: a watched byte whose value changed although no decoded
+  // write hit it still stops the run (late, at the frame edge) instead of going unseen.
+  const writeAddrs = writeWatched !== undefined ? watchedAddresses(writeWatched) : [];
+  const writeInit = writeAddrs.map((addr) => machine.memory[addr]!);
+  const pendingWrites = newWriteSet();
+  let pendingValid = false;
+  let pendingSp = 0;
+  let interruptPushed = false;
   const untilPc = params.untilPc;
   // Stored breakpoints (the persistent `break` store, via `--until-break`) — the same
   // PC-stop model as `--until-pc`, kept as a Set for O(1) per-instruction membership.
@@ -276,12 +300,33 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   // Whether the CURRENT frame executed any instruction with PC in RAM — the
   // ROM-residence signal for the `pc-in-rom` heuristic (see HangFrameObservation).
   let frameSawRamPc = false;
+  // Whether the CURRENT frame accepted the maskable interrupt — with a ROM-resident
+  // frame, the ROM idling on its keyboard loop rather than stuck (ERR-PROD-HANG-IDLE-001).
+  let frameInterrupted = false;
+  // 1-based ordinal of the frame being executed (for the reset verdict's detail).
+  let currentFrame = 0;
+  // Whose error a ROM error restart is (ERR-PROD-HANG-IDLE-001): the step before it, and
+  // whether the program is inside ROM code it CALLed or jumped into (a RET into ROM is the
+  // program returning to its caller — BASIC — so it clears this).
+  let prevPc = -1;
+  let prevOp = 0;
+  let prevNext = 0;
+  let programInRom = false;
+  let afterInterrupt = false;
 
-  // The per-instruction observer: a definite hang (immediate), the target-PC
-  // breakpoint, then the write/change watchpoints.
+  // The per-instruction observer: the reset tracker, a definite hang (immediate), the
+  // target-PC breakpoint, then the write/change watchpoints.
   const observe = (m: Machine): boolean => {
+    const pc = m.registers.pc & 0xffff;
+    const interrupted = afterInterrupt;
+    afterInterrupt = false;
     if (detectHangs) {
-      const v = definiteHang(m, org);
+      noteInstructionPc(stats, pc, currentFrame);
+      // An accepted interrupt is not the program's transfer into ROM (its ISR returns).
+      const fromRam = !interrupted && prevPc >= RAM_BASE;
+      if (fromRam && pc < RAM_BASE) programInRom = !isReturnOpcode(prevOp, prevNext);
+      else if (pc >= RAM_BASE) programInRom = false;
+      const v = definiteHang(m, org, fromRam || programInRom);
       if (v) {
         verdict = v;
         status = 'hang';
@@ -290,7 +335,6 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
         return true;
       }
     }
-    const pc = m.registers.pc & 0xffff;
     if (pc >= RAM_BASE) frameSawRamPc = true;
     if (untilPc !== undefined && pc === untilPc) {
       status = 'breakpoint';
@@ -304,8 +348,24 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
       stopPc = pc;
       return true;
     }
-    for (let i = 0; i < watchAddrs.length; i += 1) {
-      if (m.memory[watchAddrs[i]!] !== watchInit[i]) {
+    if (writeWatched !== undefined) {
+      // What the step just wrote: the decoded instruction targets (a push confirmed by SP),
+      // or an accepted interrupt's PC push (SP now points at the pushed low byte).
+      const sp = m.registers.sp & 0xffff;
+      const hit = interruptPushed
+        ? writeWatched[sp] === 1 || writeWatched[(sp + 1) & 0xffff] === 1
+        : pendingValid && stepWroteWatched(pendingWrites, pendingSp, sp, writeWatched);
+      interruptPushed = false;
+      pendingValid = false;
+      if (hit) {
+        status = 'watchpoint';
+        reason = 'watchpoint';
+        stopPc = pc;
+        return true;
+      }
+    }
+    for (let i = 0; i < changeAddrs.length; i += 1) {
+      if (m.memory[changeAddrs[i]!] !== changeInit[i]) {
         status = 'watchpoint';
         reason = 'watchpoint';
         stopPc = m.registers.pc & 0xffff;
@@ -316,9 +376,15 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   };
 
   // Entry guard: a target PC / stored breakpoint equal to the entry fires before
-  // executing anything.
+  // executing anything — on a fresh boot. A resumed session that stopped HERE must
+  // continue past it (debugger "continue" semantics); otherwise every
+  // `run --state --until-break` would stop again at once, with zero T-states run.
   const entryPc = machine.registers.pc & 0xffff;
-  if (untilPc !== undefined && entryPc === untilPc) {
+  // A run entering at the reset vector is the ROM's own power-on boot, not a program.
+  if (detectHangs) noteBootEntry(stats, entryPc);
+  if (params.resume === true) {
+    // No entry check: the first instruction executes before any stop condition.
+  } else if (untilPc !== undefined && entryPc === untilPc) {
     status = 'breakpoint';
     reason = 'until-pc';
     stopPc = untilPc;
@@ -340,15 +406,30 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
     let frameIdleTStates = 0;
     const frameStartTStates = machine.tStatesTotal;
     frameSawRamPc = false;
+    frameInterrupted = false;
+    currentFrame = f + 1;
     stopped = runFrameObserved(
       machine,
       observe,
       (m) => {
         io.setClock(m.tStatesTotal);
+        if (detectHangs) {
+          prevPc = m.registers.pc & 0xffff;
+          prevOp = m.memory[prevPc]!;
+          prevNext = m.memory[(prevPc + 1) & 0xffff]!;
+        }
+        if (writeWatched !== undefined) {
+          decodeWriteSet(m, pendingWrites);
+          pendingValid = true;
+          pendingSp = m.registers.sp & 0xffff;
+        }
         params.onStep?.(m);
       },
       (wasHalted) => {
         interruptFrames += 1;
+        frameInterrupted = true;
+        interruptPushed = true;
+        afterInterrupt = true;
         if (wasHalted) {
           haltedInterruptFrames += 1;
           haltResumed = true;
@@ -361,6 +442,17 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
       },
     );
     framesRun = f + 1;
+    if (!stopped && writeAddrs.length > 0) {
+      for (let i = 0; i < writeAddrs.length; i += 1) {
+        if (machine.memory[writeAddrs[i]!] !== writeInit[i]) {
+          stopped = true;
+          status = 'watchpoint';
+          reason = 'watchpoint';
+          stopPc = machine.registers.pc & 0xffff;
+          break;
+        }
+      }
+    }
     const frameTStates = machine.tStatesTotal - frameStartTStates;
     const busyTStates = Math.max(0, frameTStates - frameIdleTStates);
     // `runFrameObserved` returning false means the actual frame boundary was
@@ -388,7 +480,14 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
       stopPc = machine.registers.pc & 0xffff;
     }
     if (stopped) break;
-    if (detectHangs) updateHangStats(stats, machine, { haltResumed, io, sawRamPc: frameSawRamPc });
+    if (detectHangs) {
+      updateHangStats(stats, machine, {
+        haltResumed,
+        io,
+        sawRamPc: frameSawRamPc,
+        interruptAccepted: frameInterrupted,
+      });
+    }
   }
 
   // A run that reached its budget with no early stop may still be a PROBABLE hang
@@ -453,16 +552,22 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   };
 }
 
-/** Flatten the write/change stop conditions to a de-duplicated address list. */
-function collectWatchAddresses(params: RunParams): number[] {
-  const addrs = new Set<number>();
-  if (params.untilChange !== undefined) addrs.add(params.untilChange & 0xffff);
-  const addRange = (range: AddressRange): void => {
-    for (let a = range.from; a <= range.to; a += 1) addrs.add(a & 0xffff);
-  };
-  if (params.untilWrite) addRange(params.untilWrite);
-  for (const range of params.watchWrite ?? []) addRange(range);
-  return [...addrs];
+/** A 64K mask (1 = watched) of the write-watchpoint ranges (not `--until-change`), or none. */
+function collectWriteWatch(params: RunParams): Uint8Array | undefined {
+  const ranges = [...(params.untilWrite ? [params.untilWrite] : []), ...(params.watchWrite ?? [])];
+  if (ranges.length === 0) return undefined;
+  const mask = new Uint8Array(0x10000);
+  for (const range of ranges) {
+    for (let a = range.from; a <= range.to; a += 1) mask[a & 0xffff] = 1;
+  }
+  return mask;
+}
+
+/** The addresses flagged in a 64K watch mask, ascending. */
+function watchedAddresses(mask: Uint8Array): number[] {
+  const addrs: number[] = [];
+  for (let a = 0; a < mask.length; a += 1) if (mask[a] === 1) addrs.push(a);
+  return addrs;
 }
 
 // --- CLI envelope ----------------------------------------------------------
@@ -553,7 +658,10 @@ interface RunCliOptions {
 }
 
 /** Boot the run machine from the source flags / configured entry, returning the boot descriptor. */
-function resolveRunMachine(options: RunCliOptions, cwd: string): { machine: Machine; org: number; boot: RunBoot } {
+function resolveRunMachine(
+  options: RunCliOptions,
+  cwd: string,
+): { machine: Machine; org: number; boot: RunBoot; border?: number } {
   const resolved = resolveConfig({ cwd, flags: { org: options.org } });
   const org = parseAddress(resolved.org, 'run');
 
@@ -562,8 +670,13 @@ function resolveRunMachine(options: RunCliOptions, cwd: string): { machine: Mach
   // paused; `org` is the RAM floor for the hang heuristics (a resumed program lives
   // in RAM — a PC in ROM is still suspicious).
   if (options.state !== undefined) {
-    const session = loadSession(options.state, cwd);
-    return { machine: session.machine, org: RAM_BASE, boot: { source: 'state', org: RAM_BASE, file: options.state } };
+    const session = loadSession(options.state, cwd, 'run');
+    return {
+      machine: session.machine,
+      org: RAM_BASE,
+      boot: { source: 'state', org: RAM_BASE, file: options.state },
+      border: session.border,
+    };
   }
 
   // A concrete file-image source (`--bin` / `--z80` / `--tap` / `--sna`) routes through the
@@ -580,24 +693,25 @@ function resolveRunMachine(options: RunCliOptions, cwd: string): { machine: Mach
       sna: options.sna,
       org: options.org,
     });
-    return { machine: loaded.machine, org: loaded.ramFloor, boot: loaded.boot };
+    return { machine: loaded.machine, org: loaded.ramFloor, boot: loaded.boot, border: loaded.border };
   }
 
-  // No explicit source: build the configured entry fresh, then load it at `org`
-  // (CLI-PROD-RUN-001 "or the configured entry"; the verify pipeline's path).
-  const build = runBuild({ cwd, outDir: resolved.outDir });
+  // No explicit source: build the configured entry fresh, then load it where it was
+  // assembled to run — its ORG, else the configured `org` (CLI-PROD-CONV-ORIGIN-001; the
+  // verify pipeline's path, and the address every observe command uses).
+  const { envelope: build, program } = buildProject({ cwd, outDir: resolved.outDir });
   if (!build.ok) {
     throw userError(
       `Cannot run: build failed with ${build.errorCount} error(s) in ${build.entry} (run \`zxs build\` for details)`,
       'run',
     );
   }
-  const binPath = build.outputs.bin;
-  if (!binPath) throw userError('Cannot run: the build produced no binary', 'run');
+  if (!program) throw userError('Cannot run: the build produced no binary', 'run');
+  const loadOrigin = programLoadOrigin(program.origin, org);
   return {
-    machine: loadBinMachine(resolve(cwd, binPath), org),
-    org,
-    boot: { source: 'build', org, entry: build.entry },
+    machine: loadBytesMachine(program.bytes, loadOrigin),
+    org: loadOrigin,
+    boot: { source: 'build', org: loadOrigin, entry: build.entry },
   };
 }
 
@@ -617,7 +731,7 @@ export function runCommand(context: CommandContext): RunEnvelope {
   }
 
   const cwd = process.cwd();
-  const { machine, org, boot } = resolveRunMachine(options, cwd);
+  const { machine, org, boot, border } = resolveRunMachine(options, cwd);
 
   // The persistent break/watch store feeds the ONE watchpoint model when the caller
   // opts in via `--until-break`/`--until-watch` (RT-PROD-RUN-002, CLI-PROD-EDGE-001
@@ -651,6 +765,8 @@ export function runCommand(context: CommandContext): RunEnvelope {
     watchRead: parseRanges(options.watchRead),
     watchWrite: [...parseRanges(options.watchWrite), ...storedWatchWrite],
     breakpoints,
+    border,
+    resume: boot.source === 'state',
   };
 
   const result = runProgram(machine, org, params);
@@ -712,7 +828,10 @@ export function configureRunCommand(command: Command): void {
     .option('--sna <file>', 'load a .sna snapshot (unsupported: no core codec, W4-GAP-03 — fails loud)')
     .option('--z80 <file>', 'boot from a .z80 snapshot (v1/v2/v3)')
     .option('--tap <file>', 'boot from a .tap tape (instant-loads its CODE block)')
-    .option('--org <addr>', 'load origin for --bin / the built entry (default 0x8000)')
+    .option(
+      '--org <addr>',
+      'load origin for --bin, or for a built entry with no ORG (default 0x8000; an ORG wins)',
+    )
     .option('--frames <n>', 'frame budget (default 300; 50 frames ≈ 1 second)')
     .option('--no-detect-hangs', 'disable the hang watchdog (the CLI form of detectHangs:false)')
     .option('--until-pc <addr>', 'stop when PC reaches this address')

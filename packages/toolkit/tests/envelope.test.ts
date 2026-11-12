@@ -202,6 +202,21 @@ describe('printEnvelope (CLI-PROD-CONV-JSON-001 — one printer)', () => {
     );
   });
 
+  it('prints a text grid (the screen OCR rows) whole, under the summary line', () => {
+    const { streams, out } = captureStreams();
+    const rows = Array.from({ length: 24 }, (_, i) => (i === 21 ? 'SCORE 0042'.padEnd(32) : ' '.repeat(32)));
+    printEnvelope(
+      successEnvelope('screen', { rows, nonBlankCells: 9, hash: 'abcd1234' }),
+      { json: false, streams },
+    );
+    const lines = out.join('').split('\n');
+    // The summary line counts the grid; every row follows verbatim (none truncated).
+    expect(lines[0]).toBe('screen: rows=24 nonBlankCells=9 hash=abcd1234');
+    expect(lines[1]).toBe('rows:');
+    expect(lines.slice(2, 26)).toEqual(rows);
+    expect(lines[23]).toContain('SCORE 0042');
+  });
+
   it('truncates an oversized non-bulk object rather than swamping the line', () => {
     const { streams, out } = captureStreams();
     printEnvelope(

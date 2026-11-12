@@ -29,6 +29,8 @@ const runnerPath = path.join(thisDir, "run-tape-edge-load-fixtures.mjs");
 const realFixtures = path.join(thisDir, "edge-load.json");
 const repoRoot = path.resolve(thisDir, "..", "..", "..");
 const moduleUrl = pathToFileURL(path.join(repoRoot, "packages", "machine", "src", "index.mjs")).href;
+// FRAME_T_STATES is a ULA timing constant; the machine index does not re-export it.
+const ulaUrl = pathToFileURL(path.join(repoRoot, "packages", "ula", "src", "index.mjs")).href;
 const romPath = path.join(thisDir, "..", "rom", "spectrum-48k.rom");
 
 function run(args) { return spawnSync(process.execPath, [runnerPath, ...args], { encoding: "utf8" }); }
@@ -36,7 +38,11 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 
 async function main() {
   const M = await import(moduleUrl);
-  const { createMachine, blockToPulses, tapChecksum, edgeLoad, edgeLoadWithDeck, createTapeDeck, FRAME_T_STATES, BIT0_PULSE_T, BIT1_PULSE_T } = M;
+  const { createMachine, blockToPulses, tapChecksum, edgeLoad, edgeLoadWithDeck, createTapeDeck, BIT0_PULSE_T, BIT1_PULSE_T } = M;
+  const { FRAME_T_STATES } = await import(ulaUrl);
+  // Without this the frame-modulo adversary below computed `x % undefined` (NaN) and
+  // was rejected for the wrong reason.
+  assert(Number.isInteger(FRAME_T_STATES) && FRAME_T_STATES > 0, "FRAME_T_STATES must be a positive integer");
   const rom = new Uint8Array(await readFile(romPath));
 
   const buildMachine = () => {

@@ -12,6 +12,6 @@ test:
 	$(ZXS) verify
 
 screen:
-	$(ZXS) screen --text
+	$(ZXS) state reset && $(ZXS) run --state .zxs/state.zxstate && $(ZXS) screen --text --state .zxs/state.zxstate
 
 .PHONY: build run test screen

@@ -36,3 +36,9 @@ Until R-W4-05 wires the runner, the referencing coverage rows
   non-zero on failure.
 - `run-beeper-edges.json` — `RUN-BEEPER-001`: `zxs run --json` reports
   `audio.beeperEdges` as an integer `>= 0`.
+- `toolkit-fidelity.json` — ADR-0030 (2026-11): `CLI-HANG-IDLE-001` (the ROM idling
+  in BASIC is not a hang; a reset and `di`+`jr $` still are), `CLI-RUN-ORIGIN-001`
+  (a build loads at its first `ORG`), `CLI-INPUT-HANG-001` (`key`/`type` report a
+  hang), `CLI-ADDR-HSUFFIX-001` (`h`-suffixed hex starts with a digit),
+  `CLI-STATE-OBSERVE-001` (observe commands read `--state`) and
+  `CLI-RUN-WATCH-WRITE-001` (a write watch fires on a same-value write).

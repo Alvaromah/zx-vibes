@@ -1,18 +1,20 @@
-export function acceptInterrupt({ registers, memory, halted, dataBus }: {
+export function acceptInterrupt({ registers, memory, halted, dataBus, romTop }: {
     registers: any;
     memory: any;
     halted?: boolean;
     dataBus?: number;
+    romTop?: number;
 }): {
     registers: any;
     tStates: number;
     accepted: boolean;
     halted: boolean;
 };
-export function acceptNmi({ registers, memory, halted }: {
+export function acceptNmi({ registers, memory, halted, romTop }: {
     registers: any;
     memory: any;
     halted?: boolean;
+    romTop?: number;
 }): {
     registers: any;
     tStates: number;

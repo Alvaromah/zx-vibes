@@ -70,13 +70,20 @@ export function sessionExists(file: string, cwd: string = process.cwd()): boolea
   return existsSync(resolve(cwd, file));
 }
 
-/** Read + reconstruct a `.zxstate` session from disk (USER_ERROR if missing/malformed). */
-export function loadSession(file: string, cwd: string = process.cwd()): SessionState {
+/**
+ * Read + reconstruct a `.zxstate` session from disk (USER_ERROR if missing/malformed).
+ * `stage` names the command that asked, so its error envelope says which (`run`, …).
+ */
+export function loadSession(
+  file: string,
+  cwd: string = process.cwd(),
+  stage = 'state',
+): SessionState {
   const path = resolve(cwd, file);
   if (!existsSync(path)) {
     throw userError(
-      `No session at "${file}" (run \`zxs state save\` to create one first)`,
-      'state',
+      `No session at "${file}" (run \`zxs state reset\` or \`zxs state save\` to create one first)`,
+      stage,
     );
   }
   return deserializeZxState(readFileSync(path, 'utf8'), file);
@@ -87,6 +94,24 @@ export function saveSession(file: string, state: SessionState, cwd: string = pro
   const path = resolve(cwd, file);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, serializeZxState(state));
+}
+
+/**
+ * Save the machine an executing observe verb (`step`, `trace`, `coverage`) advanced back
+ * to its `--state` session, with the live debug store embedded — exactly what
+ * `run --state` does (CLI-PROD-RULE-SESSION-001, RT-PROD-SESSION-003). A no-op without
+ * `--state` or with `--no-save`/`--read-only`. Returns whether the session was written.
+ */
+export function persistStateSession(
+  file: string | undefined,
+  noSave: boolean,
+  machine: Machine,
+  border: number,
+  cwd: string = process.cwd(),
+): boolean {
+  if (file === undefined || noSave) return false;
+  saveSession(file, { machine, border, debug: loadDebugStore(cwd) }, cwd);
+  return true;
 }
 
 /** Options shared by every mutation command (`regs set`, `mem write`/`load`, `key`, `type`). */
@@ -112,6 +137,11 @@ export interface MutationSession {
   border: number;
   /** True iff `--state` opted into persistence. */
   persistent: boolean;
+  /**
+   * True iff an existing `--state` session was resumed (not a fresh source). A run over
+   * it continues like `run --state`: the RAM floor for the watchdog, not the paused PC.
+   */
+  resumed: boolean;
   /** Absolute session file path (when persistent). */
   statePath: string | undefined;
   /**
@@ -140,8 +170,9 @@ export function openSession(options: OpenSessionOptions = {}): MutationSession {
   let machine: Machine;
   let border = DEFAULT_BORDER;
   let org: number;
-  if (persistent && existsSync(statePath!)) {
-    const session = loadSession(options.state!, cwd);
+  const resumed = persistent && existsSync(statePath!);
+  if (resumed) {
+    const session = loadSession(options.state!, cwd, stage);
     machine = session.machine;
     border = session.border;
     org = session.machine.registers.pc & 0xffff;
@@ -161,6 +192,7 @@ export function openSession(options: OpenSessionOptions = {}): MutationSession {
     org,
     border,
     persistent,
+    resumed,
     statePath,
     save(overrideBorder?: number): void {
       if (!persistent || noSave || statePath === undefined) return;

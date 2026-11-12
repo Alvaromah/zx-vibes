@@ -12,10 +12,6 @@ const thisDir = path.dirname(fileURLToPath(import.meta.url));
 const dnaDir = path.resolve(thisDir, "..");
 const repoRoot = path.resolve(dnaDir, "..");
 
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
-
 async function exists(rel) {
   try {
     await stat(path.join(repoRoot, rel));
@@ -28,6 +24,33 @@ async function exists(rel) {
 
 async function read(rel) {
   return readFile(path.join(repoRoot, rel), "utf8");
+}
+
+// Runners an emulator row lists that the regeneration recipe deliberately leaves to the
+// full source-repo gate: the zexdoc/zexall belt needs an external payload, the
+// edge-load acceptance runner needs the assembler's dist, and the exec-fixtures runner
+// is driven through run-fuse-suite.mjs.
+const RECIPE_EXEMPT = new Set([
+  "conformance/cpu/run-zex.mjs",
+  "conformance/tape/run-tape-edge-load-accept.mjs",
+  "conformance/cpu/run-cpu-exec-fixtures.mjs",
+]);
+
+/** The emulator area's contract+fidelity row count and the non-self-test runners its rows list. */
+function emulatorCoverage(yamlText) {
+  let rowCount = 0;
+  const runners = new Set();
+  for (const row of yamlText.split(/\n  - id: /).slice(1)) {
+    const area = row.match(/\n    area: (\S+)/)?.[1];
+    const tier = row.match(/\n    tier: (\S+)/)?.[1];
+    if (area !== "emulator" || (tier !== "contract" && tier !== "fidelity")) continue;
+    rowCount += 1;
+    for (const entry of (row.match(/\n    fixtures: \[(.*)\]/)?.[1] ?? "").split(",")) {
+      const file = entry.trim();
+      if (/\/run-[^/]*\.mjs$/.test(file) && !file.includes("self-test") && !RECIPE_EXEMPT.has(file)) runners.add(file);
+    }
+  }
+  return { rowCount, runners: [...runners].sort() };
 }
 
 export async function runQuickstartSelfTest({ quiet = false } = {}) {
@@ -93,16 +116,27 @@ export async function runQuickstartSelfTest({ quiet = false } = {}) {
   }
 
   // 5. The doc still names the critical tokens (catches the doc drifting from reality).
+  //    The expected coverage line and the runners the recipe must drive are derived from
+  //    coverage.yaml, so adding an emulator row or runner makes this fail until the
+  //    recipe is updated (it used to pin a literal "23/23" while the area grew to 45 rows
+  //    and the recipe ran only 5 of its runners).
   const quickstart = await read("dna/QUICKSTART.md");
+  const { rowCount, runners } = emulatorCoverage(await read("dna/conformance/coverage.yaml"));
   const docTokens = [
     "packages/cpu/src/z80-step.mjs",
     "packages/ula/src/index.mjs",
     "packages/machine/src/index.mjs",
     "step({ registers, memory })",
-    "23/23 contract+fidelity rows covered [emulator]",
+    `${rowCount}/${rowCount} contract+fidelity rows covered [emulator]`,
     "conformance:emulator",
     "--by-area",
   ];
+  const recipe = quickstart.match(/"conformance:emulator":\s*"([^"]*)"/)?.[1] ?? "";
+  for (const runner of runners) {
+    if (!recipe.includes(`dna/${runner}`)) {
+      errors.push(`QUICKSTART.md: the conformance:emulator recipe does not run dna/${runner} (an emulator coverage row needs it)`);
+    }
+  }
   for (const token of docTokens) {
     if (!quickstart.includes(token)) {
       errors.push(`QUICKSTART.md: no longer mentions '${token}' (doc/reality drift)`);

@@ -1,0 +1,46 @@
+[
+  {
+    "id": "MACHINE-ROM-READONLY-001",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "machine-run",
+      "note": "ROM write protection (MACHINE-ROM-READONLY-001), opt-in via romWriteProtect. A write to 0x0000-0x3FFF is a normal timed bus cycle that stores nothing. Each protected case has a flat twin: the timing (T-states, contention, clock) and registers are identical, only memory differs — the expected timings are those of the already-conformed contention model (MACHINE-CONTENTION-*), unchanged by protection. push-straddles-rom pushes BC at SP=0x4001 during the contended display window: B lands at 0x4000 (RAM, contended), C is dropped at 0x3FFF. ldir-into-rom copies 2 bytes into 0x0010 (both iterations dropped).",
+      "cases": [
+        { "name": "ld-nn-a-protected", "romWriteProtect": true, "registers": { "pc": "0x8000", "a": "0x55" }, "memory": { "0x8000": "321000", "0x0010": "c3" }, "clock": 0, "steps": 1 },
+        { "name": "ld-nn-a-flat", "registers": { "pc": "0x8000", "a": "0x55" }, "memory": { "0x8000": "321000", "0x0010": "c3" }, "clock": 0, "steps": 1 },
+        { "name": "push-straddles-rom-protected", "romWriteProtect": true, "registers": { "pc": "0x8000", "sp": "0x4001", "b": "0x12", "c": "0x34" }, "memory": { "0x8000": "c5", "0x3fff": "aa" }, "clock": 14400, "steps": 1 },
+        { "name": "push-straddles-rom-flat", "registers": { "pc": "0x8000", "sp": "0x4001", "b": "0x12", "c": "0x34" }, "memory": { "0x8000": "c5", "0x3fff": "aa" }, "clock": 14400, "steps": 1 },
+        { "name": "ldir-into-rom-protected", "romWriteProtect": true, "registers": { "pc": "0x8000", "h": "0x90", "l": "0x00", "d": "0x00", "e": "0x10", "b": "0x00", "c": "0x02" }, "memory": { "0x8000": "edb0", "0x9000": "1122", "0x0010": "c35c" }, "clock": 0, "steps": 2 }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "ld-nn-a-protected", "registers": { "pc": "0x8003" }, "memory": { "0x0010": "c3" }, "clock": 13, "contention": 0, "tStates": 13 },
+        { "name": "ld-nn-a-flat", "registers": { "pc": "0x8003" }, "memory": { "0x0010": "55" }, "clock": 13, "contention": 0, "tStates": 13 },
+        { "name": "push-straddles-rom-protected", "registers": { "pc": "0x8001", "sp": "0x3fff" }, "memory": { "0x3fff": "aa", "0x4000": "12" }, "clock": 14416, "contention": 5, "tStates": 16 },
+        { "name": "push-straddles-rom-flat", "registers": { "pc": "0x8001", "sp": "0x3fff" }, "memory": { "0x3fff": "34", "0x4000": "12" }, "clock": 14416, "contention": 5, "tStates": 16 },
+        { "name": "ldir-into-rom-protected", "registers": { "pc": "0x8002", "b": "0x00", "c": "0x00" }, "memory": { "0x0010": "c35c" }, "clock": 37, "contention": 0, "tStates": 37 }
+      ]
+    },
+    "normalization": { "profile": "custom" }
+  },
+  {
+    "id": "MACHINE-ROM-READONLY-INT-001",
+    "tier": "fidelity",
+    "provenance": "hardware",
+    "input": {
+      "kind": "machine-frame",
+      "note": "Interrupt acceptance honours ROM write protection (MACHINE-ROM-READONLY-001): with SP=0x4001 the pushed return address 0x8000 straddles the boundary — the high byte lands at 0x4000, the low byte at 0x3FFF is dropped. The frame timing is that of halt-sync-im1 (frame-loop.json).",
+      "cases": [
+        { "name": "int-push-straddles-rom", "romWriteProtect": true, "registers": { "pc": "0x8000", "sp": "0x4001", "iff1": 1, "iff2": 1, "im": 1 }, "memory": { "0x8000": "76", "0x0038": "f376", "0x3fff": "aa" }, "clock": 0 }
+      ]
+    },
+    "expected": {
+      "cases": [
+        { "name": "int-push-straddles-rom", "registers": { "pc": "0x0039", "sp": "0x3fff", "iff1": 0 }, "memory": { "0x3fff": "aa", "0x4000": "80" }, "accepted": 1, "halted": true, "clock": 1, "tStates": 69889 }
+      ]
+    },
+    "normalization": { "profile": "custom" }
+  }
+]

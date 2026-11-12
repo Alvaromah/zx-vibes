@@ -41,7 +41,8 @@ specifies the 48K subset: the machine **writes** version 3 and **reads** version
   `data` is `length` RLE-compressed bytes. On a 48K machine the page numbers map to
   addresses: page `8` ⇒ `0x4000`–`0x7FFF`, page `4` ⇒ `0x8000`–`0xBFFF`, page `5`
   ⇒ `0xC000`–`0xFFFF`. The writer emits exactly these three pages; the reader maps
-  blocks by page number and ignores pages outside the 48K map. In a version-1 file
+  blocks by page number, requires all three (FMT-Z80-VALIDATE-001) and ignores pages
+  outside the 48K map. In a version-1 file
   the 48 KB RAM follows the 30-byte header as a single image from `0x4000`,
   RLE-compressed iff flag-byte bit 5 is set, terminated by the marker `00 ED ED 00`.
 
@@ -53,6 +54,29 @@ specifies the 48K subset: the machine **writes** version 3 and **reads** version
   otherwise be misread as the marker). A lone `ED` is emitted with its following
   byte verbatim so it can never begin a spurious marker. Decoding expands every
   `ED ED count value` and copies all other bytes literally.
+
+## Validation
+
+<!-- provenance: contract -->
+- [id: FMT-Z80-VALIDATE-001] The reader **rejects** (throws) a file that is not a
+  complete 48K snapshot, instead of decoding it into a partly zeroed machine that
+  would then run: a file shorter than the 30-byte header; a version-1 RAM image
+  shorter than 49152 bytes, or a compressed one that expands to fewer; a
+  version-2/3 extra-header length other than `23`, `54` or `55`, or a file that ends
+  inside the extra header; a hardware mode (byte 34) that is not a 48K machine; a
+  page block whose data runs past the end of the file, or that expands to fewer
+  than 16384 bytes; and a version-2/3 file missing any of pages `8`, `4`, `5`. The
+  48K hardware modes are `0` (48K), `1` (48K + Interface 1) and `2` (SamRam) in
+  version 2, plus `3` (48K + M.G.T.) in version 3. Higher modes are 128K-class or
+  later machines, whose page numbers mean different RAM banks (page `5` is bank 2,
+  page `8` bank 5, and `0xC000` holds the paged bank), so they would load scrambled
+  into the 48K map. Bit 7 of byte 37 ("modify hardware") turns a 48K mode into a
+  16K Spectrum, which stores only page `8`, so such a file fails the page check.
+  Still accepted: page blocks outside the 48K map (an add-on's ROM or RAM), which
+  are skipped, and fewer than 3 trailing bytes after the last block (too short for
+  a page header), which are ignored. The flag-byte rule of FMT-Z80-HEADER-001
+  (`255` reads as `1`) applies to every field that byte carries, so such a file has
+  border `0`.
 
 ## Acceptance criteria
 
@@ -68,3 +92,7 @@ A regenerated `.z80` reader/writer satisfies these facts iff it passes, through
   and extra header (FMT-Z80-VERSION-001), the page-block layout (FMT-Z80-PAGES-001),
   and the RLE (FMT-Z80-RLE-001) to the documented format rather than to the writer's
   own inverse.
+- the `FMT-Z80-VALIDATE-001` fixture in the same file — five files the reader must
+  accept (48K + M.G.T., a version-2 SamRam file, flag byte 255, a skipped foreign
+  page, trailing bytes) and eleven it must reject with a matching message
+  (FMT-Z80-VALIDATE-001); the self-test proves a reader that never rejects fails it.

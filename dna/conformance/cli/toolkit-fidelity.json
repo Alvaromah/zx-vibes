@@ -1,0 +1,404 @@
+[
+  {
+    "id": "CLI-HANG-IDLE-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0030",
+    "input": {
+      "kind": "cli-exit",
+      "note": "errors.md ERR-PROD-HANG-IDLE-001: the ROM idling (a power-on boot ending in the BASIC editor) is not a hang; a program that resets the machine, and di+jr $, still are.",
+      "cases": [
+        {
+          "name": "blank-boot-idles",
+          "files": [
+            {
+              "path": "s.zxstate",
+              "data": "{\n  \"emulatorId\": \"zx-vibes\",\n  \"format\": \"zxstate\",\n  \"version\": 1,\n  \"machine\": {\n    \"z80\": \"////////AAD//wAADv//////////////////AAAANgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAQjt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e1AAAQBBO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7UAABAEF7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3tQAA=\",\n    \"halted\": false,\n    \"memptr\": 0,\n    \"clock\": 0,\n    \"eiDelay\": 0\n  },\n  \"debug\": {\n    \"breakpoints\": [],\n    \"watchpoints\": [],\n    \"nextBreakId\": 1,\n    \"nextWatchId\": 1\n  }\n}\n"
+            }
+          ],
+          "command": "zxs run --state s.zxstate --no-save --json"
+        },
+        {
+          "name": "program-resets-machine",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\n    jp 0\n"
+            }
+          ],
+          "command": "zxs run --json"
+        },
+        {
+          "name": "di-jr-self",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\n    di\nself:\n    jr self\n"
+            }
+          ],
+          "command": "zxs run --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "blank-boot-idles",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "run",
+            "status": "ok"
+          }
+        },
+        {
+          "name": "program-resets-machine",
+          "exitCode": 2,
+          "json": {
+            "ok": false,
+            "stage": "run",
+            "status": "hang",
+            "hang": {
+              "kind": "pc-in-rom"
+            }
+          }
+        },
+        {
+          "name": "di-jr-self",
+          "exitCode": 2,
+          "json": {
+            "ok": false,
+            "stage": "run",
+            "status": "hang",
+            "hang": {
+              "kind": "tight-loop"
+            }
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  },
+  {
+    "id": "CLI-RUN-ORIGIN-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0030",
+    "input": {
+      "kind": "cli-exit",
+      "note": "cli.md CLI-PROD-CONV-ORIGIN-001: a built entry loads at its ORG even when zx.config.json org differs; an absolute JP proves it ran from there.",
+      "cases": [
+        {
+          "name": "org-9000-config-8000",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\",\"org\":\"0x8000\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x9000\n    jp start\n    defb 0\nstart:\n    ld a, 0x55\n    ld (0xA000), a\n    ei\nidle:\n    halt\n    jr idle\n"
+            }
+          ],
+          "command": "zxs run --frames 20 --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "org-9000-config-8000",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "run",
+            "status": "ok",
+            "boot": {
+              "source": "build",
+              "org": 36864
+            }
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  },
+  {
+    "id": "CLI-INPUT-HANG-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0030",
+    "input": {
+      "kind": "cli-exit",
+      "note": "cli.md CLI-PROD-INPUT-003: key/type report a hang (exit 2) instead of exiting 0 over a hung machine.",
+      "cases": [
+        {
+          "name": "key-into-di-halt",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\n    di\n    halt\n"
+            }
+          ],
+          "command": "zxs key O --json"
+        },
+        {
+          "name": "key-healthy",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\n    ei\nidle:\n    halt\n    jr idle\n"
+            }
+          ],
+          "command": "zxs key O --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "key-into-di-halt",
+          "exitCode": 2,
+          "json": {
+            "ok": false,
+            "stage": "key",
+            "status": "hang",
+            "hang": {
+              "kind": "di-halt"
+            }
+          }
+        },
+        {
+          "name": "key-healthy",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "key"
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  },
+  {
+    "id": "CLI-ADDR-HSUFFIX-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0030",
+    "input": {
+      "kind": "cli-exit",
+      "note": "cli.md CLI-PROD-CONV-ADDR-002: an h-suffixed hex literal starts with a digit; `each` names the label, `FFh` is not an address.",
+      "cases": [
+        {
+          "name": "break-add-label-each",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\nmain:\n    nop\neach:\n    jr main\n"
+            }
+          ],
+          "command": "zxs break add each --json"
+        },
+        {
+          "name": "break-add-FFh",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\nmain:\n    jr main\n"
+            }
+          ],
+          "command": "zxs break add FFh --json"
+        },
+        {
+          "name": "break-add-0FFh",
+          "files": [],
+          "command": "zxs break add 0FFh --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "break-add-label-each",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "break",
+            "breakpoint": {
+              "addr": 32769
+            }
+          }
+        },
+        {
+          "name": "break-add-FFh",
+          "exitCode": 1,
+          "json": {
+            "ok": false,
+            "stage": "break"
+          }
+        },
+        {
+          "name": "break-add-0FFh",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "break",
+            "breakpoint": {
+              "addr": 255
+            }
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  },
+  {
+    "id": "CLI-STATE-OBSERVE-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0030",
+    "input": {
+      "kind": "cli-exit",
+      "note": "cli.md CLI-PROD-STATE-OBSERVE-001: the observe verbs accept --state; a missing session is exit 1, never a fresh boot.",
+      "cases": [
+        {
+          "name": "screen-reads-session",
+          "files": [
+            {
+              "path": "s.zxstate",
+              "data": "{\n  \"emulatorId\": \"zx-vibes\",\n  \"format\": \"zxstate\",\n  \"version\": 1,\n  \"machine\": {\n    \"z80\": \"////////AAD//wAADv//////////////////AAAANgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAQjt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e1AAAQBBO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7UAABAEF7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3tQAA=\",\n    \"halted\": false,\n    \"memptr\": 0,\n    \"clock\": 0,\n    \"eiDelay\": 0\n  },\n  \"debug\": {\n    \"breakpoints\": [],\n    \"watchpoints\": [],\n    \"nextBreakId\": 1,\n    \"nextWatchId\": 1\n  }\n}\n"
+            }
+          ],
+          "command": "zxs screen --state s.zxstate --json"
+        },
+        {
+          "name": "step-missing-session",
+          "files": [],
+          "command": "zxs step --state missing.zxstate --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "screen-reads-session",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "screen",
+            "boot": {
+              "source": "state",
+              "file": "s.zxstate"
+            }
+          }
+        },
+        {
+          "name": "step-missing-session",
+          "exitCode": 1,
+          "json": {
+            "ok": false,
+            "stage": "step"
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  },
+  {
+    "id": "CLI-RUN-WATCH-WRITE-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0030",
+    "input": {
+      "kind": "cli-exit",
+      "note": "cli.md CLI-PROD-RUN-007: a write watchpoint fires on a write of the byte already there; --until-change does not.",
+      "cases": [
+        {
+          "name": "same-value-write-fires",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\n    xor a\nloop:\n    ld (0x9000), a\n    jr loop\n"
+            }
+          ],
+          "command": "zxs run --frames 10 --watch-write 0x9000-0x9000 --json"
+        },
+        {
+          "name": "until-change-ignores-it",
+          "files": [
+            {
+              "path": "zx.config.json",
+              "data": "{\"entry\":\"main.asm\"}"
+            },
+            {
+              "path": "main.asm",
+              "data": "    ORG 0x8000\n    xor a\nloop:\n    ld (0x9000), a\n    jr loop\n"
+            }
+          ],
+          "command": "zxs run --frames 10 --until-change 0x9000 --no-detect-hangs --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "same-value-write-fires",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "run",
+            "status": "watchpoint",
+            "exit": {
+              "reason": "watchpoint",
+              "pc": 32772
+            }
+          }
+        },
+        {
+          "name": "until-change-ignores-it",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "run",
+            "status": "ok"
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  }
+]

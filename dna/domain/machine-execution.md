@@ -224,6 +224,22 @@ specifies how those are applied to a *running* program.
   accumulated contention separately. This keeps the single-step CPU oracle
   (FUSE / zex) independent of the machine layer.
 
+## ROM write protection
+
+<!-- provenance: hardware -->
+- [id: MACHINE-ROM-READONLY-001] `0x0000`–`0x3FFF` is a ROM chip (memory-map.md
+  MM-LAYOUT-001), so a write there changes nothing: the CPU still performs the write
+  bus cycle, with its normal timing (and contention, though that bank is
+  uncontended), but no byte is stored. This applies to every write the machine
+  makes — instruction writes, the stack pushes of interrupt and NMI acceptance, and
+  instant tape loads (TAPE-INSTANT-LOAD-001). The machine models it as an opt-in
+  (`createMachine({ romWriteProtect: true })`): the CPU and machine fixtures that
+  model a flat 64 KB RAM (the FUSE/zex oracles, `contention-mcycle.json`'s pushes at
+  `SP = 0x4000`) keep running unprotected. The CPU exposes it through the optional
+  `romTop` argument of `step(...)` (writes below `romTop` are dropped; default `0`),
+  and `acceptInterrupt`/`acceptNmi` take the same `romTop`. Acceptance:
+  `dna/conformance/machine/rom-readonly.json`.
+
 ## M-cycle-exact memory contention
 
 The per-access model above (MACHINE-CONTENTION-CLOCK-001) approximates the

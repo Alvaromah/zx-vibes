@@ -7,7 +7,7 @@
     "doctor": "zxs doctor",
     "build": "zxs build",
     "run": "zxs run --bin build/main.bin --org 0x8000 --frames 300 --screenshot screen.png",
-    "screen": "zxs screen --text --png screen.png",
+    "screen": "zxs state reset && zxs run --state .zxs/state.zxstate && zxs screen --text --png screen.png --state .zxs/state.zxstate",
     "test": "zxs test tests",
     "verify": "zxs verify",
     "preview": "zxs preview --watch",

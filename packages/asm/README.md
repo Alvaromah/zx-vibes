@@ -5,8 +5,8 @@ TypeScript Z80 assembler/disassembler for zx-vibes ZX Spectrum 48K workflows.
 Current package version in this repository: `0.3.0`.
 
 The package removes the default need for an external assembler in generated
-zx-vibes projects. It targets the current starters, toolkit templates, recipes,
-and examples before claiming full sjasmplus compatibility.
+zx-vibes projects. It targets the syntax the starters, the knowledge-pack
+recipes and the tests use before claiming full sjasmplus compatibility.
 
 ## Install
 
@@ -38,7 +38,10 @@ pnpm exec zxasm doctor
 ```
 
 Successful assembly writes a raw binary, SLD-compatible symbols when available,
-and any additional artifacts requested through `SAVEBIN`.
+and any additional artifacts requested through `SAVEBIN`. A failed assembly
+prints its warnings (including `DISPLAY` output) and each error, with a
+`hint:` line when a close label name exists. `zxasm doctor` assembles a probe
+instruction and exits 1 if the embedded assembler gets it wrong.
 
 ## Supported Surface
 
@@ -77,23 +80,53 @@ and any additional artifacts requested through `SAVEBIN`.
   `HX`/`LX`/`HY`/`LY`, with illegal `H`/`L` and memory mixes rejected.
 - Square-bracket memory operands such as `LD A,[HL]`, `LD [0x4000],A`,
   and `SET 3,[IX+4],A`.
-- Table-driven disassembly compatible with zx-vibes debugger output.
+- Disassembly compatible with zx-vibes debugger output (a hand-coded x/y/z
+  decoder, kept in step with the table-driven encoder by a round-trip gate).
 
 Unsupported sjasmplus features should fail clearly instead of silently
 misassembling code.
 
+## Rules Worth Knowing
+
+These are reported as errors rather than assembled into something else:
+
+- `IF`/`ELSEIF` conditions and `DUP`/`REPT` counts are evaluated while the
+  source is read, before any address exists. They can use `EQU`/`DEFL`
+  constants already known above them, `DEFINE` values and `-D` defines, but
+  not `$`, a code label, or a constant computed from them or from a later
+  definition.
+- The first `ORG` sets the output origin (even `ORG BASE` with `BASE` defined
+  later). A forward `ORG` pads the gap with zeros; an `ORG` that would put bytes
+  over output already emitted (moving backwards, or after code that came before
+  the first `ORG`) is an error.
+- `EQU` defines a constant: redefining it with a different value, or giving a
+  code label the same name as an `EQU`/`DEFL`/`=` symbol, is an error. Use
+  `DEFL` or `name = expression` for a symbol that changes.
+- Comparisons yield 0 or 0xFFFF; an 8-bit slot stores true as 0xFF, and a
+  constant defined as a negative byte (`DIR EQU -2`) as its two's complement.
+  A literal 0xFFFF or 65535 in an 8-bit slot is out of range.
+- A macro call passes exactly one argument per parameter. A label may precede a
+  macro call or an `INCLUDE` (`here: Name args`). Errors inside an expansion
+  name the macro and the line that called it.
+- Directive and operand lists cannot have empty elements (`DB 1,`, `RET Z,`).
+- `DEVICE` accepts only `ZXSPECTRUM48`, and `-D NAME=value` values must be
+  numbers or numeric expressions.
+- `INCBIN`/`INSERT`/`BINARY` offsets and lengths must lie within the file.
+- `--sandbox` compares real paths: links cannot reach outside the project, and
+  on Windows path case (such as the drive letter) does not matter.
+
 ## Relationship To `zxs build`
 
-`@zx-vibes/toolkit` uses this package by default. The embedded backend name in
-`zxs build --assembler` remains `spectral` for compatibility with older
-configuration:
+`@zx-vibes/toolkit` uses this package as its only assembler. Its backend name
+in `zxs build --assembler` and `zx.config.json` is `builtin` (the default); the
+older name `spectral` is still accepted for compatibility:
 
 ```bash
-pnpm exec zxs build --assembler spectral
+pnpm exec zxs build --assembler builtin
 ```
 
-Use the separate `sjasmplus` backend only when a project intentionally depends
-on syntax outside this package's current surface.
+The toolkit reserves an external `sjasmplus` backend name, but does not
+implement it yet: selecting it fails with an environment error.
 
 ## Development
 

@@ -125,9 +125,14 @@ This project is built, run, and **proven** with the \`zxs\` toolkit
 A program that assembles is not a program that works. Always close the loop:
 
 1. \`zxs build --json\` — assemble \`src/main.asm\` into \`build/\`.
-2. \`zxs run --json\` — run it fresh for 300 frames under the hang watchdog.
-3. \`zxs screen --text\` — read the screen back (cheap eyes).
-4. \`zxs verify --json\` — the single acceptance gate: build -> run -> screenshot -> tests.
+2. \`zxs state reset\` — put this build, fresh, into the session \`.zxs/state.zxstate\`.
+3. \`zxs run --state .zxs/state.zxstate --json\` — run it for 300 frames under the hang watchdog.
+4. \`zxs screen --text --state .zxs/state.zxstate\` — read back what that run drew (cheap eyes).
+5. \`zxs verify --json\` — the single acceptance gate: build -> run -> screenshot -> tests.
+
+Every \`zxs\` command boots fresh unless you pass \`--state\`, so a bare \`zxs screen\`
+shows a machine that has not run. Reset the session after every build so it holds the
+new code; without the reset, \`run --state\` continues the old session.
 
 \`run\` must report \`status:"ok"\`, \`haltSynced:true\`, and
 \`frameBudget.overrunFrames:0\`; an occasional missed frame can hide behind a healthy
@@ -137,8 +142,9 @@ majority-based HALT signal, so keep a \`frameBudget\` assertion in real-time spe
 every spec under \`tests/\` passes. Treat any non-zero exit as "not done yet".
 
 Useful observation/debug commands: \`zxs regs\`, \`zxs mem read <addr>\`,
-\`zxs disasm <spec>\`, \`zxs trace\`, \`zxs test tests/\`. Remove generated artifacts
-with \`zxs clean\`.
+\`zxs disasm <spec>\`, \`zxs step\`, \`zxs trace\`, \`zxs test tests/\`. Add
+\`--state .zxs/state.zxstate\` to \`regs\`, \`mem\`, \`disasm\`, \`step\` or \`trace\` to
+inspect the session instead of a fresh boot. Remove generated artifacts with \`zxs clean\`.
 
 This is a minimal starting playbook. Install the full knowledge pack (skills,
 reference docs, recipes) with \`zxs setup --agent <codex|claude>\`.
@@ -340,9 +346,28 @@ function initProjectFiles(name: string): Array<[string, string]> {
  */
 export function runClean(options: CleanOptions = {}): CleanEnvelope {
   const cwd = resolve(options.cwd ?? process.cwd());
-  const removed: string[] = [];
-  for (const target of cleanTargets(cwd)) {
+  const { targets, entry } = cleanTargets(cwd);
+  // `outDir` comes from user config and is deleted recursively, so check every target
+  // before removing anything: `"outDir": "."` used to delete the whole project.
+  const doomed = targets.map((target) => {
     const abs = resolve(cwd, target);
+    if (!isStrictlyInside(abs, cwd)) {
+      throw userError(
+        `Refusing to clean "${target}": it is not a directory inside the project. ` +
+          'Point "outDir" in zx.config.json at a subdirectory such as "build".',
+        'clean',
+      );
+    }
+    if (entry !== undefined && isStrictlyInside(resolve(cwd, entry), abs)) {
+      throw userError(
+        `Refusing to clean "${target}": it contains the entry source "${entry}".`,
+        'clean',
+      );
+    }
+    return abs;
+  });
+  const removed: string[] = [];
+  for (const abs of doomed) {
     if (existsSync(abs)) {
       rmSync(abs, { recursive: true, force: true });
       removed.push(portableRel(abs, cwd));
@@ -352,19 +377,29 @@ export function runClean(options: CleanOptions = {}): CleanEnvelope {
   return successEnvelope('clean', { removed });
 }
 
+/** Whether `path` lies strictly below `root` (not `root` itself, not outside it). */
+function isStrictlyInside(path: string, root: string): boolean {
+  const rel = relative(root, path);
+  return rel !== '' && !isAbsolute(rel) && rel.split(/[\\/]/)[0] !== '..';
+}
+
 /**
- * The directories `clean` targets: the resolved `outDir` (default `build`) plus `.zxs`.
- * Config resolution is best-effort — an invalid `zx.config.json` must not block cleaning
+ * The directories `clean` targets: the resolved `outDir` (default `build`) plus `.zxs`,
+ * and the configured entry (so a target that holds the source is refused). Config
+ * resolution is best-effort — an invalid `zx.config.json` must not block cleaning
  * `.zxs/`, so we fall back to the default output directory.
  */
-function cleanTargets(cwd: string): string[] {
+function cleanTargets(cwd: string): { targets: string[]; entry: string | undefined } {
   let outDir = DEFAULT_OUT_DIR;
+  let entry: string | undefined;
   try {
-    outDir = resolveConfig({ cwd }).outDir;
+    const resolved = resolveConfig({ cwd });
+    outDir = resolved.outDir;
+    entry = resolved.entry;
   } catch {
     outDir = DEFAULT_OUT_DIR;
   }
-  return [...new Set([outDir, ZXS_DIR])];
+  return { targets: [...new Set([outDir, ZXS_DIR])], entry };
 }
 
 // --- shared helpers ---------------------------------------------------------

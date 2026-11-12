@@ -56,7 +56,7 @@
     "toolkit:cli-fixtures-self-test": "node dna/conformance/cli/run-cli-fixtures-self-test.mjs",
     "toolkit:mcp-self-test": "node dna/conformance/mcp/run-mcp-self-test.mjs",
     "toolkit:reveng-self-test": "node dna/conformance/reveng/run-reveng-self-test.mjs",
-    "cpu:exec-fixtures": "node dna/conformance/cpu/run-cpu-exec-fixtures.mjs",
+    "cpu:exec-fixtures": "node dna/conformance/cpu/run-cpu-exec-fixtures.mjs --module packages/cpu/src/z80-step.mjs",
     "cpu:exec-fixtures-self-test": "node dna/conformance/cpu/run-cpu-exec-fixtures-self-test.mjs",
     "cpu:fuse-suite": "node dna/conformance/cpu/run-fuse-suite.mjs",
     "timing:fixtures": "node dna/conformance/timing/run-timing-fixtures.mjs",

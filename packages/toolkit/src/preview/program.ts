@@ -11,13 +11,24 @@
 // `<file>` types, but `@zx-vibes/machine` ships NO `.sna` codec (no `readSna`). We do NOT
 // invent one: `preview <file.sna>` FAILS LOUD with a clear error naming the missing core
 // codec (errors.md ERR-PROD-NOSILENT-001) rather than silently mis-loading.
+//
+// Every program is decoded here exactly as the browser player will decode it
+// (`bootPreviewProgram`, the shared ./player-boot.ts): a corrupt `.z80`/`.tap`/`.tzx`,
+// an empty tape, or an image that does not fit RAM is a USER_ERROR before anything is
+// served — not a page stuck on "loading…".
 
 import { readFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { resolveConfig } from '../config/config.js';
 import { userError } from '../output/envelope.js';
 import { parseAddress } from '../util/address.js';
-import { runBuild } from '../build/build.js';
+import { buildProject, type BuildDiagnostic } from '../build/build.js';
+import { loadRom } from '../runtime/rom.js';
+import { programLoadOrigin } from '../runtime/session.js';
+import { bootPreviewProgram } from './player-boot.js';
+
+/** How many build errors a preview failure quotes (the rest: `zxs build`). */
+const QUOTED_BUILD_ERRORS = 5;
 
 /** The program a preview server serves to the bundled player. */
 export interface PreviewProgram {
@@ -27,7 +38,7 @@ export interface PreviewProgram {
   kind: 'blank' | 'bin' | 'z80' | 'tap' | 'tzx';
   /** The program bytes (empty for `blank`): the built `.bin`, or the `<file>` image bytes. */
   bytes: Uint8Array;
-  /** Load origin for a raw `bin` image (the configured `org`); 0 otherwise. */
+  /** Load origin for a raw `bin` image (its first ORG, else the configured `org`); 0 otherwise. */
   org: number;
   /** A short human label for the served program (Incidental). */
   label: string;
@@ -64,8 +75,9 @@ export interface ResolveProgramOptions {
 
 /**
  * Resolve the preview program for the requested mode (CLI-PROD-PREVIEW-002). The default
- * (no `--blank`, no file) BUILDS the project and serves the produced `.bin` at the
- * configured origin; `--blank` serves a clean boot screen; a `<file>` serves its image.
+ * (no `--blank`, no file) BUILDS the project and serves the produced `.bin` at its load
+ * origin (CLI-PROD-CONV-ORIGIN-001); `--blank` serves a clean boot screen; a `<file>`
+ * serves its image.
  * A build failure, a missing file, an `.sna` (the tracked gap), or an unknown extension is
  * a USER_ERROR (exit 1) — never a silent mis-load.
  */
@@ -80,21 +92,53 @@ export function resolvePreviewProgram(options: ResolveProgramOptions = {}): Prev
     return resolveFileProgram(options.file, cwd);
   }
 
-  // Default mode: build the project, then serve the produced binary at the configured org.
+  // Default mode: build the project, then serve the produced binary where it was assembled
+  // to run — its first ORG, else the configured `org` — the one load-origin rule `run`,
+  // `verify` and the observe commands share (cli.md CLI-PROD-CONV-ORIGIN-001).
   const resolved = resolveConfig({ cwd });
-  const org = parseAddress(resolved.org, 'preview');
-  const build = runBuild({ cwd, outDir: resolved.outDir });
+  const { envelope: build, program: built } = buildProject({ cwd, outDir: resolved.outDir });
   if (!build.ok) {
-    throw userError(
-      `Cannot preview: build failed with ${build.errorCount} error(s) in ${build.entry} ` +
-        '(run `zxs build` for details)',
-      'preview',
-    );
+    throw userError(buildFailureMessage(build.errorCount, build.entry, build.errors), 'preview');
   }
-  const binPath = build.outputs.bin;
-  if (binPath === null) throw userError('Cannot preview: the build produced no binary', 'preview');
-  const bytes = readProgramFile(resolve(cwd, binPath));
-  return { mode: 'project', kind: 'bin', bytes, org, label: `${build.entry} @ 0x${org.toString(16).toUpperCase()}` };
+  if (!built) throw userError('Cannot preview: the build produced no binary', 'preview');
+  const org = programLoadOrigin(built.origin, () => parseAddress(resolved.org, 'preview'));
+  const program: PreviewProgram = {
+    mode: 'project',
+    kind: 'bin',
+    bytes: built.bytes,
+    org,
+    label: `${build.entry} @ 0x${org.toString(16).toUpperCase()}`,
+  };
+  checkProgramLoads(program, `the build of ${build.entry}`);
+  return program;
+}
+
+/**
+ * The preview message for a failed build: the count, then the first few
+ * diagnostics as `file:line: message`, so `preview --watch`/`--detach` show the
+ * real assembler error instead of only pointing at `zxs build`.
+ */
+function buildFailureMessage(errorCount: number, entry: string, errors: readonly BuildDiagnostic[]): string {
+  const lines = [
+    `Cannot preview: build failed with ${errorCount} error(s) in ${entry} (run \`zxs build\` for details)` +
+      (errors.length > 0 ? ':' : ''),
+  ];
+  for (const d of errors.slice(0, QUOTED_BUILD_ERRORS)) lines.push(`  ${d.file}:${d.line}: ${d.message}`);
+  if (errors.length > QUOTED_BUILD_ERRORS) lines.push(`  … and ${errors.length - QUOTED_BUILD_ERRORS} more`);
+  return lines.join('\n');
+}
+
+/**
+ * Decode the program the way the player will (./player-boot.ts) and turn any
+ * problem into a USER_ERROR naming `what` — so a bad file fails before serving.
+ */
+function checkProgramLoads(program: PreviewProgram, what: string): void {
+  try {
+    bootPreviewProgram(program.kind, program.bytes, program.org, loadRom());
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw userError(`preview: cannot load ${what}: ${reason}`, 'preview');
+  }
 }
 
 /** Resolve a `<file>` program by its extension (CLI-PROD-PREVIEW-002 `play` mode). */
@@ -115,7 +159,9 @@ function resolveFileProgram(file: string, cwd: string): PreviewProgram {
   if (ext === '.z80' || ext === '.tap' || ext === '.tzx') {
     const bytes = readProgramFile(abs);
     const kind = ext.slice(1) as 'z80' | 'tap' | 'tzx';
-    return { mode: 'file', kind, bytes, org: 0, label: `${file} (${kind})` };
+    const program: PreviewProgram = { mode: 'file', kind, bytes, org: 0, label: `${file} (${kind})` };
+    checkProgramLoads(program, `"${file}"`);
+    return program;
   }
 
   if (ext === '.bin') {
@@ -124,7 +170,15 @@ function resolveFileProgram(file: string, cwd: string): PreviewProgram {
     const resolved = resolveConfig({ cwd });
     const org = parseAddress(resolved.org, 'preview');
     const bytes = readProgramFile(abs);
-    return { mode: 'file', kind: 'bin', bytes, org, label: `${file} @ 0x${org.toString(16).toUpperCase()}` };
+    const program: PreviewProgram = {
+      mode: 'file',
+      kind: 'bin',
+      bytes,
+      org,
+      label: `${file} @ 0x${org.toString(16).toUpperCase()}`,
+    };
+    checkProgramLoads(program, `"${file}"`);
+    return program;
   }
 
   throw userError(

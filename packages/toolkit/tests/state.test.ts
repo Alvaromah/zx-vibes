@@ -114,6 +114,63 @@ describe('.zxstate codec (FF-ZXSTATE-001, MCP-PROD-AC-INTEROP-001)', () => {
     expect(back.debug.watchpoints[0]!.type).toBe('write');
   });
 
+  it('keeps the frame clock and EI delay across save/load', () => {
+    const machine = createMachine();
+    machine.clock = 12345;
+    machine.eiDelay = 1;
+    const back = deserializeZxState(serializeZxState({ machine, border: 7, debug: emptyDebugStore() }));
+    expect(back.machine.clock).toBe(12345);
+    expect(back.machine.eiDelay).toBe(1);
+  });
+
+  it('a session saved mid-frame resumes on the same interrupt schedule as the uninterrupted machine', () => {
+    // 0x8000: INC A / JR 0x8000, counting between interrupts; the IM 1 handler at 0x0038
+    // is EI / RET. A resume that restarted the frame at T-state 0 takes its next
+    // interrupt at a different point, so A, PC and the clock diverge.
+    const build = () => {
+      const m = createMachine();
+      m.memory.set([0xfb, 0xc9], 0x0038);
+      m.memory.set([0x3c, 0x18, 0xfd], 0x8000);
+      m.registers.pc = 0x8000;
+      m.registers.sp = 0xff00;
+      m.registers.im = 1;
+      m.registers.iff1 = 1;
+      m.registers.iff2 = 1;
+      return m;
+    };
+    const original = build();
+    original.runFrame();
+    for (let i = 0; i < 2001; i += 1) original.stepInstruction(); // stop mid-frame
+    expect(original.clock).toBeGreaterThan(0);
+    const resumed = deserializeZxState(
+      serializeZxState({ machine: original, border: 0, debug: emptyDebugStore() }),
+    ).machine;
+    resumed.memory.set([0xfb, 0xc9], 0x0038); // the session re-maps the real ROM; restore the test handler
+    for (let frame = 0; frame < 3; frame += 1) {
+      original.runFrame();
+      resumed.runFrame();
+    }
+    expect(resumed.clock).toBe(original.clock);
+    expect(resumed.registers.a).toBe(original.registers.a);
+    expect(resumed.registers.pc).toBe(original.registers.pc);
+    expect(resumed.registers.sp).toBe(original.registers.sp);
+  });
+
+  it('loads a file without clock/eiDelay at T-state 0 and rejects a malformed clock', () => {
+    const machine = createMachine();
+    machine.clock = 500;
+    const envelope = JSON.parse(serializeZxState({ machine, border: 0, debug: emptyDebugStore() }));
+    delete envelope.machine.clock;
+    delete envelope.machine.eiDelay;
+    const older = deserializeZxState(JSON.stringify(envelope));
+    expect(older.machine.clock).toBe(0);
+    expect(older.machine.eiDelay).toBe(0);
+    envelope.machine.clock = 69888; // one past the frame's last T-state
+    expect(() => deserializeZxState(JSON.stringify(envelope))).toThrow(
+      /machine\.clock must be an integer 0–69887/,
+    );
+  });
+
   it('carries an emulatorId + format tag and rejects a foreign file (no silent mis-load)', () => {
     const text = serializeZxState({ machine: createMachine(), border: 7, debug: emptyDebugStore() });
     const env = JSON.parse(text);

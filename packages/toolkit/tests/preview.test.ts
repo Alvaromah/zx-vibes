@@ -85,6 +85,8 @@ describe('preview server — serves the bundled player + program (RT-PROD-PREVIE
     // the canvas is the 320x240 bordered frame, not a bare 256x192 display.
     expect(html).toContain('width="320" height="240"');
     expect(html).toContain('player.js');
+    // Where the player shows a decode error or a failed --watch rebuild.
+    expect(html).toContain('<pre id="error" hidden></pre>');
   });
 
   it('serves the bundled browser player JS (the reconstructed cores, not the legacy emulator)', async () => {

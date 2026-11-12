@@ -1,7 +1,8 @@
 /* eslint-disable no-console -- CLI entry point; stdout/stderr are its output surface */
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
-import { assembleFile, disassemble, writeAssemblyOutputs } from './index.js';
+import { checkAssemblerRuntime } from './doctor.js';
+import { assembleFile, disassemble, writeAssemblyOutputs, type Diagnostic } from './index.js';
 
 interface PackageMetadata {
   version: string;
@@ -60,9 +61,12 @@ program
       console.log(`OK ${outputs.bin}`);
       if (outputs.sld) console.log(`symbols: ${outputs.sld}`);
       for (const artifact of outputs.artifacts ?? []) console.log(`artifact: ${artifact}`);
-      for (const w of result.warnings) console.warn(`${w.file}:${w.line}: warning: ${w.message}`);
+      for (const w of result.warnings) console.warn(formatDiagnostic(w));
     } else {
-      for (const e of result.errors) console.error(`${e.file}:${e.line}: error: ${e.message}`);
+      // A failed build still shows the warnings (DISPLAY output included) and each
+      // error's did-you-mean hint (ASM-PROD-ERR-001); only the bare errors were printed.
+      for (const w of result.warnings) console.warn(formatDiagnostic(w));
+      for (const e of result.errors) console.error(formatDiagnostic(e));
     }
     process.exitCode = result.ok ? 0 : 1;
   });
@@ -89,15 +93,30 @@ program
   .description('Check the embedded assembler runtime')
   .option('--json', 'machine-readable JSON output', false)
   .action((opts: { json: boolean }) => {
-    const ok = true;
-    const doc = { ok, assembler: '@zx-vibes/asm', version: packageMetadata.version };
+    const check = checkAssemblerRuntime();
+    const doc = {
+      ok: check.ok,
+      assembler: '@zx-vibes/asm',
+      version: packageMetadata.version,
+      ...(check.ok ? {} : { error: { message: check.message, exitCode: 1 } }),
+    };
     if (opts.json) console.log(JSON.stringify(doc, null, 2));
-    else console.log(`OK ${doc.assembler} ${doc.version}`);
+    else if (check.ok) console.log(`OK ${doc.assembler} ${doc.version}`);
+    else console.error(`FAIL ${doc.assembler} ${doc.version}: ${check.message}`);
+    process.exitCode = check.ok ? 0 : 1;
   });
 
 program.parseAsync().catch((err: unknown) => {
   if (typeof err === 'object' && err !== null && 'exitCode' in err && err.exitCode === 0) {
     process.exitCode = 0;
+    return;
+  }
+  // `zxasm` with no command: commander writes the help through writeErr, which is
+  // silenced above so errors get our own format, so print the help here instead of
+  // the bare "error: (outputHelp)".
+  if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'commander.help') {
+    process.stderr.write(program.helpInformation());
+    process.exitCode = 1;
     return;
   }
   const message = err instanceof Error ? err.message.replace(/^error:\s*/i, '') : String(err);
@@ -149,6 +168,12 @@ function parseDefines(items: string[]): Record<string, string | number | boolean
     else out[item.slice(0, eq)] = item.slice(eq + 1);
   }
   return out;
+}
+
+/** `file:line: error: message`, plus an indented `hint:` line when there is one. */
+function formatDiagnostic(d: Diagnostic): string {
+  const line = `${d.file}:${d.line}: ${d.severity}: ${d.message}`;
+  return d.hint ? `${line}\n  hint: ${d.hint}` : line;
 }
 
 function hex16(n: number): string {

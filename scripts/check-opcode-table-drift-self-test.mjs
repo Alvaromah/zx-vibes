@@ -36,27 +36,40 @@ function assert(condition, message) {
   assert(actual === expected, "committed generated file is not byte-identical to a fresh generation");
 }
 
-// 4. A tampered file is detected. We exercise the comparison directly against a
-//    mutated copy so the check provably rejects drift (without touching the real
-//    committed artifact).
+// 4. A tampered file is detected by the real checker. checkOpcodeTableDrift() takes the
+//    file to compare, so each tampered copy is written to a temp dir (the committed
+//    artifact is never touched) and must be reported ok:false; an untouched copy in the
+//    same place must still pass, so the failures come from the tampering, not the path.
 {
   const expected = (await generateOpcodeTableSource()).replace(/\r\n/g, "\n");
-  const tamperedSamples = [
-    expected.replace('"caseInsensitive":true', '"caseInsensitive":false'),
-    `${expected}\n// stray edit\n`,
-    expected.replace("Z80_OPCODE_TABLE_ENTRY_COUNT = ", "Z80_OPCODE_TABLE_ENTRY_COUNT = 1 + "),
-  ];
-  for (const [index, tampered] of tamperedSamples.entries()) {
-    assert(tampered !== expected, `tamper sample ${index} did not actually change the text`);
-  }
-
-  // And prove the file-backed check fails when the committed file is mutated:
+  const firstRow = expected.split("\n").find((line) => line.startsWith('  {"id":"Z80-OPC-LD-B-N-001"'));
+  assert(firstRow, "expected the generated table to contain the LD B,n row");
+  const tampered = {
+    "changed opcode byte": expected.replace('{"value":6,"hex":"06"}', '{"value":7,"hex":"07"}'),
+    "extra entry": expected.replace(
+      firstRow,
+      `${firstRow}\n${firstRow.replace("Z80-OPC-LD-B-N-001", "Z80-OPC-LD-B-N-EXTRA")}`,
+    ),
+  };
   const dir = await mkdtemp(path.join(os.tmpdir(), "zx-vibes-opcode-drift-"));
   try {
-    const decoy = path.join(dir, "z80-opcodes-table.ts");
-    await writeFile(decoy, tamperedSamples[0], "utf8");
-    const decoyDiffers = (await readFile(decoy, "utf8")).replace(/\r\n/g, "\n") !== expected;
-    assert(decoyDiffers, "expected the tampered decoy to differ from a fresh generation");
+    const pristine = path.join(dir, "pristine.ts");
+    await writeFile(pristine, expected, "utf8");
+    const control = await checkOpcodeTableDrift(pristine);
+    assert(control.ok, `expected an untouched copy to pass, got: ${control.reason ?? "?"}`);
+
+    for (const [name, text] of Object.entries(tampered)) {
+      assert(text !== expected, `tamper sample '${name}' did not change the text`);
+      const decoy = path.join(dir, `${name.replace(/\W+/g, "-")}.ts`);
+      await writeFile(decoy, text, "utf8");
+      const result = await checkOpcodeTableDrift(decoy);
+      assert(!result.ok, `expected the drift check to reject a table with a ${name}`);
+      assert(/is stale/.test(result.reason ?? ""), `unexpected reason for the ${name}: ${result.reason}`);
+    }
+
+    const missing = await checkOpcodeTableDrift(path.join(dir, "does-not-exist.ts"));
+    assert(!missing.ok, "expected the drift check to reject a missing generated table");
+    assert(/missing generated table/.test(missing.reason ?? ""), `unexpected reason for a missing file: ${missing.reason}`);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

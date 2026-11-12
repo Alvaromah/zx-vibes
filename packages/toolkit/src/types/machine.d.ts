@@ -1,11 +1,12 @@
-// Ambient typings for the untyped ESM dependency `@zx-vibes/machine`.
+// Ambient typings for the ESM dependency `@zx-vibes/machine`.
 //
-// The machine core ships as plain `.mjs` with no `.d.ts`. We only consume a thin
-// public surface here (a fresh-boot machine for the stateless session, RT-PROD-
-// SESSION-*); this declaration types exactly that surface so the toolkit can stay
-// `strict` without reaching into the core's implementation. Authored from the
-// machine package's PUBLIC exports (`src/index.mjs`, `src/machine.mjs`), a
-// legitimate dependency under the clean-room seal.
+// The machine core ships `.d.mts` declarations generated from its JSDoc, but this
+// ambient module takes precedence over them inside the toolkit (TypeScript checks
+// ambient modules first), so the toolkit compiles against THIS surface, not the
+// shipped one. It types only what the toolkit consumes, more strictly than the
+// generated declarations. Authored from the machine package's PUBLIC exports
+// (`src/index.mjs`, `src/machine.mjs`), a legitimate dependency under the
+// clean-room seal.
 declare module '@zx-vibes/machine' {
   /** The Z80 register file as the machine models it (8-bit halves, all keys present). */
   export type MachineRegisters = Record<string, number> & {
@@ -37,6 +38,8 @@ declare module '@zx-vibes/machine' {
     io?: MachineIo;
     clock?: number;
     exactContention?: boolean;
+    /** Ignore writes to 0x0000-0x3FFF, as the 48K ROM does (MACHINE-ROM-READONLY-001). */
+    romWriteProtect?: boolean;
   }
 
   export class Machine {
@@ -54,6 +57,10 @@ declare module '@zx-vibes/machine' {
     eiDelay: number;
     tStatesTotal: number;
     frames: number;
+    /** Whether writes to the ROM area are ignored (MACHINE-ROM-READONLY-001). */
+    romWriteProtect: boolean;
+    /** The first writable address: 0x4000 when the ROM is write-protected, else 0. */
+    romTop(): number;
     reset(): this;
     stepInstruction(): StepResult;
     runFrame(options?: { dataBus?: number }): FrameResult;
@@ -80,6 +87,7 @@ declare module '@zx-vibes/machine' {
     memory: Uint8Array | ArrayLike<number>;
     border?: number;
   }): Uint8Array;
+  /** Throws `Error("readZ80: …")` when `bytes` is not a complete 48K snapshot (FMT-Z80-VALIDATE-001). */
   export function readZ80(bytes: Uint8Array | ArrayLike<number>): Z80Snapshot;
 
   // --- .tap tape-image codec (tap-format.mjs) -------------------------------
@@ -96,6 +104,22 @@ declare module '@zx-vibes/machine' {
   export function serializeTap(
     blocks: ReadonlyArray<{ flag: number; data: Uint8Array | ArrayLike<number> }>,
   ): Uint8Array;
+
+  // --- .tzx tape-archive codec (tzx-format.mjs) -----------------------------
+  // The TZX v1.20 block stream (dna/domain/file-formats.md FMT-TZX-*). Only the data
+  // blocks (0x10 standard, 0x11 turbo, 0x14 pure data) carry `data`; the signal,
+  // control (FMT-TZX-CONTROL-001) and informational (FMT-TZX-INFO-001) blocks carry
+  // their own fields, so a loader picks the blocks that have `data`.
+  export interface TzxBlock {
+    id: number;
+    data?: Uint8Array;
+    [field: string]: unknown;
+  }
+  /** Throws on a bad signature, a truncated block or an unsupported block ID. */
+  export function parseTzx(bytes: Uint8Array | ArrayLike<number>): {
+    version: { major: number; minor: number };
+    blocks: TzxBlock[];
+  };
 
   // --- ROM tape pulse encoding (tape-pulses.mjs) ----------------------------
   // A block body [flag, ...data, checksum] -> the EAR pulse stream the ROM LD-BYTES reads
@@ -148,6 +172,8 @@ declare module '@zx-vibes/machine' {
     memory: Uint8Array;
     halted?: boolean;
     dataBus?: number;
+    /** Writes below this address are ignored (a write-protected ROM); default 0. */
+    romTop?: number;
   }): InterruptResult;
   export const INT_DATA_BUS: number;
 

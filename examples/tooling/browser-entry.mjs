@@ -1,9 +1,10 @@
 // The browser entry point bundled into examples/zxspectrum.js (global `ZXSpectrum`).
 //
 // A tiny, friendly wrapper around @zx-vibes/machine: boot the real 48K ROM, render
-// the screen to a <canvas> at 50 Hz, and drive the keyboard matrix from host key
-// events. The ROM is embedded (base64) at build time, so a page using this needs
-// no fetch, no server, no install — it works from a double-clicked file.
+// the screen to a <canvas> at the 48K frame rate (≈ 50.08 Hz), and drive the
+// keyboard matrix from host key events. The ROM is embedded (base64) at build time,
+// so a page using this needs no fetch, no server, no install — it works from a
+// double-clicked file.
 //
 //   const zx = ZXSpectrum.create();
 //   zx.attach(document.querySelector('canvas')).start();
@@ -17,8 +18,12 @@ import { ROM_BASE64 } from './rom-data.generated.mjs';
 import {
   renderWithBorderRows, borderRowsFromLog, OUT_WIDTH, OUT_HEIGHT,
 } from './render.mjs';
-import { keyboardMatrixByte, resolveMatrix, browserCodeToKeys, charToKeys } from './keyboard.mjs';
-import { beeperSamples, FRAME_T_STATES } from './audio.mjs';
+import {
+  PressedKeys, resolveMatrix, browserCodeToKeys, charToKeys, isShiftCode,
+} from './keyboard.mjs';
+import {
+  FRAME_T_STATES, FRAME_MS, CPU_HZ, samplesPerFrame, createBeeperStream, renderBeeperSpan,
+} from './audio.mjs';
 
 // Tape → EAR pulse stream. A tape is played into port 0xFE bit 6, exactly the line
 // the real ROM LD-BYTES samples, so the machine loads a `.tap`/`.tzx` with no traps:
@@ -26,9 +31,29 @@ import { beeperSamples, FRAME_T_STATES } from './audio.mjs';
 const T_PER_MS = 3500;            // 3.5 MHz → T-states per millisecond (TZX pauses are ms)
 const GAP_T = 1_000 * T_PER_MS;   // ~1 s flat gap around/between blocks (also the closing edge)
 
+/**
+ * The most EAR pulses a tape may expand to. Real tapes stay far below it (a long
+ * standard-speed game is a few million pulses; 2^23 is 50+ minutes of tape); a
+ * malformed or hostile file — e.g. a TZX loop (0x24, count 65535) around a long pure
+ * tone (0x12, count 65535), ~4e9 pulses — is refused with a clear error before it can
+ * exhaust the tab's memory.
+ */
+export const MAX_TAPE_PULSES = 1 << 23;
+
+/** Make room for `n` more pulses, or refuse the tape. */
+function reserve(pulses, n) {
+  if (pulses.length + n > MAX_TAPE_PULSES) {
+    throw new Error(
+      `tape too long: it expands to more than ${MAX_TAPE_PULSES} pulses ` +
+        '(a malformed or endlessly looping tape?) — not loaded',
+    );
+  }
+}
+
 // Append `count` bit-pulse pairs for each byte (MSB first) using the given 0/1 pulse
 // lengths; `usedBits` limits the LAST byte (TZX turbo / pure-data).
 function pushBits(out, data, zeroLen, oneLen, usedBits) {
+  if (data.length > 0) reserve(out, 2 * (8 * (data.length - 1) + (usedBits || 8)));
   for (let i = 0; i < data.length; i += 1) {
     const byte = data[i] & 0xff;
     const bits = i === data.length - 1 && usedBits ? usedBits : 8;
@@ -46,26 +71,33 @@ function tapToPulses(bytes) {
   const pulses = [GAP_T];
   for (const { flag, data } of parseTap(bytes)) {
     const body = Uint8Array.from([flag, ...data, tapChecksum(flag, data)]);
-    for (const p of blockToPulses(body)) pulses.push(p);
+    const block = blockToPulses(body);
+    reserve(pulses, block.length + 1);
+    for (const p of block) pulses.push(p);
     pulses.push(GAP_T);
   }
   return pulses;
 }
 
 // A `.tzx` (versioned block stream) → a playable pulse list. This walks the raw block
-// stream itself rather than going through the strict parseTzx codec: real-world tapes
-// nearly always carry metadata/control blocks beyond the core audio set — archive info
-// (0x32), hardware type (0x33), loops (0x24/0x25), stop-in-48K (0x2A) — and the strict
-// codec rejects any of them outright, so no real game .tzx would ever load. The walker
+// stream itself rather than going through the core parseTzx codec: parseTzx returns the
+// blocks (control and informational ones included, FMT-TZX-CONTROL-001 / -INFO-001) but
+// plays nothing, and it rejects the IDs it does not model (0x15/0x18/0x19, the deprecated
+// ones), while the demo wants to play as much of a real tape as it can. The walker
 // turns every audio-bearing block into pulses, honours loops, and skips the rest;
 // unknown IDs are skipped via the spec's forward-compat rule (a DWORD body length).
+// Every expansion goes through `reserve`, so no file can make the list outgrow
+// MAX_TAPE_PULSES — however its loops multiply.
 function tzxToPulses(bytes) {
   const u8 = (o) => bytes[o] & 0xff;
   const u16 = (o) => (bytes[o] | (bytes[o + 1] << 8)) & 0xffff;
   const u24 = (o) => bytes[o] | (bytes[o + 1] << 8) | (bytes[o + 2] << 16);
   const u32 = (o) => (bytes[o] | (bytes[o + 1] << 8) | (bytes[o + 2] << 16) | (bytes[o + 3] << 24)) >>> 0;
   const pulses = [GAP_T];
-  const pausePulse = (ms) => pulses.push(Math.max(ms, 1) * T_PER_MS);
+  const pausePulse = (ms) => {
+    reserve(pulses, 1);
+    pulses.push(Math.max(ms, 1) * T_PER_MS);
+  };
   let i = 10; // past the "ZXTape!" header
   let loopStart = -1;
   let loopLeft = 0;
@@ -76,7 +108,9 @@ function tzxToPulses(bytes) {
       case 0x10: { // standard-speed data (ROM timings via blockToPulses)
         const pause = u16(i);
         const len = u16(i + 2);
-        for (const p of blockToPulses(bytes.subarray(i + 4, i + 4 + len))) pulses.push(p);
+        const block = blockToPulses(bytes.subarray(i + 4, i + 4 + len));
+        reserve(pulses, block.length);
+        for (const p of block) pulses.push(p);
         i += 4 + len;
         pausePulse(pause);
         break;
@@ -85,6 +119,7 @@ function tzxToPulses(bytes) {
         const pilot = u16(i), sync1 = u16(i + 2), sync2 = u16(i + 4);
         const zero = u16(i + 6), one = u16(i + 8), pilotPulses = u16(i + 10);
         const usedBits = u8(i + 12), pause = u16(i + 13), len = u24(i + 15);
+        reserve(pulses, pilotPulses + 2);
         for (let p = 0; p < pilotPulses; p += 1) pulses.push(pilot);
         pulses.push(sync1, sync2);
         pushBits(pulses, bytes.subarray(i + 18, i + 18 + len), zero, one, usedBits);
@@ -94,12 +129,14 @@ function tzxToPulses(bytes) {
       }
       case 0x12: { // pure tone
         const len = u16(i), count = u16(i + 2);
+        reserve(pulses, count);
         for (let p = 0; p < count; p += 1) pulses.push(len);
         i += 4;
         break;
       }
       case 0x13: { // pulse sequence
         const count = u8(i);
+        reserve(pulses, count);
         for (let p = 0; p < count; p += 1) pulses.push(u16(i + 1 + 2 * p));
         i += 1 + 2 * count;
         break;
@@ -121,15 +158,20 @@ function tzxToPulses(bytes) {
         for (let b = 0; b < bits; b += 1) {
           const bit = (data[b >> 3] >> (7 - (b & 7))) & 1;
           if (bit === prev) run += 1;
-          else { if (run) pulses.push(run * tps); prev = bit; run = 1; }
+          else {
+            if (run) { reserve(pulses, 1); pulses.push(run * tps); }
+            prev = bit;
+            run = 1;
+          }
         }
-        if (run) pulses.push(run * tps);
+        if (run) { reserve(pulses, 1); pulses.push(run * tps); }
         pausePulse(pause);
         break;
       }
       case 0x20: { // pause; 0 = "stop the tape" (modelled as a long gap)
         const pause = u16(i);
         i += 2;
+        reserve(pulses, 1);
         pulses.push(pause > 0 ? pause * T_PER_MS : GAP_T);
         break;
       }
@@ -182,7 +224,7 @@ const DISPLAY_START_T = 64 * LINE_T_STATES;
 // between the two clocks never turns into clicks.
 const RING_SIZE = 1 << 14;
 
-// Beeper amplitude: beeperSamples maps level 0/1 to -AMP/+AMP. Ring priming uses
+// Beeper amplitude: renderBeeperSpan maps level 0/1 to -AMP/+AMP. Ring priming uses
 // the same values so starting, resetting, or re-enabling audio never steps the
 // output level (a step is an audible click).
 const AMP = 0.18;
@@ -259,8 +301,13 @@ function romBootMemory() {
 
 class Spectrum {
   constructor() {
-    /** Currently-held canonical matrix keys (also settable programmatically). */
-    this.pressed = new Set();
+    /**
+     * Currently-held canonical matrix keys (also settable programmatically: add,
+     * delete, clear). It latches quick taps (KBD-LATCH-001, see keyboard.mjs
+     * PressedKeys): a key added and removed between two frames is still seen by one
+     * keyboard scan.
+     */
+    this.pressed = new PressedKeys();
     this.border = 7;
     this.earLevel = 0;
     this.frames = 0;
@@ -271,7 +318,7 @@ class Spectrum {
     // 69888, and because a frame runs a few T-states past 69888 (the last
     // instruction overshoots), clock wraps *inside* the frame, so an edge logged
     // after the wrap gets a smaller value than one before it. That non-monotonic
-    // log breaks the ascending-time assumption in borderRowsFromLog / beeperSamples
+    // log breaks the ascending-time assumption in borderRowsFromLog / renderBeeperSpan
     // (it scrambles the waveform), and since the wrap point drifts ~6 T-states per
     // frame, more and more edges land past it as time goes on — the sound decays
     // the longer it plays. tStatesTotal never wraps, so the offset is always clean.
@@ -287,14 +334,19 @@ class Spectrum {
     // The audible level is therefore a weighted SUM, not an XOR: a very common game
     // beeper routine toggles both bits together (OUT 0x18 / OUT 0x00), which an XOR
     // model cancels to constant silence. Changes are logged (frameTState, level 0..1)
-    // like the border and resampled each frame (see _pumpAudio).
+    // like the border and resampled each frame (see _pumpAudio) onto one continuous
+    // sample grid whose state (level + the partly filled sample) carries across frames.
     this._beeperLog = [];
     this._audioLevel = 0;
+    this._beeperStream = createBeeperStream(0);
     // Currently-held host keys: event.code -> event.key. The full matrix is
     // recomputed from this on every key event (see keyboard.resolveMatrix), which
     // keeps symbol chords and the two shift keys consistent regardless of the
     // order modifiers are pressed or released.
     this._held = new Map();
+    // Host Shift keys that produced a symbol character during their current hold:
+    // their CAPS stays suppressed until they are released (see keyboard.resolveMatrix).
+    this._stickyShift = new Set();
     // Web Audio is created lazily on the first user gesture (browser autoplay
     // policy); until then these stay null and the beeper is silent. Samples flow
     // through a ring buffer drained at the audio hardware rate: inside an
@@ -331,7 +383,9 @@ class Spectrum {
         // never clashes with the even-port ULA keyboard read).
         if (kempstonDecodes(port)) return kempstonByte(this._joy);
         if ((port & 1) === 0) {
-          const keys = keyboardMatrixByte(this.pressed, (port >> 8) & 0xff);
+          // The machine's frame counter tells a new keyboard scan from another read of
+          // the same one (the quick-tap latch spans exactly one scan).
+          const keys = this.pressed.keyBits((port >> 8) & 0xff, this.machine.frames);
           let earBit = this.earLevel ? 0x40 : 0;
           if (this._tapePlaying && this._tapeDeck) {
             const t = this.machine.tStatesTotal - this._tapeStartT;
@@ -362,10 +416,13 @@ class Spectrum {
         }
       },
     };
+    // The ROM is read-only, as on the real 48K (MACHINE-ROM-READONLY-001): a program
+    // writing below 0x4000 spends the bus cycle and changes nothing.
     this.machine = createMachine({
       memory: romBootMemory(),
       registers: { ...RESET_REGISTERS },
       io,
+      romWriteProtect: true,
     });
   }
 
@@ -393,14 +450,16 @@ class Spectrum {
   /** Restart from a clean power-on. */
   reset() {
     this.stop();
-    this.pressed.clear();
+    this.pressed.reset();
     this._held.clear();
+    this._stickyShift.clear();
     this.frames = 0;
     this.border = 7;
     this.earLevel = 0;
     this._audioLevel = 0;
     this._borderLog.length = 0;
     this._beeperLog.length = 0;
+    this._resetBeeperStream();
     this._tapePlaying = false; // the tape stays inserted; playback rewinds
     this._joy = { up: false, down: false, left: false, right: false, fire: false };
     if (this._node) this._primeRing(0); // flush audio, re-prime at the post-reset level
@@ -408,16 +467,21 @@ class Spectrum {
     this.machine.registers = { ...RESET_REGISTERS };
     this.machine.clock = 0;
     this.machine.halted = false;
+    this.machine.eiDelay = 0;
     return this;
   }
 
   /**
    * Insert a `.tap` or `.tzx` image (container auto-detected). Builds its EAR pulse
-   * stream; call `playTape()` to start it, then LOAD "" on the machine.
+   * stream; call `playTape()` to start it, then LOAD "" on the machine. Throws — with
+   * the machine and any inserted tape untouched — when the file is not a playable tape.
    */
   insertTape(bytes, { name = '' } = {}) {
     const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-    const pulses = tapeFileToPulses(arr);
+    return this._insertPulses(tapeFileToPulses(arr), name);
+  }
+
+  _insertPulses(pulses, name) {
     this._tapeDeck = createTapeDeck(pulses, { clock: () => 0 });
     this._tapeTotal = this._tapeDeck.total;
     this._tapePlaying = false;
@@ -473,15 +537,18 @@ class Spectrum {
     this.machine.registers = { ...snap.registers };
     this.machine.clock = 0;
     this.machine.halted = false;
+    this.machine.eiDelay = 0;
     this.border = snap.border;
     this.earLevel = 0;
     this._audioLevel = 0;
     this._borderLog.length = 0;
     this._beeperLog.length = 0;
+    this._resetBeeperStream();
     this._borderRows.fill(snap.border);
     this._tapePlaying = false;
-    this.pressed.clear();
+    this.pressed.reset();
     this._held.clear();
+    this._stickyShift.clear();
     if (this._node) this._primeRing(0);
     return this;
   }
@@ -494,6 +561,10 @@ class Spectrum {
    * when the load is done. Use for `.tap`/`.tzx`.
    */
   async fastLoadTape(bytes, { name = '' } = {}) {
+    // Decode first: a file that is not a playable tape throws here, before the reboot,
+    // leaving the running machine (and any inserted tape) exactly as it was.
+    const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const pulses = tapeFileToPulses(arr);
     const wasRunning = Boolean(this._raf);
     this.stop();
     this.reset();
@@ -513,7 +584,7 @@ class Spectrum {
     step(100);                                       // boot to the © prompt
     tap(['CAPS']);                                   // prime the key debounce
     for (const k of [['J'], ['SYM', 'P'], ['SYM', 'P'], ['ENTER']]) tap(k); // LOAD ""
-    this.insertTape(bytes, { name });
+    this._insertPulses(pulses, name);
     this.playTape();
     // Frame budget from the tape itself: its pulse stream length is known exactly, plus
     // slack for the ROM's between-block processing. (A fixed guard is a trap: 6000 frames
@@ -560,11 +631,25 @@ class Spectrum {
 
   // Rebuild the pressed-key set from all currently-held host keys. Doing this on
   // every event (rather than add/remove per key) keeps symbol chords and the two
-  // shift keys correct no matter what order modifiers go up and down.
+  // shift keys correct no matter what order modifiers go up and down. Only real
+  // changes reach `pressed`, so a key held throughout is not re-latched as a tap.
+  //
+  // A CAPS SHIFT that exists only because a host Shift is held is a modifier side
+  // effect, not a typed key: it is held but never latched (PressedKeys.hold). A quick
+  // `"` typed as Shift+2 therefore reaches the next scan as exactly SYMBOL SHIFT + P —
+  // a latched CAPS beside it would read as EXTENDED mode.
   _recompute() {
-    const next = resolveMatrix(this._held);
-    this.pressed.clear();
-    for (const k of next) this.pressed.add(k);
+    const next = resolveMatrix(this._held, this._stickyShift);
+    const sansShift = resolveMatrix(
+      [...this._held].filter(([code]) => !isShiftCode(code)),
+      this._stickyShift,
+    );
+    for (const k of [...this.pressed]) if (!next.has(k)) this.pressed.delete(k);
+    for (const k of next) {
+      if (this.pressed.has(k)) continue;
+      if (k === 'CAPS' && !sansShift.has('CAPS')) this.pressed.hold(k);
+      else this.pressed.add(k);
+    }
   }
 
   // Does this host key reach the Spectrum's matrix at all? Only claimed keys are
@@ -583,31 +668,38 @@ class Spectrum {
     // A real user gesture — safe to start audio (browser autoplay policy).
     if (this._sound) this._enableAudio();
     this._held.set(event.code, event.key);
+    // A host Shift that helps produce a symbol keeps its CAPS suppressed for the rest
+    // of its hold (see keyboard.resolveMatrix).
+    if (event.key && event.key.length === 1 && charToKeys(event.key)) {
+      for (const code of this._held.keys()) if (isShiftCode(code)) this._stickyShift.add(code);
+    }
     this._recompute();
     event.preventDefault();
   }
 
   _keyUp(event) {
+    if (isShiftCode(event.code)) this._stickyShift.delete(event.code);
     if (!this._held.delete(event.code)) return; // we never claimed its keydown
     this._recompute();
     event.preventDefault();
   }
 
-  // Run exactly one 50 Hz ZX frame: emulate it, collapse this frame's border log
-  // to scanline colours, and push its beeper edges to the audio timeline.
+  // Run exactly one ZX frame: emulate it, collapse this frame's border log to
+  // scanline colours, and push its beeper edges to the audio timeline.
   _advance() {
-    // The border colour / beeper level in force at the top of this frame is
-    // whatever the last frame left behind. runFrame appends any changes (with
-    // T-states) to the logs and updates this.border / this.earLevel along the way.
+    // The border colour in force at the top of this frame is whatever the last frame
+    // left behind (the beeper level is carried by _beeperStream). runFrame appends any
+    // changes (with T-states) to the logs and updates this.border / this.earLevel.
     const borderCarry = this.border;
-    const beeperCarry = this._audioLevel;
     this._borderLog.length = 0;
     this._beeperLog.length = 0;
     this._frameT0 = this.machine.tStatesTotal; // baseline for this frame's edge times
     this.machine.runFrame();
     this.frames += 1;
     borderRowsFromLog(this._borderLog, borderCarry, this._borderRows);
-    this._pumpAudio(beeperCarry);
+    // The frame's real length (a frame ends on the first instruction past the boundary,
+    // and the next one is that much shorter), so the audio grid follows machine time.
+    this._pumpAudio(this.machine.tStatesTotal - this._frameT0);
   }
 
   // Run one frame without touching audio. Used by fastLoadTape's fast-forward, whose
@@ -622,6 +714,17 @@ class Spectrum {
     this.machine.runFrame();
     this.frames += 1;
     borderRowsFromLog(this._borderLog, borderCarry, this._borderRows);
+    this._resetBeeperStream();
+  }
+
+  // Restart the audio sample grid at the speaker level in force now: whenever no audio
+  // is being produced, so the next audible frame starts clean instead of finishing a
+  // sample begun before the gap.
+  _resetBeeperStream() {
+    const stream = this._beeperStream;
+    stream.level = this._audioLevel;
+    stream.partialT = 0;
+    stream.partialArea = 0;
   }
 
   // Blit the current screen + border to the canvas.
@@ -631,16 +734,16 @@ class Spectrum {
     this.ctx.putImageData(this.image, 0, 0);
   }
 
-  // Drive the machine at a true 50 Hz off wall-clock time (rAF fires at the
-  // display rate, usually 60 Hz), catching up whole frames as real time elapses.
-  // This keeps emulation speed — and therefore beeper pitch — correct.
+  // Drive the machine at its true frame rate off wall-clock time — one 48K frame is
+  // 69888 T-states at 3.5 MHz = 19.968 ms (≈ 50.08 Hz), not a rounded 20 ms — while
+  // rAF fires at the display rate (usually 60 Hz), catching up whole frames as real
+  // time elapses. This keeps emulation speed — and therefore beeper pitch — correct.
   _frameStep(now) {
     if (!this._lastTime) this._lastTime = now;
     let dt = now - this._lastTime;
     this._lastTime = now;
     if (dt > 100) dt = 100; // clamp after a stall (e.g. backgrounded tab)
     this._acc += dt;
-    const FRAME_MS = 1000 / 50;
     // A stall drained the ring dry (flagged by onaudioprocess). Top it back up
     // *before* this tick's frames produce audio, sized so the fill lands exactly
     // on target after they run. Padding with the held sample is DC — it only
@@ -657,7 +760,7 @@ class Spectrum {
       ran += 1;
       if (ran >= 6) { this._acc = 0; break; } // don't spiral if we fall behind
     }
-    if (ran > 0) this._present();
+    if (ran > 0 && this.ctx) this._present(); // (no canvas attached: nothing to draw)
     this._raf = requestAnimationFrame((t) => this._frameStep(t));
   }
 
@@ -812,6 +915,7 @@ class Spectrum {
   // every audio start.
   _primeRing(level) {
     const value = AMP * (2 * level - 1);
+    this._beeperStream = createBeeperStream(level); // a fresh grid at the primed level
     if (this._worklet) {
       this._worklet.port.postMessage({ flush: true, level: value });
       const pad = new Float32Array(this._audioTarget).fill(value);
@@ -834,7 +938,7 @@ class Spectrum {
     this._starved = false;
     const ctx = this._audioCtx;
     if (!this._node || !ctx) return;
-    const padTo = this._audioTarget - Math.round(pending * (ctx.sampleRate / 50));
+    const padTo = this._audioTarget - Math.round(pending * samplesPerFrame(ctx.sampleRate));
     const missing = padTo - this._fillNow();
     if (missing > 0) {
       const pad = new Float32Array(missing).fill(AMP * (2 * this._audioLevel - 1));
@@ -844,38 +948,48 @@ class Spectrum {
   }
 
   // Resample this frame's beeper edges into the ring buffer, rate-matched to the
-  // audio clock. The producer here runs on the system clock (rAF), the consumer
-  // (onaudioprocess) on the audio hardware clock; the two are never exactly equal,
-  // so a fixed samples-per-frame would let the ring fill drift to an edge and
-  // glitch over minutes. A deadband controller corrects that — but it must watch
-  // a *smoothed* fill, not the raw one: the consumer drains a whole
+  // audio clock. The samples come off ONE continuous grid (audio.mjs
+  // renderBeeperSpan, BEEPER-PCM-FRACTIONAL-001): a 48K frame spans a fractional
+  // ≈958.46 samples at 48 kHz, and the partly filled sample at the end of a frame
+  // carries into the next, so frames alternate 958/959 samples with no rounding
+  // drift and no seam. The producer here runs on the system clock (rAF), the
+  // consumer (onaudioprocess) on the audio hardware clock; the two are never
+  // exactly equal, so even the exact count would let the ring fill drift to an edge
+  // and glitch over minutes. A deadband controller corrects that — but it must
+  // watch a *smoothed* fill, not the raw one: the consumer drains a whole
   // ScriptProcessor buffer (4096 samples) at a time, so the instantaneous fill
   // sawtooths with drain phase, and reacting to it would resample — i.e.
   // pitch-shift — frames constantly. The ~1 s EMA erases that sawtooth, so the
-  // controller sees only the mean: while the mean sits inside the deadband we
-  // emit exactly the nominal count (no resampling, clean tone), and only genuine
-  // long-run clock drift walks it past the band, where a gentle trim/pad clamped
-  // to ±3 % steers it back.
-  _pumpAudio(carryLevel) {
+  // controller sees only the mean: while the mean sits inside the deadband the grid
+  // runs at exactly the hardware rate (no resampling, clean tone), and only genuine
+  // long-run clock drift walks it past the band, where a gentle trim/pad clamped to
+  // ±3 % stretches or squeezes the grid's sample width to steer it back.
+  _pumpAudio(spanT) {
     const ctx = this._audioCtx;
-    if (!this._node || !ctx || ctx.state !== 'running') return;
-    const nominal = ctx.sampleRate / 50; // audio samples in one 50 Hz ZX frame
-    const maxDev = Math.round(nominal * 0.03);
-    let count = Math.round(nominal);
+    // "Sound: off" must stay off: setSound(false) only flushed the queue once, and
+    // the next frames pushed beeper audio again. (_advance clears the log per frame.)
+    if (!this._sound || !this._node || !ctx || ctx.state !== 'running') {
+      this._resetBeeperStream();
+      return;
+    }
+    const nominal = samplesPerFrame(ctx.sampleRate); // fractional samples per 48K frame
+    const maxDev = nominal * 0.03;
     // The deadband must swallow the whole no-fault fill variation, which is set
     // by the consumer's chunk size: the fill band sits anywhere within ±half a
     // chunk of the target depending on drain phase (and that phase re-randomizes
     // every stall). Any tighter and the controller rides the band edge after a
     // stall, correcting — pitch-bending — forever.
-    const deadband = Math.round(this._chunk / 2 + nominal);
+    const deadband = this._chunk / 2 + nominal;
     const err = this._fillAvg - this._audioTarget;
-    if (err > deadband) count -= Math.round(Math.min((err - deadband) * 0.05, maxDev));
-    else if (err < -deadband) count -= Math.round(Math.max((err + deadband) * 0.05, -maxDev));
-    if (count < 1) count = 1;
-    if (!this._scratch || this._scratch.length < count) {
-      this._scratch = new Float32Array(Math.ceil(nominal) + maxDev + 2);
-    }
-    const samples = beeperSamples(this._beeperLog, carryLevel, count, AMP, this._scratch);
+    let trim = 0; // samples per frame to shed (−) or add (+)
+    if (err > deadband) trim = -Math.min((err - deadband) * 0.05, maxDev);
+    else if (err < -deadband) trim = Math.min((-deadband - err) * 0.05, maxDev);
+    const sampleT = (CPU_HZ / ctx.sampleRate) * (nominal / (nominal + trim));
+    const room = Math.ceil(spanT / sampleT) + 2;
+    if (!this._scratch || this._scratch.length < room) this._scratch = new Float32Array(room + 64);
+    const samples = this._scratch;
+    const count = renderBeeperSpan(this._beeperStream, this._beeperLog, spanT, sampleT, AMP, samples);
+    if (count === 0) return;
     if (this._tapePlaying && this._tapeDeck) this._mixTapeAudio(samples, count);
     this._push(samples, count);
     // Measure the fill *after* pushing: post-push it sits at the top of the
@@ -883,7 +997,7 @@ class Spectrum {
     // top-ups place it — so the EMA compares like with like and idles on the
     // target, instead of reading a trough that sits ~a frame below it and
     // pinning the controller against the deadband edge.
-    this._fillAvg += (this._fillNow() - this._fillAvg) * 0.02; // ~1 s time constant at 50 Hz
+    this._fillAvg += (this._fillNow() - this._fillAvg) * 0.02; // ~1 s time constant at 50.08 Hz
   }
 
   // The loading sound: add this frame's tape EAR level, sampled at the audio rate, on

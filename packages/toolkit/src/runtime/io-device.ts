@@ -50,8 +50,17 @@ export class HostIo implements MachineIo {
   beeperEdges = 0;
   /** Total writes decoded to the ULA (even/`A0=0`) port — the `portFEWrites` stat. */
   portFEWrites = 0;
-  /** Chronological beeper edge stream (seam consumed by the future WAV/PCM slice, beeper-output.md). */
+  /** Chronological beeper edge stream (consumed by `run --wav`, beeper-output.md). */
   readonly edges: BeeperEdge[] = [];
+
+  /**
+   * @param border the border colour already in effect (a resumed session's or a
+   *   snapshot's). Without it a continued run reports, and saves, the power-on 7
+   *   until the program happens to write port 0xFE again.
+   */
+  constructor(border?: number) {
+    if (border !== undefined) this.border = border & 0x07;
+  }
 
   /** Drive the scheduled input for the current frame (keyboard matrix + Kempston byte). */
   setInput(pressedKeys: ReadonlySet<string>, joyByte: number): void {

@@ -8,8 +8,6 @@
  */
 import { roundtripByteCase } from "./run-roundtrip.mjs";
 
-const ORG = 0x8000;
-
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);

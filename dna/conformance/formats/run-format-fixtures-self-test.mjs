@@ -2,13 +2,14 @@
 // Self-test for run-format-fixtures.mjs: proves the runner actually validates
 // @zx-vibes/machine's .z80 read/write (the committed fixtures pass) AND detects
 // mismatches (a wrong decoded register, and a round-trip whose asserted RAM cell
-// is wrong, both fail with a named diff). Keeps FMT-Z80-V3-001 honest: a runner
-// that always passed would be worthless.
+// is wrong, both fail with a named diff), and that a reader which never rejects a
+// malformed file fails FMT-Z80-VALIDATE-001. Keeps the format fixtures honest: a
+// runner that always passed would be worthless.
 import { spawnSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const thisDir = path.dirname(fileURLToPath(import.meta.url));
 const runnerPath = path.join(thisDir, "run-format-fixtures.mjs");
@@ -28,9 +29,13 @@ async function withTemp(cb) {
 // 2) A wrong decode expectation is caught: a v3 blob whose A register is 0xAA must
 //    not decode to 0x00. We reuse the runner's own decode path with a tiny blob.
 await withTemp(async (dir) => {
-  // Minimal v3 header (PC=0 -> v2/3, extra len 54), A=0xAA, no memory blocks.
+  // Minimal v3 header (PC=0 -> v2/3, extra len 54), A=0xAA, then the three 48K pages
+  // (8, 4, 5) as all-zero RLE runs — a complete snapshot, so readZ80 accepts it.
   const hdr = new Array(30 + 2 + 54).fill(0);
   hdr[0] = 0xaa; hdr[30] = 54; hdr[32] = 0x00; hdr[33] = 0xc0;
+  const zeros = [];
+  for (let left = 0x4000; left > 0; left -= 255) zeros.push(0xed, 0xed, Math.min(255, left), 0x00);
+  for (const page of [8, 4, 5]) hdr.push(zeros.length & 0xff, zeros.length >> 8, page, ...zeros);
   const hex = hdr.map((b) => b.toString(16).padStart(2, "0")).join("");
   await writeFile(path.join(dir, "wrong-decode.json"), JSON.stringify({
     id: "WRONG-DECODE", tier: "contract", provenance: "contract",
@@ -81,4 +86,24 @@ await withTemp(async (dir) => {
   assert(output.includes("memory"), `failure should name the memory diff, got: ${output}`);
 });
 
-console.log("Format runner self-test passed: committed fixtures green; wrong decode register and lost-RAM round-trip rejected.");
+// 5) A lenient reader — the real one with every rejection swallowed, i.e. the pre-2026-11
+//    behaviour of decoding any input into a partly zeroed machine — fails the committed
+//    FMT-Z80-VALIDATE-001 cases, naming the file it should have rejected.
+await withTemp(async (dir) => {
+  const realModule = path.join(thisDir, "..", "..", "..", "packages", "machine", "src", "index.mjs");
+  const stub = path.join(dir, "lenient.mjs");
+  await writeFile(stub, [
+    `import * as real from ${JSON.stringify(pathToFileURL(realModule).href)};`,
+    "export const writeZ80 = real.writeZ80;",
+    "export function readZ80(bytes) {",
+    "  try { return real.readZ80(bytes); }",
+    "  catch { return { registers: {}, memory: new Uint8Array(0x10000), border: 0, version: 3 }; }",
+    "}",
+  ].join("\n"), "utf8");
+  const result = run(["--module", stub, "--quiet"]);
+  const output = `${result.stdout}\n${result.stderr}`;
+  assert(result.status !== 0, "a reader that never rejects must fail the validation fixture");
+  assert(output.includes("missing-page-4: readZ80 decoded the file"), `failure should name the accepted bad file, got: ${output}`);
+});
+
+console.log("Format runner self-test passed: committed fixtures green; wrong decode register, lost-RAM round-trip and a never-rejecting reader all caught.");
