@@ -2021,10 +2021,18 @@ things in `run` and `regs`, and screenshots without the border.
    `0.8.0+6575db7.dirty`; `pnpm --filter @zx-vibes/toolkit pack` without the variable,
    the prepack `pnpm publish` runs, produced a tarball with no stamp, and the CLI
    printed `0.8.0` again.
+8. **Client gates in `setup`'s next steps** (FEEDBACK 14). Codex reads a project's
+   `.codex/config.toml` only for a trusted project (`projects.<path>.trust_level`;
+   OpenAI's Codex configuration docs, read 2026-11-13). That rule explains the
+   codex-cli 0.167.2 probe that listed no `zx-vibes`. `setup --agent codex` without
+   `--write-global` now says so in `next` (trust the project, or rerun with
+   `--write-global`), and `--agent claude` says Claude Code asks to approve a project MCP
+   server. The README's setup section says both. The wording is incidental
+   (CLI-PROD-FREE-001), so no claim changed. Pinned by `tests/setup.test.ts`.
 
-**Consequences.** Every FEEDBACK item but one has a fix or a documented answer; the
-exception (Codex not loading an untrusted project's `.codex/config.toml`) is the
-client's rule and is reported, not changed. Output that scripts may read changed in two
+**Consequences.** Every FEEDBACK item has a fix or a documented answer. Codex not
+loading an untrusted project's `.codex/config.toml` is the client's rule, and `setup`
+and the README now state it (item 8). Output that scripts may read changed in two
 places: an explicit `run --frames` now stops a longer key plan (D3), and `boot` reports
 `pc` instead of `org` for sessions, snapshots and fresh boots. The MCP surface keeps its
 seven tools and input schemas, and the assertion vocabulary stays at 17. Verified on

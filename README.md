@@ -156,6 +156,13 @@ does the wiring in one shot:
   `~/.codex/config.toml` with `--write-global`), `AGENTS.md`, and the same
   knowledge pack under `.codex/zx-vibes/`.
 
+Both clients gate a project-level server. Claude Code asks you to approve a
+server from a project `.mcp.json` before it starts it. Codex reads a
+project's `.codex/config.toml` only when the project is trusted
+(`trust_level = "trusted"` for it under `[projects]` in your Codex config);
+until then `codex mcp list` doesn't show `zx-vibes`. Trust the project in
+Codex, or register the server with `--write-global`.
+
 Setup is idempotent and non-destructive: existing files are reported as
 `skipped` unless you pass `--force`. The `zx-vibes` server is merged into an
 existing `.mcp.json` or Codex `config.toml`, leaving the other servers and
