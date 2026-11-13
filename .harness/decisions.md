@@ -2078,8 +2078,9 @@ title's border stripes and SAVE's bands.
 ### ADR-0032 — Whole-project audit (2026-11-13): silent successes, debugger paths, release tooling
 
 **Status:** proposed, not ratified. Recorded by the audit session on 2026-11-13 and pushed
-for review on the branch `audit/whole-project-2026-11-13`; the owner ratifies it by merging
-that branch, as with ADR-0029 and ADR-0030. Until then it overrides no earlier ADR.
+for review on the branch `audit/whole-project-2026-11-13` (PR #45); the owner ratifies it
+by merging that pull request, as with ADR-0029 and ADR-0030. Until then it overrides no
+earlier ADR.
 
 **Context.** The owner asked for a whole-project audit: find what is broken, inconsistent,
 inefficient or no longer needed, fix what is certain and list the rest. The full gate was
@@ -2183,10 +2184,10 @@ exit 1 (D1, D2). `exit.pc` changes for frame-budget exits, and the OCR `rows` fo
 glyphs. No MCP tool, input schema, assertion type or exit-code meaning changed.
 
 **Verification.** On Windows 11 (Node 24.22.1, npm 12.0.2) on 2026-11-13, on the tree of
-this change before it was committed. Linux, macOS, Node 20 and 22 and CI were not run.
-`pnpm run verify` passed, step by step and as one command (toolkit 573 tests in 50 files, asm 79 with
-the 19 sjasmplus parity tests skipped as before, coverage 180/181 with the open row
-unchanged, provenance 1051 items, no lint warning), and so did `pnpm run pack`. The six
+this change before it was committed. `pnpm run verify` passed, step by step and as one
+command (toolkit 573 tests in 50 files, asm 79 with the 19 sjasmplus parity tests skipped
+as before, coverage 180/181 with the open row unchanged, provenance 1051 items, no lint
+warning), and so did `pnpm run pack`. The six
 tarballs then went into a new consumer project with one `npm install`. There every command
 of the README's CLI tour and debugging block, of the recipe's and the skill's debugging
 loops and of the playbook's table ran as printed, and these fixes gave their new result:
@@ -2195,7 +2196,9 @@ errors of D1; D2 with and without `--force`; D3 through the CLI and through MCP;
 `ld sp,0`; the stage of a bad key or key plan; the build warnings; `GET //`; D8; and the MCP
 sequence `zx_build`, `zx_state reset`, `zx_run`. The `type` schedule, `xref`,
 `scan --imm`, the Codex TOML cases, the reverse-engineering gate and the `↑` and `£`
-glyphs were checked by their package tests only.
+glyphs were checked by their package tests only. CI on PR #45 then ran the same gate for
+commit 6424c93 on Ubuntu, macOS and Windows with Node 20 and 22, and every job passed, as
+did the changeset check and CodeQL.
 
 **Debt (C5).** Except D8, these behaviours are pinned by package tests only, like ADR-0029's:
 a regeneration from `dna/` alone would lose them. The largest findings that were not fixed
