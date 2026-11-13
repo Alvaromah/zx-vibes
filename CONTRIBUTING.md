@@ -40,6 +40,13 @@ with this file and [`dna/README.md`](dna/README.md).
   - `dna/domain/*.md`, the render specs and `palette.yaml` in `dna/product/`,
     `dna/product/skills/` or `dna/product/recipes/` →
     `pnpm run gen:knowledge-pack`
+- **The agent playbooks are hand-written, and `check:drift` keeps them in line.**
+  The `PLAYBOOK` that `zxs new` and `zxs setup` write
+  (`packages/toolkit/src/scaffold/scaffold.ts`) and `starters/*/AGENT_PLAYBOOK.md`
+  are different texts. `pnpm run check:playbooks` fails when the two starter
+  playbooks differ, or when any playbook drops one of the shared facts listed in
+  `scripts/check-playbooks-drift.mjs`. When you add a fact to both, add it to the
+  list.
 - Keep starter projects compatible with the embedded assembler unless the
   change is explicitly about optional `sjasmplus` support.
 - Match the surrounding code style; `pnpm run lint` must pass with no warnings.

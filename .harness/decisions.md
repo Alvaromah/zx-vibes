@@ -1863,7 +1863,9 @@ custom info, two data blocks) loaded end to end in `zxs preview` and in `full.ht
 **Status:** applied on the branch `feedback/clean-room-consumer` at the owner's request
 ("run all the steps in the recommended order"), taking the default answer to each of the
 five questions below; ratified on merge. Each work package lands as its own commit and
-adds its item here.
+adds its item here. Items 1–6 are PR #43. Items 7–9 (D6, D7) came after it, when the
+owner asked to continue with the recommendations; they are on
+`feedback/clean-room-followups`, in a PR stacked on #43.
 
 **Context.** A clean-room consumer test of `main` at 325992e cloned the repo, ran
 `pnpm install`, `build` and `pack`, installed the six tarballs into a fresh project with
@@ -1899,6 +1901,11 @@ things in `run` and `regs`, and screenshots without the border.
   published packages print the bare version. *Rejected:* stamping every build made in
   a git checkout, since the release workflow builds and publishes from one; a tracked
   generated file, which CI's `git diff --exit-code` after the build would flag.
+- **D7. The two playbooks get a drift check, not one merged text** (also a follow-up the
+  plan had left out of scope). The `PLAYBOOK` and the starter playbook serve different
+  projects (a starter has a `package.json`, a `Makefile` and `lib/`), and merging them
+  would rewrite the agent instructions. *Rejected:* a generated shared block, which
+  would first need the shared paragraphs reworded to fit both texts.
 
 **Items.**
 1. **Docs and doc claims** (FEEDBACK 1, 2, 6, 7, 11 doc half, 12). New contract claim
@@ -2029,6 +2036,16 @@ things in `run` and `regs`, and screenshots without the border.
    `--write-global`), and `--agent claude` says Claude Code asks to approve a project MCP
    server. The README's setup section says both. The wording is incidental
    (CLI-PROD-FREE-001), so no claim changed. Pinned by `tests/setup.test.ts`.
+9. **Playbook drift check** (D7). `scripts/check-playbooks-drift.mjs`, run by
+   `check:drift` as `check:playbooks`, reads the `PLAYBOOK` literal out of
+   `scaffold.ts` and both starter playbooks. It fails when the two starter copies
+   differ, or when any playbook no longer states one of 16 shared facts: the loop rule,
+   the run-report fields, how the frame budget is measured and what to do about set-up,
+   the entry state, the `--state` loop and `zxs verify`. The facts are matched
+   on normalised text, so wrapping and markdown may differ. Its self-test
+   (`check-playbooks-drift-self-test.mjs`, 6 cases) shows it passes the committed texts
+   and fails on a dropped fact or a starter that differs. CONTRIBUTING says how to add
+   a fact. Tooling only: no published package changed.
 
 **Consequences.** Every FEEDBACK item has a fix or a documented answer. Codex not
 loading an untrusted project's `.codex/config.toml` is the client's rule, and `setup`
