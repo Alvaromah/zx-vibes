@@ -1,17 +1,28 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const writeMode = process.argv.includes('--write');
 
-const packageManifests = [
-  ['zx-vibes', 'packages/zx-vibes/package.json'],
-  ['@zx-vibes/toolkit', 'packages/toolkit/package.json'],
-  ['@zx-vibes/asm', 'packages/asm/package.json'],
-];
+// Every published package under packages/ is a version surface: its row in the
+// root README table and the "Current package version" line of its own README.
+// The list is read from disk, so a package cannot be left out of the check (a
+// hand-kept list once covered three of the six, and a release would have left
+// the cpu, ula and machine versions behind in both places).
+const packageManifests = readdirSync(join(root, 'packages'), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => `packages/${entry.name}/package.json`)
+  .filter((file) => existsSync(join(root, file)))
+  .map((file) => [readJson(file), file])
+  .filter(([manifest]) => manifest.private !== true)
+  .map(([manifest, file]) => [manifest.name, file])
+  .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 
 const packages = new Map(packageManifests.map(([name, file]) => [name, readJson(file)]));
+if (!packages.has('zx-vibes')) {
+  throw new Error('packages/zx-vibes/package.json (the umbrella package) is missing');
+}
 const zxVibesVersion = packages.get('zx-vibes').version;
 const expectedStarterRange = `^${zxVibesVersion}`;
 const problems = [];

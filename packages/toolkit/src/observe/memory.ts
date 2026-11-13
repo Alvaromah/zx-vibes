@@ -14,6 +14,7 @@ import type { Machine } from '@zx-vibes/machine';
 import { userError } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
 import { parseAddress, parseNumber, parseRange } from '../util/address.js';
+import { RAM_BASE } from '../runtime/session.js';
 import { openSession } from '../state/persist.js';
 import { hashBytes } from './screen.js';
 import {
@@ -188,8 +189,19 @@ export function parseHexBytes(input: string): Uint8Array {
   return out;
 }
 
-/** Bounds-check a write of `length` bytes at `addr` (a poke past 0xFFFF is a USER_ERROR). */
+/**
+ * Bounds-check a write of `length` bytes at `addr`: a poke past 0xFFFF is a USER_ERROR,
+ * and so is one that starts in the ROM. A session keeps only RAM (the ROM is restored
+ * from the clean image on every load), so a ROM poke used to report `persisted: true`
+ * and then vanish — refuse it instead (ERR-PROD-NOSILENT-001).
+ */
 function requireFits(addr: number, length: number): void {
+  if (addr < RAM_BASE) {
+    throw userError(
+      `Cannot write ROM: 0x${addr.toString(16).toUpperCase().padStart(4, '0')} is below 0x4000, and a session keeps only RAM (0x4000-0xFFFF)`,
+      'mem',
+    );
+  }
   if (addr + length > 0x10000) {
     throw userError(
       `Write does not fit memory: ${length} byte(s) at 0x${addr

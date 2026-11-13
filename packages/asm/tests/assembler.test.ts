@@ -897,6 +897,32 @@ describe('assemble', () => {
     expect(badCount.stderr).toContain("Invalid instruction count: '0'");
   });
 
+  it('CLI disasm stops at the end of the file instead of inventing bytes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'spectral-asm-cli-'));
+    const lines = (res: { stdout: string }): string[] => res.stdout.split('\n').filter((l) => l !== '');
+
+    // LD A,1 / RET: two instructions, not thirty-two (the rest used to be `NOP`s).
+    const whole = join(dir, 'whole.bin');
+    writeFileSync(whole, Buffer.from([0x3e, 0x01, 0xc9]));
+    const listed = asmCli('disasm', whole, '--org', '0x8000');
+    expect(listed.status, listed.stderr).toBe(0);
+    expect(lines(listed).map((l) => l.replace(/\s+/g, ' '))).toEqual(['0x8000 3e 01 LD A,0x01', '0x8002 c9 RET']);
+
+    // A file that ends inside CALL nn: the lone opcode byte is data, not `CALL 0x0000`.
+    const cut = join(dir, 'cut.bin');
+    writeFileSync(cut, Buffer.from([0x3e, 0x01, 0xcd]));
+    const truncated = asmCli('disasm', cut, '--org', '0x8000', '--count', '8');
+    expect(lines(truncated).map((l) => l.replace(/\s+/g, ' '))).toEqual(['0x8000 3e 01 LD A,0x01', '0x8002 cd DB 0xCD']);
+
+    // --count still limits a longer file, and an empty file lists nothing.
+    expect(lines(asmCli('disasm', whole, '--count', '1'))).toHaveLength(1);
+    const empty = join(dir, 'empty.bin');
+    writeFileSync(empty, Buffer.alloc(0));
+    const nothing = asmCli('disasm', empty);
+    expect(nothing.status).toBe(0);
+    expect(nothing.stdout).toBe('');
+  });
+
   it('CLI version and doctor output follow package metadata', () => {
     const metadata = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as { version: string };
 

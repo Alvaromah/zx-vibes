@@ -73,8 +73,13 @@ CLI (`cli.md`) as MCP tools over stdio. Mined once from the oracle
 
 ## Examples
 
+`zx_build` assembles and loads symbols; it does not load the program into the live
+machine, which starts as a bare ROM boot. `zx_state reset` loads the built program
+(MCP-PROD-TOOL-STATE-001), so a plain `zx_run` after it runs that program:
+
 ```jsonc
 // tool: zx_build  { "entry": "src/main.asm" }
+// tool: zx_state  { "action": "reset" }      -> { ok, op:"reset", pc }   (the program is now loaded)
 // tool: zx_run    { "frames": 300 }          -> { ok, status, audio:{beeperEdges}, ... }
 // tool: zx_debug  { "action": "break-add", "spec": "main_loop" }
 // tool: zx_screen { "scale": 2 }             -> [image/png, text(JSON grid)]

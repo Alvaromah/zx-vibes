@@ -108,23 +108,26 @@ zxs verify
 zxs preview game.z80        # also .tap/.tzx/.bin, or --blank for a clean 48K
 ```
 
-Debugging and inspection:
+Debugging and inspection. Every command boots the program fresh unless it gets
+`--state`, so to look at the machine a run left behind, give each one the session:
 
 ```bash
-zxs regs
-zxs mem read 0x8000 --len 64
-zxs disasm PC --count 12
-zxs break add 0x8000
-zxs watch add --write 0x5800-0x5aff
-zxs step 10
-zxs trace --frames 5 --profile
-zxs state save session.zxstate
-zxs state export --z80 session.z80
-zxs screen --png screen.png
-zxs gfx attrs --out attrs.png
+zxs state reset                                             # this build, fresh, into the session
+zxs break add draw_player                                   # a label, file.asm:line or an address
+zxs watch add --write 0x5800-0x5aff                         # kept for `run --until-watch`
+zxs run --state .zxs/state.zxstate --until-break            # stops at the breakpoint, saves the session
+zxs regs --state .zxs/state.zxstate
+zxs mem read 0x8000 --len 64 --state .zxs/state.zxstate
+zxs disasm PC --count 12 --state .zxs/state.zxstate
+zxs step 10 --state .zxs/state.zxstate
+zxs screen --png screen.png --state .zxs/state.zxstate
+zxs gfx attrs --out attrs.png --state .zxs/state.zxstate
+zxs state save backup.zxstate --state .zxs/state.zxstate    # a copy of the session
+zxs state export --z80 session.z80 --state .zxs/state.zxstate
+zxs trace --frames 5 --profile                              # a fresh run: T-states by routine
 ```
 
-`zxs preview` serves the browser player with a visible build hash; `--watch`
+`zxs preview` serves the project in the browser player; `--watch`
 rebuilds and reloads on source changes. If the requested port is busy it
 picks the next free one and prints the URL (`--strict-port` to fail
 instead). `--detach`, `--list`, and `--stop` manage a background server;

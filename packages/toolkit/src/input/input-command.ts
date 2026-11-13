@@ -17,7 +17,7 @@ import type { CommandContext } from '../registry.js';
 import { runProgram, type RunExit } from '../runtime/run.js';
 import type { HangVerdict } from '../runtime/hang.js';
 import { RAM_BASE } from '../runtime/session.js';
-import { DEFAULT_HOLD, normalizeKeyToken, type KeyEvent } from '../runtime/schedule.js';
+import { DEFAULT_HOLD, isMatrixKey, normalizeKeyToken, type KeyEvent } from '../runtime/schedule.js';
 import { type RegisterSnapshot } from '../observe/registers.js';
 import { type ScreenSummary } from '../observe/screen.js';
 import { openSession } from '../state/persist.js';
@@ -103,6 +103,7 @@ function runKeySchedule(
   // the watchdog's RAM floor, not wherever the session paused (which may be in ROM).
   const result = runProgram(session.machine, session.resumed ? RAM_BASE : session.org, {
     keys: keysSpec,
+    inputStage: stage,
     frames,
     border: session.border,
   });
@@ -123,6 +124,12 @@ function runKeySchedule(
 /** `key <key> [--hold n]` — press one key (CLI-PROD-INPUT-001). */
 export function runKey(key: string, hold: number, options: InputCommonOptions): InputResult {
   const normalized = normalizeKeyToken(key);
+  if (!isMatrixKey(normalized)) {
+    throw userError(
+      `Unknown key "${key}" (use A–Z, 0–9, ENTER, SPACE, CAPS_SHIFT or SYMBOL_SHIFT)`,
+      'key',
+    );
+  }
   const events: KeyEvent[] = [{ frame: 0, key: normalized, hold }];
   const { hang, ...run } = runKeySchedule('key', events, options);
   return inputEnvelope({ stage: 'key', key: normalized, hold, ...run }, hang);
@@ -181,22 +188,28 @@ export function charToKey(ch: string): string {
  * Frames a key stays released before the SAME key is pressed again. Held back to back,
  * a repeated key is one continuous press, so the ROM keyboard routine reads "11" as "1";
  * measured against the real ROM, a 3-frame gap still drops it and 6 frames is reliable.
+ * The gap counts from the key's own release, whatever was typed in between: in "101" the
+ * second `1` came 3 frames after the first was released and was dropped ("10").
  */
 export const REPEAT_RELEASE_FRAMES = 6;
 
 /**
  * The key schedule that types `text`: each character held `framesPerKey` frames, keys
- * back to back, with a {@link REPEAT_RELEASE_FRAMES} release before a repeated key.
- * Shared by `zxs type` and the MCP `zx_keys` `typeText` so both type the same way.
+ * back to back, except that a key is not pressed again until {@link REPEAT_RELEASE_FRAMES}
+ * frames after its own last release. Shared by `zxs type` and the MCP `zx_keys`
+ * `typeText` so both type the same way.
  */
 export function typeSchedule(text: string, framesPerKey: number): KeyEvent[] {
   const events: KeyEvent[] = [];
+  // Per key: the first frame it may be pressed again.
+  const pressableFrom = new Map<string, number>();
   let frame = 0;
   for (let i = 0; i < text.length; i += 1) {
     const key = charToKey(text[i]!);
-    if (i > 0 && key === events[i - 1]!.key) frame += REPEAT_RELEASE_FRAMES;
+    frame = Math.max(frame, pressableFrom.get(key) ?? 0);
     events.push({ frame, key, hold: framesPerKey });
     frame += framesPerKey;
+    pressableFrom.set(key, frame + REPEAT_RELEASE_FRAMES);
   }
   return events;
 }
@@ -216,14 +229,14 @@ function parsePositiveInt(input: string, stage: string, flag: string): number {
   return n;
 }
 
-function commonOptions(options: Record<string, unknown>): InputCommonOptions {
+function commonOptions(options: Record<string, unknown>, stage: 'key' | 'type'): InputCommonOptions {
   return {
     cwd: process.cwd(),
     state: options.state as string | undefined,
     bin: options.bin as string | undefined,
     org: options.org as string | undefined,
     noSave: options.save === false || options.readOnly === true,
-    frames: options.frames !== undefined ? parsePositiveInt(options.frames as string, 'key', '--frames') : undefined,
+    frames: options.frames !== undefined ? parsePositiveInt(options.frames as string, stage, '--frames') : undefined,
   };
 }
 
@@ -233,7 +246,7 @@ export function keyCommand(context: CommandContext): InputResult {
   if (key === undefined) throw userError('key requires a <key> (A–Z, 0–9, ENTER, SPACE, ...)', 'key');
   const options = context.options as Record<string, unknown>;
   const hold = options.hold !== undefined ? parsePositiveInt(options.hold as string, 'key', '--hold') : DEFAULT_HOLD;
-  return runKey(key, hold, commonOptions(options));
+  return runKey(key, hold, commonOptions(options, 'key'));
 }
 
 /** Map the CLI context onto the `type` service. */
@@ -245,7 +258,7 @@ export function typeCommand(context: CommandContext): InputResult {
     options.framesPerKey !== undefined
       ? parsePositiveInt(options.framesPerKey as string, 'type', '--frames-per-key')
       : DEFAULT_FRAMES_PER_KEY;
-  return runType(text, framesPerKey, commonOptions(options));
+  return runType(text, framesPerKey, commonOptions(options, 'type'));
 }
 
 /** Declare the `key` command's argument / flags (CLI-PROD-INPUT-001). */

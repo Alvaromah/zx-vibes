@@ -11,6 +11,11 @@
         "data": "013412"
       },
       {
+        "path": "cut.bin",
+        "encoding": "hex",
+        "data": "3E01CD"
+      },
+      {
         "path": "bad-label.asm",
         "data": "    ORG 0x8000\n    DISPLAY \"probe\"\n    call draw_sprtie\ndraw_sprite:\n    ret\n"
       }
@@ -39,6 +44,10 @@
       {
         "name": "disasm-wrap",
         "args": ["disasm", "<tmp>/wrap.bin", "--org", "0xFFFF", "--count", "1"]
+      },
+      {
+        "name": "disasm-stops-at-end-of-file",
+        "args": ["disasm", "<tmp>/cut.bin", "--org", "0x8000"]
       },
       {
         "name": "bad-origin",
@@ -113,6 +122,12 @@
         "name": "disasm-wrap",
         "status": 0,
         "stdoutContains": ["LD BC,0x1234"],
+        "stderrExact": ""
+      },
+      {
+        "name": "disasm-stops-at-end-of-file",
+        "status": 0,
+        "stdoutExact": "0x8000  3e 01        LD A,0x01\n0x8002  cd           DB 0xCD\n",
         "stderrExact": ""
       },
       {

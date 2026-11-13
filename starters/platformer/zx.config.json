@@ -2,7 +2,7 @@
   "name": "__NAME__",
   "entry": "src/main.asm",
   "org": "0x8000",
-  "assembler": "spectral",
+  "assembler": "builtin",
   "outDir": "build",
   "template": "platformer",
   "toolkit": "zx-vibes"

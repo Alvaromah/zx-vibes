@@ -131,20 +131,33 @@ export interface McpRegistration {
   agent: 'claude' | 'codex';
   /** The launch read from the file, or undefined when the entry could not be read. */
   launch: McpLaunch | undefined;
+  /** True when the whole file could not be parsed (so it is unknown what it registers). */
+  unparseable?: boolean;
 }
+
+/** `text` without a leading UTF-8 byte order mark (editors on Windows write one). */
+export function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
+/** A launch could not be read because the file itself does not parse. */
+const UNPARSEABLE = Symbol('unparseable');
 
 /** The `[mcp_servers.zx-vibes]` header, bare or quoted. */
 export const CODEX_TABLE_HEADER = new RegExp(
   `^\\s*\\[\\s*mcp_servers\\.(?:${MCP_SERVER_NAME}|"${MCP_SERVER_NAME}")\\s*\\]\\s*(?:#.*)?$`,
 );
 
-/** The `zx-vibes` launch in a `.mcp.json` text, null when absent, undefined when unreadable. */
-function claudeLaunch(text: string): McpLaunch | null | undefined {
+/**
+ * The `zx-vibes` launch in a `.mcp.json` text, null when absent, undefined when the
+ * entry is unreadable, {@link UNPARSEABLE} when the file is not JSON at all.
+ */
+function claudeLaunch(text: string): McpLaunch | null | undefined | typeof UNPARSEABLE {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(stripBom(text));
   } catch {
-    return undefined;
+    return UNPARSEABLE;
   }
   const servers = (parsed as { mcpServers?: unknown } | null)?.mcpServers;
   if (servers === null || typeof servers !== 'object') return null;
@@ -162,22 +175,39 @@ function claudeLaunch(text: string): McpLaunch | null | undefined {
  * absent; undefined when it is there but not in that form.
  */
 function codexLaunch(text: string): McpLaunch | null | undefined {
-  const lines = text.split(/\r?\n/);
+  const lines = stripBom(text).split(/\r?\n/);
   const start = lines.findIndex((line) => CODEX_TABLE_HEADER.test(line));
   if (start < 0) return null;
   let command: string | undefined;
   let args: string[] | undefined;
   for (let i = start + 1; i < lines.length && !/^\s*\[/.test(lines[i]!); i += 1) {
     const line = lines[i]!;
-    const commandMatch = /^\s*command\s*=\s*"((?:[^"\\]|\\.)*)"\s*(?:#.*)?$/.exec(line);
-    if (commandMatch) command = JSON.parse(`"${commandMatch[1]}"`) as string;
+    const commandMatch = /^\s*command\s*=\s*(?:"((?:[^"\\]|\\.)*)"|'([^']*)')\s*(?:#.*)?$/.exec(line);
+    if (commandMatch) command = decodeTomlString(commandMatch[1], commandMatch[2]);
     const argsMatch = /^\s*args\s*=\s*\[(.*)\]\s*(?:#.*)?$/.exec(line);
     if (argsMatch) {
-      args = [...argsMatch[1]!.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`) as string);
+      const values = [...argsMatch[1]!.matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'/g)].map((m) => decodeTomlString(m[1], m[2]));
+      args = values.every((value): value is string => value !== undefined) ? values : undefined;
     }
   }
   if (command === undefined) return undefined;
   return args === undefined ? { command } : { command, args };
+}
+
+/**
+ * A TOML string value: a literal `'…'` string as written, or a basic `"…"` string with
+ * its escapes decoded. Undefined when a basic string's escapes are not valid — a Windows
+ * path written `"C:\tools\zxs-mcp.cmd"` is one, and used to throw out of `doctor` and
+ * `setup` as "Bad escaped character in JSON".
+ */
+function decodeTomlString(basic: string | undefined, literal: string | undefined): string | undefined {
+  if (literal !== undefined) return literal;
+  if (basic === undefined) return undefined;
+  try {
+    return JSON.parse(`"${basic}"`) as string;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The project's `zx-vibes` registrations (`.mcp.json`, `.codex/config.toml`), in that order. */
@@ -199,6 +229,10 @@ export function readMcpRegistrations(projectDir: string): McpRegistration[] {
     }
     const launch = source.read(text);
     if (launch === null) continue;
+    if (launch === UNPARSEABLE) {
+      found.push({ file: source.file, agent: source.agent, launch: undefined, unparseable: true });
+      continue;
+    }
     found.push({ file: source.file, agent: source.agent, launch });
   }
   return found;
@@ -250,6 +284,13 @@ export function checkMcpRegistration(
   const good: string[] = [];
   for (const registration of registrations) {
     const fix = `run \`zxs setup --agent ${registration.agent} --force\``;
+    if (registration.unparseable === true) {
+      // Not `--force`: setup never overwrites a file it cannot read (it may hold other servers).
+      problems.push(
+        `${registration.file} is not valid JSON, so its ${MCP_SERVER_NAME} registration cannot be read; fix the file by hand, then run \`zxs setup --agent ${registration.agent}\``,
+      );
+      continue;
+    }
     if (registration.launch === undefined) {
       problems.push(`${registration.file}: the ${MCP_SERVER_NAME} entry has no readable command; ${fix}`);
       continue;

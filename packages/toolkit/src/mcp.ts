@@ -367,7 +367,12 @@ function toolRun(session: McpSession, args: ToolArgs): CallToolResult {
     boot = { source: 'state' };
     resume = args.pc === undefined;
   }
-  if (args.pc !== undefined) session.machine.registers.pc = parseAddress(args.pc as string, 'run') & 0xffff;
+  if (args.pc !== undefined) {
+    session.machine.registers.pc = parseAddress(args.pc as string, 'run') & 0xffff;
+    // Start executing at `pc`: a session left waiting on a HALT would otherwise stay
+    // halted there, and the next interrupt would return to `pc + 1` (as `regs set pc`).
+    session.machine.halted = false;
+  }
   // The live session has no known origin (RAM_BASE is only the hang floor): report the
   // PC this run starts at, as the CLI does for `run --state` (CLI-PROD-CONV-BOOT-001).
   if (boot.source === 'state') boot = { ...boot, pc: session.machine.registers.pc & 0xffff };
@@ -660,8 +665,11 @@ export function buildCatalog(session: McpSession): McpTool[] {
     {
       name: 'zx_build',
       title: 'Build (assemble) a ZX program',
+      // The description is what an agent plans from. `zx_build` followed by a bare
+      // `zx_run` is the obvious sequence, and it ran the ROM: the build is not loaded.
       description:
-        'Assemble a .asm entry into an output directory and load its SLD symbols for the debugger tools.',
+        'Assemble a .asm entry into an output directory and load its SLD symbols for the debugger tools. ' +
+        'This does not load the program into the live machine: call zx_state with action "reset" to load it, then zx_run.',
       inputSchema: {
         entry: z.string().optional(),
         outDir: z.string().optional(),
@@ -673,7 +681,9 @@ export function buildCatalog(session: McpSession): McpTool[] {
       name: 'zx_run',
       title: 'Run the live machine',
       description:
-        'Run the emulator for a frame budget. Loading a program boots clean first; otherwise execution continues from the current live state.',
+        'Run the emulator for a frame budget. Loading a program (bin, z80 or tap) boots clean first; otherwise execution ' +
+        'continues from the current live state. The live machine starts as a bare 48K ROM boot (fresh:true returns to ' +
+        'it), so to run the program zx_build assembled, call zx_state with action "reset" first.',
       inputSchema: {
         bin: z.string().optional(),
         org: z.string().optional(),

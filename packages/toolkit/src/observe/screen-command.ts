@@ -225,6 +225,14 @@ function normalizeScale(scale: number | undefined): number {
   return scale;
 }
 
+/** `--max-diff <n>`: a count of pixels. Anything else used to become NaN and fail every diff. */
+function parseMaxDiff(input: string): number {
+  if (!/^\d+$/.test(input.trim())) {
+    throw userError(`Invalid --max-diff: "${input}" (expected a non-negative integer)`, 'screen');
+  }
+  return Number(input);
+}
+
 /** Map the CLI context onto the `screen` service. */
 export function screenCommand(context: CommandContext): ScreenEnvelope {
   const options = context.options as Record<string, unknown>;
@@ -238,7 +246,7 @@ export function screenCommand(context: CommandContext): ScreenEnvelope {
     png: options.png as string | undefined,
     base64: options.base64 as boolean | undefined,
     diff: options.diff as string | undefined,
-    maxDiff: options.maxDiff !== undefined ? Number(options.maxDiff) : undefined,
+    maxDiff: options.maxDiff !== undefined ? parseMaxDiff(String(options.maxDiff)) : undefined,
     updateBaseline: options.updateBaseline as boolean | undefined,
     scale: options.scale !== undefined ? Number(options.scale) : undefined,
   });

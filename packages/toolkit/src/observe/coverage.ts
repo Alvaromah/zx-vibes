@@ -90,6 +90,7 @@ export function runCoverage(options: CoverageOptions = {}): CoverageEnvelope {
     frames,
     keys: options.keys,
     joy: options.joy,
+    inputStage: 'coverage',
     border,
     resume: resumed,
     onStep: (m: Machine) => reached.add(m.registers.pc & 0xffff),

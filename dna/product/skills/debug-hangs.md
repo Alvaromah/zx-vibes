@@ -12,7 +12,7 @@ Three are **probable** (decided from per-frame statistics at budget exhaustion):
 
 | Kind | Meaning | First move |
 | --- | --- | --- |
-| `tight-loop` | machine state frozen for ~a second | `zxs disasm PC --count 12` — which loop is it? |
+| `tight-loop` | machine state frozen for ~a second | `zxs disasm PC --count 12 --state .zxs/state.zxstate` — which loop is it? |
 | `sp-corrupt` | SP points into ROM/low memory | find the unbalanced push/pop or the `LD SP` you forgot |
 | `pc-in-rom` | execution left the program into ROM and never came back | a wild `JP`/`RET` into ROM — check the stack; or a ROM routine that needs the system variables (such as `rst 0x10` printing), which are zero because `zxs` starts your program without the ROM's start-up |
 
@@ -27,15 +27,26 @@ model).
 
 ## The debugging loop
 
+Run on a session: `run --state` saves the machine it ended with, hung or not, and the
+inspection commands then read that machine. Without `--state` each of them boots the
+program fresh and shows its entry state, not the machine that hung.
+
 ```
-zxs run --json                        # the verdict + PC + likelyCause
-zxs regs                              # where is SP? IM? IFF1?
-zxs disasm PC --count 12              # what code is the PC actually in?
-zxs break add <label|file.asm:line>   # then: zxs run --until-break
-zxs step 10                           # single-step from a stop
-zxs trace --frames 5 --profile        # actual T-states by routine + HALT idle
-zxs coverage                          # which routines were ever reached?
+zxs state reset                                        # this build, fresh, into the session
+zxs run --state .zxs/state.zxstate --json              # the verdict + PC + likelyCause
+zxs regs --state .zxs/state.zxstate                    # where is SP? IM? IFF1?
+zxs disasm PC --count 12 --state .zxs/state.zxstate    # what code is the PC actually in?
+zxs break add <label|file.asm:line>                    # then: zxs state reset, and
+zxs run --state .zxs/state.zxstate --until-break       #   run to the breakpoint
+zxs step 10 --state .zxs/state.zxstate                 # single-step from that stop
+zxs trace --frames 5 --profile                         # a fresh run: T-states by routine + HALT idle
+zxs coverage                                           # a fresh run: which routines were ever reached?
 ```
+
+Two limits of this loop. `zxs step` does not take the frame interrupt: from a `HALT` it
+shows the same `HALT` again, so break on the instruction after it. And a breakpoint on
+the address the session is already at (the entry, right after `state reset`) is passed,
+not hit, until execution comes back to it.
 
 `haltSynced: true` means the once-per-frame interrupt resumed `HALT` for a
 majority of the run. It does **not** prove every deadline was met: inspect

@@ -237,7 +237,15 @@ function sendEvent(client: ServerResponse, event: string, data: unknown): void {
 }
 
 function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): void {
-  const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+  let url: URL;
+  try {
+    url = new URL(req.url ?? '/', 'http://127.0.0.1');
+  } catch {
+    // A request target the URL parser rejects (`//` reads as an empty host) is a bad
+    // request. Left to throw out of the listener, it took the whole server down, and
+    // any page could send it (`<img src="http://127.0.0.1:5173//">`).
+    return sendJson(res, 400, { ok: false, error: 'bad request' });
+  }
   const path = url.pathname;
   const method = req.method ?? 'GET';
   const program = ctx.holder.program;
@@ -385,9 +393,17 @@ function tryListen(server: Server, host: string, port: number): Promise<void> {
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     let data = '';
+    let tooLarge = false;
     req.on('data', (chunk) => {
+      // Past the cap the rest of the body is drained, not kept: rejecting alone left
+      // the listener appending every further chunk.
+      if (tooLarge) return;
       data += chunk;
-      if (data.length > 1_000_000) reject(new Error('body too large'));
+      if (data.length > 1_000_000) {
+        tooLarge = true;
+        data = '';
+        reject(new Error('body too large'));
+      }
     });
     req.on('end', () => resolve(data));
     req.on('error', reject);

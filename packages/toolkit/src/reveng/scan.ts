@@ -4,8 +4,9 @@
 //   - `--bytes <hex>` : a raw BYTE-PATTERN (opcode) search — hex tokens with `??` wildcards,
 //     e.g. `"CD ?? 90"` (any `CALL 0x90xx`). Reports every start address the pattern hits.
 //   - `--imm <from-to>` : an IMMEDIATE-RANGE search — disassemble linearly and report each
-//     instruction whose 16-bit or 8-bit immediate operand falls in `[from,to]`, e.g. finding
-//     every reference to the screen file 0x4000-0x5AFF loaded as a constant.
+//     instruction whose 16-bit operand (an absolute address or a 16-bit constant) falls in
+//     `[from,to]`, e.g. finding every reference to the screen file 0x4000-0x5AFF loaded as
+//     a constant. 8-bit immediates (`LD A,n`) are not matched.
 //
 // Both restrict to an optional `--range from-to` (default the whole 48K RAM 0x4000-0xFFFF).
 // The scan is pure static analysis — it reads the image, never runs it.
@@ -108,18 +109,17 @@ export interface ScanImmOptions extends RevengSourceOptions {
   range?: string | undefined;
 }
 
-/** The immediate operand value(s) an instruction encodes, for the `--imm` range test. */
-function immediatesOf(bytes: number[], text: string): number[] {
-  // Relative branches (JR/DJNZ) resolve to an absolute target that the disassembler already
-  // rendered into `text` as 0x…; the raw displacement byte is not a useful "immediate", so
-  // rely on the 16-bit trailing-word / 8-bit-literal encodings below plus the text scan.
+/**
+ * The 16-bit operand value(s) an instruction carries, for the `--imm` range test: every
+ * `0x####` the decoder printed. That covers each `nn` form (JP/CALL nn, LD rr,nn,
+ * LD (nn),… and their ED/indexed variants) and the absolute target of a relative branch.
+ *
+ * The last two bytes of the instruction are NOT read as a word: for the indexed forms
+ * they are a displacement and an opcode (`DD 7E 05`, `LD A,(IX+0x05)`, was reported as
+ * the immediate 0x057E; `FD CB 00 46` as 0x4600).
+ */
+function immediatesOf(text: string): number[] {
   const values: number[] = [];
-  // A trailing 16-bit little-endian word (JP/CALL nn, LD (nn), LD rr,nn, …). We inspect the
-  // last two bytes of any >= 3-byte instruction — the operand position for absolute forms.
-  if (bytes.length >= 3) {
-    values.push((bytes[bytes.length - 2]! | (bytes[bytes.length - 1]! << 8)) & 0xffff);
-  }
-  // Any absolute 16-bit address the decoder printed (covers indexed / ED forms uniformly).
   for (const m of text.matchAll(/0x([0-9A-F]{4})\b/g)) values.push(parseInt(m[1]!, 16));
   return values;
 }
@@ -134,7 +134,7 @@ export function runScanImm(options: ScanImmOptions): ScanEnvelope {
   let addr = range.from;
   while (addr <= range.to) {
     const line = disassembleOne(read, addr);
-    for (const value of immediatesOf(line.bytes, line.text)) {
+    for (const value of immediatesOf(line.text)) {
       if (value >= imm.from && value <= imm.to) {
         matches.push({ addr, text: line.text, value });
         break;
@@ -194,7 +194,7 @@ export function configureScanCommand(command: Command): void {
     .option('--bin <file>', 'a raw memory dump to scan')
     .option('--org <addr>', 'load origin for --bin (default 0x8000)')
     .option('--bytes <hex>', 'byte/opcode pattern, e.g. "CD ?? 90" (?? = any byte)')
-    .option('--imm <from-to>', 'immediate-range search: match instructions with an operand in the range')
+    .option('--imm <from-to>', 'immediate-range search: match instructions with a 16-bit operand in the range')
     .option('--range <from-to>', 'restrict the scan to a region (default the 48K RAM)')
     .option('--json', 'emit a single machine-readable JSON envelope');
 }

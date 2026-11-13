@@ -84,10 +84,18 @@ export interface StateCommonOptions {
 /**
  * Source the machine a `save`/`export` should snapshot: resume the `--state` session
  * if present, else a fresh/`--bin`/built-entry boot (the same precedence as observe).
+ *
+ * `requireSession` is for `export`: a `--state` that names no session is an error there,
+ * as it is for every observe verb (CLI-PROD-STATE-OBSERVE-001) — a typo must not export
+ * a fresh boot under the name of the session the caller meant. `save` keeps creating.
  */
-function sourceSessionState(options: StateCommonOptions): SessionState {
+function sourceSessionState(
+  options: StateCommonOptions,
+  { requireSession = false }: { requireSession?: boolean } = {},
+): SessionState {
   const cwd = resolve(options.cwd ?? process.cwd());
-  if (options.state !== undefined && sessionExists(options.state, cwd)) {
+  if (options.state !== undefined && (requireSession || sessionExists(options.state, cwd))) {
+    // `loadSession` reports a missing file as "No session at …" (USER_ERROR).
     return loadSession(options.state, cwd);
   }
   const { machine } = resolveObserveMachine({
@@ -164,7 +172,7 @@ export function runStateReset(
 /** `state export --z80 <file>` — export the session machine as a `.z80` v1 snapshot. */
 export function runStateExportZ80(file: string, options: StateCommonOptions = {}): StateEnvelope {
   const cwd = resolve(options.cwd ?? process.cwd());
-  const state = sourceSessionState(options);
+  const state = sourceSessionState(options, { requireSession: true });
   const bytes = exportZ80Bytes(state.machine, state.border);
   const out = resolve(cwd, file);
   mkdirSync(dirname(out), { recursive: true });
@@ -181,7 +189,7 @@ export function runStateExportZ80(file: string, options: StateCommonOptions = {}
  */
 export function runStateExportTap(file: string, options: StateCommonOptions = {}): StateEnvelope {
   const cwd = resolve(options.cwd ?? process.cwd());
-  const state = sourceSessionState(options);
+  const state = sourceSessionState(options, { requireSession: true });
   const ram = state.machine.memory.slice(0x4000, 0x10000);
   const bytes = tapImageBytes({ bytes: ram, loadAddress: 0x4000, name: tapeNameFromFile(file) });
   writeExport(cwd, file, bytes);
@@ -195,7 +203,7 @@ export function runStateExportTap(file: string, options: StateCommonOptions = {}
  */
 export function runStateExportScr(file: string, options: StateCommonOptions = {}): StateEnvelope {
   const cwd = resolve(options.cwd ?? process.cwd());
-  const state = sourceSessionState(options);
+  const state = sourceSessionState(options, { requireSession: true });
   const bytes = scrImageBytes(state.machine);
   writeExport(cwd, file, bytes);
   return { ok: true, stage: 'state', op: 'export', file, format: 'scr', bytes: bytes.length };

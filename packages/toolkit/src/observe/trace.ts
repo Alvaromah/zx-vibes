@@ -172,6 +172,7 @@ export function runTrace(options: TraceOptions = {}): TraceEnvelope {
     // The plan extends the traced run to its end, as on `coverage` (CLI-PROD-TRACE-002).
     keys: options.keys,
     joy: options.joy,
+    inputStage: 'trace',
     detectHangs: false,
     border,
     resume: resumed,

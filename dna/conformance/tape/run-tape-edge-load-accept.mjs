@@ -90,7 +90,9 @@ async function main() {
   const result = asm.assemble(PROGRAM.join("\n"));
   if (!result.ok) {
     console.error("acceptance: program failed to assemble:");
-    for (const d of result.diagnostics ?? []) console.error(`  ${d.severity ?? "error"}: ${d.message}`);
+    // The assembler result carries `errors` (there is no `diagnostics` field, which this
+    // loop used to read: a failed assembly printed the heading and nothing under it).
+    for (const d of result.errors ?? []) console.error(`  ${d.severity ?? "error"}: ${d.message}`);
     return 1;
   }
   const code = result.bytes;
