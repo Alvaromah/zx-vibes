@@ -2074,3 +2074,135 @@ steps, `--list-assertions` prints 17 rows, a failing `frameBudget` names frames 
 `trace --keys` runs, `rst 0x10` gets the start-up hint, `run --state` and
 `regs --state` report the same `boot`, and `run --screenshot --border` shows the
 title's border stripes and SAVE's bands.
+
+### ADR-0032 — Whole-project audit (2026-11-13): silent successes, debugger paths, release tooling
+
+**Status:** proposed, not ratified. Recorded by the audit session on 2026-11-13 and pushed
+for review on the branch `audit/whole-project-2026-11-13` (PR #45); the owner ratifies it
+by merging that pull request, as with ADR-0029 and ADR-0030. Until then it overrides no
+earlier ADR.
+
+**Context.** The owner asked for a whole-project audit: find what is broken, inconsistent,
+inefficient or no longer needed, fix what is certain and list the rest. The full gate was
+green first, on a clean clone of a864502 (Windows 11, Node 24.22.1). Nine read-only
+reviewers then read the project by area (assembler, emulator cores, toolkit runtime,
+observe/state, CLI/MCP/setup, preview and demos, two for conformance, and docs, scripts
+and CI). The lead ran what reading cannot show: the script graph, every generator and
+`types:gen` against the committed files, a simulated `changeset version`, the six tarballs
+installed in a consumer project, a headless-browser pass over the demos and `zxs preview`,
+and about 250 awkward CLI, MCP and HTTP inputs.
+
+A behaviour was changed only when the fault was reproduced on the unmodified build, the fix
+changed no existing DNA claim or fixture expectation and narrowed no public export (what
+was added is optional, such as the `stage` parameter of the exported schedule parsers), and
+a regression test fails without it. Documentation and tooling fixes were checked by running what they
+describe. The rest, about 200 findings, is in the review list the session left beside this
+log (`review-2026-11-13.md`, local and not tracked, like the rest of `.harness/`).
+
+**Decisions** (the choices that go beyond a plain bug fix).
+- **D1. Fail loud where a command reported a success that did not happen.** `mem write` and
+  `mem load` below `0x4000` (a session keeps only RAM, so the write was reported
+  `persisted: true` and then lost), `state export --state <missing>` (it exported a fresh
+  boot), a test spec with a mistyped field (`"frames": "ten"` ran zero frames and passed),
+  assertion numbers that were masked to fit, `regs set constructor`, `im 3`,
+  `screen --max-diff ten`, and an unknown top-level flag with no command are now USER_ERRORs
+  (exit 1). *Left as they are:* `state save`, which still creates a session from a fresh
+  boot (pinned by `state.test.ts`); `frames: 0` in a spec; unknown top-level spec keys; ROM
+  writes through a spec's `setup`.
+- **D2. `setup` never overwrites an `.mcp.json` it cannot parse, not even with `--force`.**
+  The file may hold the user's other servers; `--force` used to replace it with one that
+  registered `zx-vibes` alone, and `setup` and `doctor` both recommended that. It is a
+  USER_ERROR raised before anything is installed. A leading byte order mark is not a parse
+  error. *Rejected:* keeping `--force` as the way out, which contradicts the README's
+  "`--force` refreshes only the `zx-vibes` entry".
+- **D3. A PC written from outside clears `halted`, at the toolkit boundary.** `regs set pc`
+  and MCP `zx_run { pc }` on a machine waiting on a `HALT` resumed at `pc + 1`. *Not done:*
+  the same fix inside `@zx-vibes/machine` (a caller that assigns `registers.pc` still
+  carries the stale flag), which needs a machine fixture.
+- **D4. `sp-corrupt` exempts exactly `SP = 0x0000`,** the empty stack of `ld sp,0`. The other
+  hang-watchdog findings change heuristics and are left for the owner: a multi-instruction
+  `di` loop is not flagged, and neither is an `ei` busy loop run for 256 to 305 frames, which
+  includes the default 300 and contradicts ERR-PROD-HANG-IDLE-001.
+- **D5. The screen read-back reports the Spectrum character set** for codes `0x5E`, `0x60`
+  and `0x7F` (`↑`, `£`, `©`) instead of `^`, a backtick and a raw DEL. `screenIncludes`
+  matches either spelling, so an existing spec keeps passing.
+- **D6. `scan --imm` matches 16-bit operands only.** The trailing-two-bytes heuristic reported
+  an index displacement and the next opcode as an immediate. The 8-bit matching a comment
+  promised was never implemented; the comment and the help now say 16-bit.
+- **D7. Release tooling.** `check:versions`/`sync:versions` read the package list from
+  `packages/` instead of a hand-kept list of three: the next release would have left the
+  cpu, ula and machine versions stale in the root README table and in their own READMEs.
+  Changesets ignore the private `@zx-vibes-examples/tooling`: it was to receive a version
+  bump and a CHANGELOG, and an examples-only pull request failed the changeset guard.
+- **D8. `zxasm disasm` stops at the end of the file.** The only DNA change of the pass: claim
+  ASM-PROD-CLI-DISASM-003 and one case in `conformance/assembler/cli-surface.json`.
+
+**Items.**
+1. *Toolkit, inspection and session* (`tests/halted-pc`, `silent-success`, `ocr-charset`):
+   D1's `mem`, `state export`, `regs set` and `screen --max-diff` cases, D3, D5, and the
+   reverse-engineering gate, which stayed mounted after `ZXS_REVENG` was turned off in the
+   same process.
+2. *Toolkit, run and input* (`tests/run-report-fixes`): `exit.pc` of a frame-budget exit is
+   the PC the run ended at (it was the entry PC); D4; `type` releases a key before pressing
+   it again whatever was typed in between (`type 101` reached the ROM as `10`; ADR-0029's
+   release covered only a key repeated at once); a malformed
+   `--keys`/`--joy` plan, a bad `--frames` and an unknown key are reported under `trace`,
+   `coverage`, `key` or `type`, not `run`.
+3. *Toolkit, preview* (`tests/preview-bad-request`): `GET //` ended the server process, since
+   the URL parser threw inside the request listener; it is a 400. A control request past the
+   1 MB cap is no longer buffered.
+4. *Toolkit, specs, CLI surface, reveng* (`tests/spec-and-surface-fixes`): D1's spec and
+   assertion cases and the unknown top-level flag; human-mode `build` prints the assembler
+   warnings; `xref` finds `RST n`; D6.
+5. *Toolkit, setup and doctor* (`tests/setup-config-safety`): D2; a Codex `config.toml` whose
+   basic string has invalid escapes (a Windows path) is an unreadable command instead of a
+   thrown "Bad escaped character in JSON"; literal `'…'` strings are read; a commented-out
+   line that mentions the server is not a registration.
+6. *MCP* (wording only, Incidental under MCP-PROD-FREE-001): the `zx_build` and `zx_run`
+   descriptions and the example in `mcp-tools.md` say that the build is not loaded into the
+   live machine. `zx_build` then `zx_run` ran the ROM boot; the working sequence is
+   `zx_build`, `zx_state reset`, `zx_run`.
+7. *Assembler* (D8; `packages/asm/tests`, the fixture case).
+8. *Docs.* The debugging sequences in the README, `docs/recipes.md`, the `debug-hangs` skill
+   and the starter playbooks pass `--state`: without it `regs`, `disasm` and `step` showed a
+   fresh boot. Each rewritten sequence was run as printed on the packed build, a hang
+   included, and running them corrected two examples. A breakpoint on the entry address is
+   passed, not hit, by a session that is already there (ADR-0029's continue semantics). And
+   `step` cannot leave a `HALT`, because it never takes the frame interrupt, and a `HALT` is
+   where the scaffolded main loop starts. The examples now break on `draw_player`, the recipe
+   and the skill state both limits, and the second is in the review list as a design
+   question. The starter playbooks no longer point at seven files that do not exist and name
+   the installed knowledge pack instead. The starters' `zx.config.json` uses `builtin`, as `zxs new`
+   writes. The README no longer claims a "visible build hash" in the preview. The changeset
+   `deps-security-bumps` no longer lists workspace-only pins as a toolkit change.
+9. *Repository* (D7); the `form-data` override, for a package that is not in the lockfile, is
+   gone; `globals.jest` is gone from the ESLint config; an offline tape harness read a
+   `diagnostics` field the assembler does not return.
+
+**Consequences.** Commands that used to exit 0 over a failed or meaningless operation now
+exit 1 (D1, D2). `exit.pc` changes for frame-budget exits, and the OCR `rows` for three
+glyphs. No MCP tool, input schema, assertion type or exit-code meaning changed.
+
+**Verification.** On Windows 11 (Node 24.22.1, npm 12.0.2) on 2026-11-13, on the tree of
+this change before it was committed. `pnpm run verify` passed, step by step and as one
+command (toolkit 573 tests in 50 files, asm 79 with the 19 sjasmplus parity tests skipped
+as before, coverage 180/181 with the open row unchanged, provenance 1051 items, no lint
+warning), and so did `pnpm run pack`. The six
+tarballs then went into a new consumer project with one `npm install`. There every command
+of the README's CLI tour and debugging block, of the recipe's and the skill's debugging
+loops and of the playbook's table ran as printed, and these fixes gave their new result:
+the `mem`, `state export`, `regs set`, `screen --max-diff`, unknown-flag and test-spec
+errors of D1; D2 with and without `--force`; D3 through the CLI and through MCP; `exit.pc`;
+`ld sp,0`; the stage of a bad key or key plan; the build warnings; `GET //`; D8; and the MCP
+sequence `zx_build`, `zx_state reset`, `zx_run`. The `type` schedule, `xref`,
+`scan --imm`, the Codex TOML cases, the reverse-engineering gate and the `↑` and `£`
+glyphs were checked by their package tests only. CI on PR #45 then ran the same gate for
+commit 6424c93 on Ubuntu, macOS and Windows with Node 20 and 22, and every job passed, as
+did the changeset check and CodeQL.
+
+**Debt (C5).** Except D8, these behaviours are pinned by package tests only, like ADR-0029's:
+a regeneration from `dna/` alone would lose them. The largest findings that were not fixed
+are assembler misassemblies in the family ADR-0030 item 8 turned into diagnostics (symbols
+masked to 16 bits, `ei : ret` dropping the `ei`, an unclosed parenthesis, `bit 0,ixh`), three
+tape and snapshot core bugs found by running the cores, and conformance checks that can pass
+without running anything. They are in the review list with their reproductions.

@@ -254,6 +254,9 @@ export function definiteHang(
 export function probableHang(machine: Machine, org: number, stats: HangStats): HangVerdict | undefined {
   const pc = (machine.registers.pc as number) & 0xffff;
   const sp = (machine.registers.sp as number) & 0xffff;
+  // SP inside the ROM / low memory. SP = 0x0000 is not that: it is the empty stack of
+  // the common `ld sp,0` set-up, whose first push lands at 0xFFFF/0xFFFE.
+  const spInLowMemory = sp < RAM_BASE && sp !== 0;
 
   // The program reset the machine and never ran again. Once the ROM's RAM test has
   // wiped it, the 48K sits idle in BASIC (which on its own is not a hang,
@@ -287,7 +290,7 @@ export function probableHang(machine: Machine, org: number, stats: HangStats): H
 
   // Frozen with no progress: a tight loop, with the stack intact vs corrupt distinguished.
   if (stats.staticFrames >= STATIC_FRAMES) {
-    if (org >= RAM_BASE && sp < RAM_BASE) {
+    if (org >= RAM_BASE && spInLowMemory) {
       return {
         kind: 'sp-corrupt',
         pc,
@@ -310,7 +313,7 @@ export function probableHang(machine: Machine, org: number, stats: HangStats): H
   }
 
   // Stack corrupt but still making some change elsewhere — flag it on its own.
-  if (org >= RAM_BASE && sp < RAM_BASE) {
+  if (org >= RAM_BASE && spInLowMemory) {
     return {
       kind: 'sp-corrupt',
       pc,

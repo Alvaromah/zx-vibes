@@ -176,16 +176,26 @@ carries a `kind` so you know *why*:
 | `sp-corrupt`  | The stack pointer walked into an implausible place. |
 | `rom-error`   | Dropped into a ROM error routine. |
 
-Tools for the diagnosis:
+Tools for the diagnosis. Run on a session, so the machine that hung is saved and the
+other commands can look at it; without `--state` each of them boots the program fresh
+and shows its entry state instead:
 
 ```bash
-zxs run --json                 # status + hang.kind + final registers
-zxs regs                       # PC/SP/flags right now
-zxs disasm PC --count 12       # what is it about to execute?
-zxs trace --frames 5 --profile # actual T-states by routine + HALT idle
-zxs break add 0x8000           # stop at a PC and inspect
-zxs step 10                    # single-step out of a suspicious spot
+zxs state reset                                        # this build, fresh, into the session
+zxs run --state .zxs/state.zxstate --json              # status + hang.kind + final registers
+zxs regs --state .zxs/state.zxstate                    # PC/SP/flags of the hung machine
+zxs disasm PC --count 12 --state .zxs/state.zxstate    # what is it about to execute?
+zxs trace --frames 5 --profile                         # a fresh run: T-states by routine + HALT idle
+zxs break add draw_player                              # a label, file.asm:line or an address; then
+zxs state reset                                        #   start again, and
+zxs run --state .zxs/state.zxstate --until-break       #   run to the breakpoint
+zxs step 10 --state .zxs/state.zxstate                 # single-step from there
 ```
+
+Put the breakpoint where stepping can go on. `zxs step` does not take the frame
+interrupt, so from a `HALT` it shows the same `HALT` again: break on the instruction
+after it. A breakpoint on the address the session is already at (the entry, right after
+`state reset`) is passed, not hit, until execution comes back to it.
 
 A `haltSynced: true` run means the loop reached `HALT` for most frame
 interrupts. Require `frameBudget.overrunFrames: 0` as the deadline proof;

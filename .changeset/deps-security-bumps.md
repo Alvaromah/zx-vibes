@@ -3,4 +3,4 @@
 "zx-vibes": patch
 ---
 
-Security: the toolkit now depends on `@modelcontextprotocol/sdk` ^1.32.0 and `zod` ^4.6.6 (the MCP tool schemas use only the zod subset shared by v3 and v4). Transitive pins move to patched releases (fast-uri, brace-expansion, js-yaml, vite).
+Security: the toolkit now depends on `@modelcontextprotocol/sdk` ^1.32.0 and `zod` ^4.6.6 (the MCP tool schemas use only the zod subset shared by v3 and v4).

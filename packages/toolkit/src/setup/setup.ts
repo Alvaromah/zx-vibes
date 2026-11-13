@@ -40,6 +40,7 @@ import {
   mcpLaunchFor,
   readMcpRegistrations,
   runningToolkitRoot,
+  stripBom,
   type McpLaunch,
 } from './mcp-launch.js';
 import { PACK_FILES } from './pack-content.js';
@@ -339,6 +340,23 @@ const CODEX_SERVER_KEY = new RegExp(
   'm',
 );
 
+/** One TOML line without its `#` comment (a `#` inside a quoted string is kept). */
+function withoutTomlComment(line: string): string {
+  let quote: string | undefined;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i]!;
+    if (quote !== undefined) {
+      if (ch === '\\' && quote === '"') i += 1;
+      else if (ch === quote) quote = undefined;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === '#') {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
 /**
  * Register the `zx-vibes` server in a Codex `config.toml` without rewriting the file:
  * the rest of it is the user's (a global `~/.codex/config.toml` holds the model, profiles
@@ -358,8 +376,10 @@ function mergeCodexToml(abs: string, snippet: string, force: boolean): 'installe
   if (start === -1) {
     // Already defined another way (`zx-vibes = { … }` inside `[mcp_servers]`, or dotted
     // `mcp_servers.zx-vibes.command = …`): appending our table would duplicate the key
-    // and make the TOML invalid, so leave the file alone.
-    if (CODEX_SERVER_KEY.test(text)) return 'skipped';
+    // and make the TOML invalid, so leave the file alone. Comments do not define anything:
+    // a commented-out `# mcp_servers.zx-vibes.command = …` used to count, and the server
+    // was then never registered (with or without `--force`).
+    if (lines.some((line) => CODEX_SERVER_KEY.test(withoutTomlComment(line)))) return 'skipped';
     const separator = text.length === 0 || text.endsWith('\n') ? '' : eol;
     writeFileSync(abs, `${text}${separator}${eol}${snippet.split('\n').join(eol)}`, 'utf8');
     return 'installed';
@@ -377,8 +397,13 @@ function mergeCodexToml(abs: string, snippet: string, force: boolean): 'installe
 /**
  * Merge the `zx-vibes` MCP server into an `.mcp.json` (Claude Code project config),
  * preserving any other servers. Idempotent: an already-registered server is `skipped`
- * unless `--force`. An existing-but-unparseable file is left untouched (skipped) unless
- * `--force` (never silently clobbered).
+ * unless `--force`, which refreshes only that entry.
+ *
+ * A file that exists but is not a JSON object is never written, not even with `--force`:
+ * it may hold other servers (a trailing comma is enough to make it unparseable), and
+ * `--force` used to replace it with a file that registered `zx-vibes` alone. It is a
+ * USER_ERROR that names the file instead, raised before anything else is installed.
+ * A leading UTF-8 byte order mark is not a parse error.
  */
 function mergeMcpRegistration(abs: string, force: boolean, launch: McpLaunch): 'installed' | 'skipped' {
   const fresh = { mcpServers: { [MCP_SERVER_NAME]: mcpServerEntry(launch) } };
@@ -387,18 +412,21 @@ function mergeMcpRegistration(abs: string, force: boolean, launch: McpLaunch): '
     return 'installed';
   }
   let parsed: Record<string, unknown> | null = null;
+  let reason = 'its top level is not a JSON object';
   try {
-    const raw = JSON.parse(readFileSync(abs, 'utf8')) as unknown;
+    const raw = JSON.parse(stripBom(readFileSync(abs, 'utf8'))) as unknown;
     if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
       parsed = raw as Record<string, unknown>;
     }
-  } catch {
-    parsed = null;
+  } catch (error) {
+    reason = error instanceof Error ? error.message : String(error);
   }
   if (parsed === null) {
-    if (!force) return 'skipped';
-    writeFileTo(abs, `${JSON.stringify(fresh, null, 2)}\n`);
-    return 'installed';
+    throw userError(
+      `Cannot register the ${MCP_SERVER_NAME} MCP server: ${abs} is not a JSON object (${reason}). ` +
+        'Fix the file by hand or remove it, then run setup again; setup does not overwrite a file it cannot read.',
+      'setup',
+    );
   }
   const serversValue = parsed.mcpServers;
   const servers =

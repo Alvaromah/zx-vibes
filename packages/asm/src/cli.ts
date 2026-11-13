@@ -2,11 +2,14 @@
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { checkAssemblerRuntime } from './doctor.js';
-import { assembleFile, disassemble, writeAssemblyOutputs, type Diagnostic } from './index.js';
+import { assembleFile, disassembleOne, writeAssemblyOutputs, type Diagnostic, type DisasmLine } from './index.js';
 
 interface PackageMetadata {
   version: string;
 }
+
+/** Instructions `zxasm disasm` lists when `--count` is not given. */
+const DEFAULT_DISASM_COUNT = 32;
 
 function readPackageVersion(): string {
   try {
@@ -75,13 +78,12 @@ program
   .command('disasm')
   .argument('<bin>', 'raw binary file')
   .option('--org <addr>', 'origin address', '0x8000')
-  .option('--count <n>', 'instruction count')
+  .option('--count <n>', `instruction count (at most; default ${DEFAULT_DISASM_COUNT})`)
   .action((bin: string, opts: { org: string; count?: string }) => {
     const bytes = new Uint8Array(readFileSync(bin));
     const org = parseAddress(opts.org, 'origin');
-    const count = opts.count ? parseCount(opts.count, 'instruction count') : 32;
-    const lines = disassemble((addr) => mappedByte(bytes, org, addr), org, count);
-    for (const line of lines) {
+    const count = opts.count ? parseCount(opts.count, 'instruction count') : DEFAULT_DISASM_COUNT;
+    for (const line of disassembleFile(bytes, org, count)) {
       console.log(
         `${hex16(line.addr)}  ${line.bytes.map((b) => b.toString(16).padStart(2, '0')).join(' ').padEnd(12)} ${line.text}`
       );
@@ -153,6 +155,30 @@ function parseCount(text: string, name: string): number {
 function mappedByte(bytes: Uint8Array, org: number, addr: number): number {
   const offset = (addr - org) & 0xffff;
   return offset < bytes.length ? bytes[offset]! : 0;
+}
+
+/**
+ * Disassemble a raw binary loaded at `org`: at most `limit` instructions, and never past
+ * the end of the file. Bytes after the end do not exist — reading them as 0x00 listed a
+ * `NOP` for each (30 of them after a 3-byte file) and completed a cut-off instruction with
+ * operands that were never there (a final `CD` became `CALL 0x0000`). An instruction the
+ * file ends inside of is listed as the data bytes that are present (`DB 0xCD`).
+ */
+function disassembleFile(bytes: Uint8Array, org: number, limit: number): DisasmLine[] {
+  const lines: DisasmLine[] = [];
+  let offset = 0;
+  while (lines.length < limit && offset < bytes.length) {
+    const addr = (org + offset) & 0xffff;
+    let line = disassembleOne((a) => mappedByte(bytes, org, a), addr);
+    if (offset + line.bytes.length > bytes.length) {
+      const rest = Array.from(bytes.subarray(offset));
+      const data = rest.map((b) => `0x${b.toString(16).toUpperCase().padStart(2, '0')}`);
+      line = { addr, bytes: rest, text: `DB ${data.join(',')}` };
+    }
+    lines.push(line);
+    offset += line.bytes.length;
+  }
+  return lines;
 }
 
 function collect(value: string, previous: string[]): string[] {

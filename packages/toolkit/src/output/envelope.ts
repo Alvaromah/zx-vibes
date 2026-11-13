@@ -179,6 +179,11 @@ function errorDetails(envelope: Record<string, unknown>, indent = '  '): string[
       if (typeof d.hint === 'string') lines.push(`${indent}    hint: ${d.hint}`);
     }
   }
+  // A failed build still shows its warnings (`DISPLAY` output included), as `zxasm` does.
+  const warnings = envelope.warnings;
+  if (isDiagnosticList(warnings)) {
+    for (const w of warnings) lines.push(`${indent}warning: ${formatDiagnostic(w)}`);
+  }
   const results = envelope.results;
   if (Array.isArray(results)) {
     for (const r of results as Array<Record<string, unknown>>) {
@@ -248,6 +253,30 @@ const SUMMARIZED_FIELDS = new Set([
  * per line under the summary line (a count, `next=3`, hid the steps themselves).
  */
 const LINE_LIST_FIELDS = new Set(['next', 'deferred']);
+
+/** The parts of an assembler diagnostic the human output prints. */
+interface DiagnosticRecord {
+  message: string;
+  file?: unknown;
+  line?: unknown;
+}
+
+/** A non-empty list of assembler diagnostics (`{ file, line, message, … }`). */
+function isDiagnosticList(value: unknown): value is DiagnosticRecord[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(
+      (item) => item !== null && typeof item === 'object' && typeof (item as { message?: unknown }).message === 'string',
+    )
+  );
+}
+
+/** `file:line: message` (the location only when the diagnostic has one). */
+function formatDiagnostic(d: DiagnosticRecord): string {
+  const where = typeof d.file === 'string' ? `${d.file}:${String(d.line ?? '?')}: ` : '';
+  return `${where}${d.message}`;
+}
 
 /** A non-empty list of strings. */
 function isStringList(value: unknown): value is string[] {
@@ -364,6 +393,13 @@ function formatHuman(envelope: SuccessEnvelope): string {
     // `trace --profile`: the routine table is the answer, so print it as one.
     if (key === 'profile' && isProfile(value)) {
       blocks.push(...formatProfile(value));
+      continue;
+    }
+    // Assembler warnings (a `DISPLAY` line among them) are text the user asked to see:
+    // one per line under the summary, as `zxasm` prints them. A count hid them.
+    if (key === 'warnings' && isDiagnosticList(value)) {
+      parts.push(`${key}=${value.length}`);
+      blocks.push(`${key}:`, ...value.map((d) => `  ${formatDiagnostic(d)}`));
       continue;
     }
     // `next` steps and `deferred` notes are read, not counted: one per line.

@@ -220,6 +220,11 @@ export interface RunParams {
    * first instruction, so a run that stopped there can continue past it.
    */
   resume?: boolean | undefined;
+  /**
+   * The command the `keys`/`joy` plans were given to (`trace`, `coverage`, …), named in
+   * the error envelope of a malformed plan. Defaults to `run`.
+   */
+  inputStage?: string | undefined;
   /** Per-frame checkpoint hook (seam for the test runner's temporal/`at` snapshots, Slice 4). */
   onFrame?: ((frame: number, machine: Machine, io: HostIo) => void) | undefined;
   /** Stop successfully when an internal condition becomes true after a completed frame. */
@@ -291,8 +296,8 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
   const io = params.io ?? new HostIo(params.border);
   machine.io = io;
 
-  const keys = parseKeySchedule(params.keys);
-  const joy = parseJoySchedule(params.joy);
+  const keys = parseKeySchedule(params.keys, params.inputStage);
+  const joy = parseJoySchedule(params.joy, params.inputStage);
   const detectHangs = params.detectHangs !== false;
 
   let budget = params.frames ?? DEFAULT_FRAMES;
@@ -538,6 +543,10 @@ export function runProgram(machine: Machine, org: number, params: RunParams = {}
       });
     }
   }
+
+  // A run that used up its budget ends wherever its last frame left the PC. `exit.pc`
+  // used to keep the PC the run was ENTERED at for this one exit reason.
+  if (!stopped) stopPc = machine.registers.pc & 0xffff;
 
   // A run that reached its budget with no early stop may still be a PROBABLE hang
   // (tight-loop / sp-corrupt / pc-in-rom), decided here (ERR-PROD-HANG-KINDS-001).

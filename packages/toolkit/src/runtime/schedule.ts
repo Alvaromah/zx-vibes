@@ -82,14 +82,23 @@ function parseEvent(entry: string, stage: string): { frame: number; token: strin
   return { frame, token, hold };
 }
 
-/** Parse a `--keys` schedule (CLI-PROD-RUN-004). An empty/undefined spec is no events. */
-export function parseKeySchedule(spec: string | undefined): KeyEvent[] {
+/** Whether `key` (already normalized) is one of the 40 keys of the 48K matrix. */
+export function isMatrixKey(key: string): boolean {
+  return Object.hasOwn(KEY_MATRIX, key);
+}
+
+/**
+ * Parse a `--keys` schedule (CLI-PROD-RUN-004). An empty/undefined spec is no events.
+ * `stage` names the command the schedule was given to, for its error envelope
+ * (CLI-PROD-CONV-JSON-002): `trace --keys` is not a `run` error.
+ */
+export function parseKeySchedule(spec: string | undefined, stage = 'run'): KeyEvent[] {
   if (!spec || spec.trim() === '') return [];
   return spec.split(',').map((entry) => {
-    const { frame, token, hold } = parseEvent(entry, 'run');
+    const { frame, token, hold } = parseEvent(entry, stage);
     const key = normalizeKeyToken(token);
-    if (!(key in KEY_MATRIX)) {
-      throw userError(`Unknown key in --keys schedule: "${token}"`, 'run');
+    if (!isMatrixKey(key)) {
+      throw userError(`Unknown key in --keys schedule: "${token}"`, stage);
     }
     return { frame, key, hold };
   });
@@ -100,23 +109,23 @@ const JOY_BITS: Readonly<Record<string, keyof import('@zx-vibes/machine').Kempst
 };
 
 /** Build the active-high `000FUDLR` byte from a control subset like `RF` (JOY-KEMPSTON-READ-001). */
-export function joyByte(value: string): number {
+export function joyByte(value: string, stage = 'run'): number {
   const state: import('@zx-vibes/machine').KempstonState = {};
   for (const ch of value.toUpperCase()) {
     const field = JOY_BITS[ch];
-    if (!field) throw userError(`Unknown Kempston control "${ch}" in --joy (use any of U D L R F)`, 'run');
+    if (!field) throw userError(`Unknown Kempston control "${ch}" in --joy (use any of U D L R F)`, stage);
     state[field] = true;
   }
   return kempstonByte(state);
 }
 
 /** Parse a `--joy` schedule (CLI-PROD-RUN-005). An empty/undefined spec is no events. */
-export function parseJoySchedule(spec: string | undefined): JoyEvent[] {
+export function parseJoySchedule(spec: string | undefined, stage = 'run'): JoyEvent[] {
   if (!spec || spec.trim() === '') return [];
   return spec.split(',').map((entry) => {
-    const { frame, token, hold } = parseEvent(entry, 'run');
+    const { frame, token, hold } = parseEvent(entry, stage);
     const value = token.toUpperCase();
-    return { frame, value, hold, byte: joyByte(value) };
+    return { frame, value, hold, byte: joyByte(value, stage) };
   });
 }
 

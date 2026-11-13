@@ -19,6 +19,7 @@ import {
   type ExitCode as ExitCodeType,
   type OutputStreams,
 } from './output/envelope.js';
+import { clearRevengGfxHandler } from './gfx/reveng-hook.js';
 import { createRegistry, type CommandContext } from './registry.js';
 import { registerRevengAddon } from './reveng/index.js';
 import { toolkitVersion } from './version.js';
@@ -52,6 +53,9 @@ export interface RunCliOptions {
   streams?: OutputStreams;
 }
 
+/** The flags `zxs` itself takes when no command is given. */
+const TOP_LEVEL_FLAGS = new Set(['--json', '-v', '--version', '-h', '--help']);
+
 /**
  * Parse and dispatch a `zxs` invocation. Returns the process exit code; never
  * calls `process.exit` itself, so it is unit-testable. `argv` is the user args
@@ -67,6 +71,11 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
   // the only coupling point, so `ZXS_REVENG=off` yields a pure-core CLI (add-on absent).
   if (revengAddonEnabled()) {
     registerRevengAddon(registry);
+  } else {
+    // The add-on's `gfx` handler is module state. A caller that runs the CLI twice in
+    // one process (a library user, the tests) must not keep the add-on's `gfx find` /
+    // `gfx blit-linear` after the gate was turned off.
+    clearRevengGfxHandler();
   }
   // `--json` may appear anywhere (including after a subcommand); detect it directly.
   const jsonFlag = argv.includes('--json');
@@ -128,6 +137,15 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
   // would otherwise throw a help-as-error with a non-zero code).
   const firstPositional = argv.find((token) => !token.startsWith('-'));
   if (firstPositional === undefined) {
+    // Only flags were given. One this program does not have is a usage error
+    // (CLI-PROD-EXIT-002), not a reason to print the help and exit 0: `zxs --verison`
+    // looked like a success to a script.
+    const unknownFlag = argv.find((token) => !TOP_LEVEL_FLAGS.has(token));
+    if (unknownFlag !== undefined) {
+      const envelope = toErrorEnvelope(userError(`unknown option '${unknownFlag}'`, 'cli'), 'cli');
+      printEnvelope(envelope, { json: jsonFlag, streams });
+      return envelope.error.exitCode;
+    }
     if (argv.includes('-v') || argv.includes('--version')) {
       streams.out(`${version}\n`);
       return ExitCode.OK;

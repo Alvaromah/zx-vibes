@@ -80,7 +80,8 @@ const PAIR: Readonly<Record<string, readonly [string, string]>> = {
   "af'": ['a_', 'f_'], "bc'": ['b_', 'c_'], "de'": ['d_', 'e_'], "hl'": ['h_', 'l_'],
 };
 const REG16 = new Set(['pc', 'sp']);
-const CONTROL: Readonly<Record<string, number>> = { im: 3, iff1: 1, iff2: 1 };
+// Each control register's largest value: the Z80 has interrupt modes 0, 1 and 2 only.
+const CONTROL: Readonly<Record<string, number>> = { im: 2, iff1: 1, iff2: 1 };
 
 /** Normalize a register name to its canonical key (lower-case; `'`/`2` alt suffixes accepted). */
 function normalizeRegName(name: string): string {
@@ -88,6 +89,7 @@ function normalizeRegName(name: string): string {
   // Accept `a2`/`bc2` as aliases for the alternate set alongside `a'`/`bc'`.
   if (/^(af|bc|de|hl)2$/.test(n)) return `${n.slice(0, 2)}'`;
   if (/^[a-l]2$/.test(n)) return `${n.slice(0, 1)}_`;
+  if (/^[abcdefhl]'$/.test(n)) return `${n.slice(0, 1)}_`;
   return n;
 }
 
@@ -104,6 +106,10 @@ export function setRegister(machine: Machine, rawName: string, value: number): v
   if (REG16.has(name)) {
     requireRange(rawName, value, 0xffff);
     reg[name] = value & 0xffff;
+    // Writing PC means "continue from here". A machine waiting on a HALT would
+    // otherwise stay halted at the new address, and the next interrupt would push
+    // PC + 1 as its return address, skipping the first byte of the code there.
+    if (name === 'pc') machine.halted = false;
     return;
   }
   if (REG8.has(name)) {
@@ -111,14 +117,15 @@ export function setRegister(machine: Machine, rawName: string, value: number): v
     reg[name] = value & 0xff;
     return;
   }
-  const pair = PAIR[name];
+  // Own keys only: `constructor`, `__proto__` and friends are not registers.
+  const pair = Object.hasOwn(PAIR, name) ? PAIR[name] : undefined;
   if (pair) {
     requireRange(rawName, value, 0xffff);
     reg[pair[0]] = (value >> 8) & 0xff;
     reg[pair[1]] = value & 0xff;
     return;
   }
-  if (name in CONTROL) {
+  if (Object.hasOwn(CONTROL, name)) {
     requireRange(rawName, value, CONTROL[name]!);
     reg[name] = value;
     return;

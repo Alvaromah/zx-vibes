@@ -262,6 +262,15 @@ const FONT_FIRST_CHAR = 0x20;
 const FONT_CHAR_COUNT = 96; // 0x20..0x7F
 /** CHARS system constant: glyph for code `c` is at `0x3C00 + c*8` (space → 0x3D00). */
 const ROM_CHARS_BASE = 0x3c00;
+/**
+ * The three codes where the Spectrum character set is not ASCII: 0x5E is an up arrow
+ * (ASCII `^`), 0x60 the pound sign (ASCII backtick) and 0x7F the copyright sign (ASCII
+ * DEL, a control character). OCR reports the character the screen shows, so the ROM's
+ * boot line reads "© 1982 Sinclair Research Ltd" instead of starting with a raw DEL.
+ */
+const SPECTRUM_CHARS: Readonly<Record<number, string>> = { 0x5e: '↑', 0x60: '£', 0x7f: '©' };
+/** The ASCII character at the same code, still accepted by `screenIncludes`. */
+const ASCII_SPELLING: Readonly<Record<string, string>> = { '↑': '^', '£': '`', '©': '\u007f' };
 
 let cachedFont: Uint8Array[] | undefined;
 
@@ -313,7 +322,8 @@ export function ocrScreenRows(image: Uint8Array): string[] {
       let matched = ' ';
       for (let g = 0; g < font.length; g += 1) {
         if (bytesEqual(cell, font[g]!)) {
-          matched = String.fromCharCode(FONT_FIRST_CHAR + g);
+          const code = FONT_FIRST_CHAR + g;
+          matched = SPECTRUM_CHARS[code] ?? String.fromCharCode(code);
           break;
         }
       }
@@ -324,7 +334,13 @@ export function ocrScreenRows(image: Uint8Array): string[] {
   return rows;
 }
 
-/** Whether `text` appears (verbatim) on some OCR'd screen row (ASSERT-PROD-SCREENINC-001). */
+/**
+ * Whether `text` appears (verbatim) on some OCR'd screen row (ASSERT-PROD-SCREENINC-001).
+ * The up arrow, pound and copyright glyphs also match the ASCII character at their code
+ * (`^`, a backtick, DEL), which is what the OCR reported for them before.
+ */
 export function screenIncludesText(image: Uint8Array, text: string): boolean {
-  return ocrScreenRows(image).some((row) => row.includes(text));
+  return ocrScreenRows(image).some(
+    (row) => row.includes(text) || row.replace(/[↑£©]/g, (ch) => ASCII_SPELLING[ch]!).includes(text),
+  );
 }

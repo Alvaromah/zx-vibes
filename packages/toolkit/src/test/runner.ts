@@ -397,6 +397,28 @@ function validateSpec(raw: unknown): TestSpec {
   if (!Array.isArray(obj.assert)) {
     throw userError('test spec requires an "assert" array', 'test');
   }
+  // The optional fields are typed (REC-PROD-SPEC-003). A mistyped one used to be coerced
+  // or ignored: `"frames": "ten"` ran zero frames and the spec still passed, and
+  // `"detectHangs": "false"` left the watchdog on.
+  const got = (value: unknown): string => JSON.stringify(value);
+  if (obj.frames !== undefined && !(typeof obj.frames === 'number' && Number.isInteger(obj.frames) && obj.frames >= 0)) {
+    throw userError(`test spec "frames" must be a whole number of frames, got ${got(obj.frames)}`, 'test');
+  }
+  for (const field of ['keys', 'joy'] as const) {
+    if (obj[field] !== undefined && typeof obj[field] !== 'string') {
+      throw userError(`test spec "${field}" must be a schedule string, got ${got(obj[field])}`, 'test');
+    }
+  }
+  if (obj.detectHangs !== undefined && typeof obj.detectHangs !== 'boolean') {
+    throw userError(`test spec "detectHangs" must be true or false, got ${got(obj.detectHangs)}`, 'test');
+  }
+  if (
+    obj.org !== undefined &&
+    typeof obj.org !== 'string' &&
+    !(typeof obj.org === 'number' && Number.isInteger(obj.org) && obj.org >= 0 && obj.org <= 0xffff)
+  ) {
+    throw userError(`test spec "org" must be an address string or a number 0..65535, got ${got(obj.org)}`, 'test');
+  }
   return obj as unknown as TestSpec;
 }
 

@@ -47,7 +47,7 @@ export type XrefEnvelope = {
 function classify(text: string, targetHex: string): XrefKind {
   const head = text.split(/\s+/, 1)[0]!.toUpperCase();
   if (head === 'CALL') return 'call';
-  if (head === 'JP' || head === 'JR' || head === 'DJNZ' || head === 'RST') return 'jump';
+  if (head === 'JP' || head === 'JR' || head === 'DJNZ') return 'jump';
   // A parenthesised operand `(0x####)` is a memory access (LD (nn),… / LD …,(nn)).
   if (text.includes(`(${targetHex})`)) return 'mem';
   // Otherwise the address appears as a bare immediate (e.g. `LD HL,0x####`).
@@ -75,7 +75,12 @@ export function runXref(options: XrefOptions): XrefEnvelope {
   let addr = range.from;
   while (addr <= range.to) {
     const line = disassembleOne(read, addr);
-    if (tokenRe.test(line.text)) {
+    // `RST n` calls a restart address the decoder prints with two hex digits (`RST 0x10`),
+    // so the four-digit token test below could never see it: match it by its vector.
+    const restart = /^RST 0x([0-9A-F]{2})$/.exec(line.text);
+    if (restart !== null) {
+      if (parseInt(restart[1]!, 16) === target) refs.push({ addr, text: line.text, kind: 'call' });
+    } else if (tokenRe.test(line.text)) {
       refs.push({ addr, text: line.text, kind: classify(line.text, targetHex) });
     }
     addr += Math.max(1, line.bytes.length);

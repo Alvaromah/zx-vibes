@@ -120,7 +120,13 @@ function boolField(a: RawAssertion, key: string): boolean {
 
 /** Resolve an `addr` field: a number, an address string (`0x`/`$`/`h`/decimal), or a build label. */
 function resolveAddr(raw: unknown, symbols: Map<string, number>): number {
-  if (typeof raw === 'number') return raw & 0xffff;
+  if (typeof raw === 'number') {
+    // Not masked: `"addr": 70000` used to check 0x1170 and could pass by accident.
+    if (!Number.isInteger(raw) || raw < 0 || raw > 0xffff) {
+      throw userError(`assertion "addr" ${raw} is not a 16-bit address (0..65535)`, 'test');
+    }
+    return raw;
+  }
   if (typeof raw === 'string') {
     if (symbols.has(raw)) return symbols.get(raw)! & 0xffff;
     return parseAddress(raw, 'test') & 0xffff;
@@ -265,7 +271,15 @@ export function evaluateAssertion(a: RawAssertion, target: Snapshot, ctx: RunCon
     case 'regEquals': {
       const name = strField(a, 'reg').toLowerCase();
       const { value, width } = readReg(target.registers, name);
-      const want = resolveValue(a.value) & (width === 16 ? 0xffff : 0xff);
+      const max = width === 16 ? 0xffff : 0xff;
+      const raw = resolveValue(a.value);
+      // A value the register cannot hold is a spec error, not a match on its low bits
+      // (`"reg": "a", "value": 256` used to pass when A was 0). A negative value stays
+      // the two's complement of the register width.
+      if (!Number.isInteger(raw) || raw < -(max + 1) / 2 || raw > max) {
+        throw userError(`regEquals ${name}: value ${raw} does not fit a ${width}-bit register`, 'test');
+      }
+      const want = raw & max;
       return value === want ? null : `regEquals ${name}: expected ${hex(want, 4)}, got ${hex(value, 4)}`;
     }
     case 'pixelAt': {

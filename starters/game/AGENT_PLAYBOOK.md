@@ -9,9 +9,12 @@ This project expects the local `zx-vibes` devDependency. If `zxs` is not found,
 run `npm install`; then use `npm run build`, `npm test`, or `npx zxs <cmd>`.
 If the toolchain looks wrong, start with `zxs doctor --json`.
 
-Before loading a domain skill, read `docs/agents/skills/INDEX.md`. It routes
-assembler, screen/rendering, keyboard, timing, ROM, colour, sound, and debug
-work to the smallest local context.
+The knowledge pack (technique skills, hardware reference, tested recipes) is not
+in this project until you install it: `npx zxs setup --agent claude` puts it under
+`.claude/skills/zx-vibes/`, `--agent codex` under `.codex/zx-vibes/`. Start at its
+`skills/INDEX.md`, which routes screen, keyboard, timing, interrupt, collision,
+scrolling and debug work to the smallest context. Paths below that begin with
+`skills/` or `reference/` are inside that pack.
 
 ## The loop (non-negotiable)
 
@@ -46,15 +49,15 @@ preview after source changes.
 
 | Symptom | Do |
 |---|---|
-| exit 2, `di-halt` / `tight-loop` / `pc-in-rom` | Read the verdict's `likelyCause`; docs/reference/common-bugs.md |
-| Garbage stripes when drawing | docs/reference/screen-layout.md — the bitmap is interleaved |
-| Keys dead or inverted | docs/reference/keyboard-input.md — active-low, CPL first |
-| Wrong colours | docs/reference/attributes-and-colour.md |
-| Works then crashes | `zxs regs` after longer runs: SP drifting? docs/reference/common-bugs.md#stack-drift |
-| Need to see inside | `zxs break add <label>` → `zxs run --until-break` → `zxs regs`, `zxs step`, `zxs disasm PC` |
+| exit 2, `di-halt` / `tight-loop` / `pc-in-rom` | Read the verdict's `likelyCause`; `skills/debug-hangs.md` |
+| Garbage stripes when drawing | `reference/memory-map.md` — the bitmap is interleaved |
+| Keys dead or inverted | `reference/keyboard-input.md` — active-low, CPL first |
+| Wrong colours | `reference/screen-render.md` — the attribute byte |
+| Works then crashes | Run the session longer (`zxs run --state .zxs/state.zxstate --frames 600`), then `zxs regs --state .zxs/state.zxstate`: is SP drifting? |
+| Need to see inside | `zxs break add <label>`, `zxs state reset`, `zxs run --state .zxs/state.zxstate --until-break`; then `zxs regs`, `zxs disasm PC`, `zxs step`, each with `--state .zxs/state.zxstate` (without it they show a fresh boot) |
 | Where is the time going | `zxs trace --frames 5 --profile` |
-| Need read-only investigation | `zxs run --no-save` or `zxs screen --z80 game.z80 --png s.png` |
-| Need to inspect assets | docs/reference/reverse-engineering.md, `zxs gfx find --json` |
+| Need read-only investigation | `zxs run --state .zxs/state.zxstate --no-save` or `zxs screen --z80 game.z80 --png s.png` |
+| Need to inspect your graphics data | `zxs gfx linear --addr <addr> --width 16 --height 16 --out sprite.png`, `zxs gfx attrs --out attrs.png` |
 
 ## Conventions
 
