@@ -2045,3 +2045,105 @@ describe('regressions: silent misassembly, layout and diagnostics (second review
     ).toEqual({ ok: false, message: 'assembling the probe threw: boom' });
   });
 });
+
+// ADR-0033: source that used to assemble to the wrong bytes with no diagnostic. The
+// fixture cases in dna/conformance/assembler/syntax-surface.json pin one example of
+// each; these cover the sibling forms.
+describe('no silent misassembly (ADR-0033)', () => {
+  const at = (...lines: string[]) => assemble(['    ORG 0x8000', ...lines, ''].join('\n'));
+  const oneError = (lines: string[], message: string) => {
+    const r = at(...lines);
+    expect(r.ok, hex(r.bytes)).toBe(false);
+    expect(r.errors.map((e) => e.message)).toEqual([message]);
+  };
+
+  it('rejects index halves and junk operands where no such instruction exists', () => {
+    oneError(['    rlc ixh'], 'Unsupported RLC target: ixh');
+    oneError(['    set 1,iyl'], 'Unsupported SET target: iyl');
+    oneError(['    out (c),iyl'], 'Unsupported OUT form: (c), iyl');
+    oneError(['    in (hl),(c)'], 'Unsupported IN form: (hl), (c)');
+    oneError(['    out (c),(hl)'], 'Unsupported OUT form: (c), (hl)');
+    oneError(['    rlc (ix+1),zzz'], 'Unsupported RLC copy-register: zzz');
+    oneError(['    set 3,(ix+4),ixh'], 'Unsupported SET copy-register: ixh');
+    // The legal forms next to them are unchanged.
+    expect(hex(at('    bit 0,h', '    rlc (ix+1),b', '    set 3,(ix+4),a', '    in h,(c)', '    out (c),l').bytes)).toBe(
+      'CB44DDCB0100DDCB04DFED60ED69'
+    );
+  });
+
+  it('reports malformed expressions instead of reading a default', () => {
+    oneError(['    db ~'], "Missing operand after '~'");
+    oneError(['    db !'], "Missing operand after '!'");
+    oneError(['    ld a,LOW'], "Missing operand after 'LOW'");
+    oneError(['    ld a,(2+(3)'], "Missing ')' in expression: (2+(3)");
+    oneError(["    cp '\\q'"], 'Unsupported string escape: \\q');
+    // An unresolved operand still reads as "Label not found" only (ASM-PROD-ERR-012).
+    oneError(['    db -missing'], 'Label not found: missing');
+    expect(hex(at('    ld a,((1+2))', '    ld a,(1+2)', '    ld a,-(1+2)*2', "    ld a,'\\n'").bytes)).toBe('3A03003A03003EFA3E0A');
+  });
+
+  it('reads a column-0 macro call with an END argument as a call, and keeps label END', () => {
+    const r = assemble(['Jump MACRO target', '    jp target', 'ENDM', '    ORG 0x8000', 'Jump end', 'end: nop', 'stop END', '    db 9', ''].join('\n'));
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    expect(hex(r.bytes)).toBe('C30380' + '00');
+  });
+
+  it('keeps a colon after a label and after directive-named labels', () => {
+    oneError(['ei : ret'], "ei is an instruction, not a label: put one instruction per line (':' does not separate statements here)");
+    oneError(['loop: ei : ret'], 'Unsupported instruction: EI : ret');
+    const r = at('loop: nop', 'end: nop', 'org: jr loop');
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    expect(hex(r.bytes)).toBe('000018FC');
+  });
+
+  it('makes DEFINE order-sensitive and a value-less DEFINE true, like -D', () => {
+    oneError(['    db FOO', '    DEFINE FOO 1'], 'Label not found: FOO');
+    const r = at('    DEFINE FLAG', '    db FLAG', '    IF FLAG', '    db 2', '    ENDIF', '    UNDEFINE FLAG', '    IFNDEF FLAG', '    db 3', '    ENDIF');
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    expect(hex(r.bytes)).toBe('010203');
+    expect(hex(assemble('    ORG 0x8000\n    db FLAG\n', { defines: { FLAG: '' } }).bytes)).toBe('01');
+  });
+
+  it('substitutes macro parameters and repeat counters once, outside numbers', () => {
+    const r = assemble(
+      ['    ORG 0x8000', 'Swap MACRO a1,b1', '    db b1,a1', 'ENDM', '    Swap b1,a1', 'a1 EQU 1', 'b1 EQU 2', '    DUP 2, x', '    db 0x1b + x', '    EDUP', ''].join('\n')
+    );
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    expect(hex(r.bytes)).toBe('01021B1C');
+  });
+
+  it('keeps constants at full width in expressions and 16 bits in exported symbols', () => {
+    const r = at(
+      'HZ EQU 3500000',
+      'N EQU -3',
+      'NEG2 EQU -2',
+      'T EQU 1==1',
+      '    dw HZ/1000, HZ >> 8 & 0xFFFF',
+      '    IF N < 0',
+      '    db 1',
+      '    ENDIF',
+      '    db NEG2, T, N/2 & 0xFF',
+      '    ld (ix+NEG2),a',
+      '    DEFINE BIG 0x12345',
+      '    dw BIG - 0x10000'
+    );
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    expect(hex(r.bytes)).toBe('AC0D' + '6735' + '01' + 'FEFFFF' + 'DD77FE' + '4523');
+    // ASM-PROD-EXPR-004 still holds: a literal 0xFFFF does not fit a byte.
+    oneError(['    db 0xFFFF'], '8-bit value out of range: 0xFFFF');
+    oneError(['HZ EQU 3500000', '    dw HZ'], '16-bit value out of range: HZ');
+    // The exported symbol and the SLD keep 16 bits, as before.
+    expect(r.symbols.find((s) => s.name === 'HZ')?.value).toBe(3500000 & 0xffff);
+    expect(r.symbols.find((s) => s.name === 'N')?.value).toBe(0xfffd);
+    const api = assemble('    ORG 0x8000\n    dw BIG/16\n', { defines: { BIG: '0x10000' } });
+    expect(api.ok, JSON.stringify(api.errors)).toBe(true);
+    expect(hex(api.bytes)).toBe('0010');
+  });
+
+  it('warns when parentheses around an immediate look like a memory read', () => {
+    const r = at('    cp (5)', '    ld (ix+1),(7)', '    ld b,5', '    ld a,(5)');
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    expect(hex(r.bytes)).toBe('FE05DD3601070605' + '3A0500');
+    expect(r.warnings.map((w) => w.message.split(':')[0])).toEqual(['CP (5)', 'LD (ix+1),(7)']);
+  });
+});

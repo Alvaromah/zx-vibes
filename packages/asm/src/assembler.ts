@@ -138,6 +138,8 @@ interface LayoutResult {
   symbols: Map<string, number>;
   negativeSymbols: Map<string, number>;
   definitions: Map<string, SymbolDef>;
+  /** Names set by a source `DEFINE` in the final pass; they exist only from that line on. */
+  sourceDefines: ReadonlySet<string>;
   lines: ParsedLine[];
   errors: Diagnostic[];
   warnings: Diagnostic[];
@@ -370,6 +372,12 @@ function assembleLines(sourceLines: SourceLine[], opts: AssembleOptions): Assemb
   const deviceEnabled = layout.lines.some((line) => line.op === 'DEVICE');
   const emitSymbols = new Map(layout.symbols);
   const negativeSymbols = new Map(layout.negativeSymbols);
+  // A source DEFINE is order-sensitive (ASM-PROD-DEFINES-001): the layout's final value
+  // must not be visible above the DEFINE line, where `ld a,FOO` used to read it.
+  for (const name of layout.sourceDefines) {
+    emitSymbols.delete(name);
+    negativeSymbols.delete(name);
+  }
   const apiDefines = apiDefineValues(opts.defines ?? {});
   for (const [name, value] of apiDefines) setDefineValue(emitSymbols, negativeSymbols, name, value);
   const activeDefineSymbols = new Set(apiDefines.keys());
@@ -427,7 +435,7 @@ function assembleLines(sourceLines: SourceLine[], opts: AssembleOptions): Assemb
       if (line.labelKey) {
         const value = evalExpr(line.args, ctx);
         if (value !== undefined) {
-          emitSymbols.set(line.labelKey, value & 0xffff);
+          emitSymbols.set(line.labelKey, value);
           recordSignedValue(ctx, line.labelKey, line.args);
         }
       }
@@ -572,17 +580,20 @@ function computeLayout(sourceLines: SourceLine[], opts: AssembleOptions): Layout
         if (finalPass && raw !== undefined && definedAs.get(line.labelKey) === 'EQU') {
           const first = equValues.get(line.labelKey);
           if (first === undefined) {
-            equValues.set(line.labelKey, value & 0xffff);
-          } else if (first !== (value & 0xffff)) {
+            equValues.set(line.labelKey, value);
+          } else if (first !== value) {
             errors.push(
               diag(
                 line.loc,
-                `EQU ${line.labelKey} redefined with a different value (${hex16(first)}, then ${hex16(value & 0xffff)}); use DEFL or = for a symbol that changes`
+                `EQU ${line.labelKey} redefined with a different value (${hex16(first)}, then ${hex16(value)}); use DEFL or = for a symbol that changes`
               )
             );
           }
         }
-        symbols.set(line.labelKey, value & 0xffff);
+        // A constant keeps its full value for expressions (`CPU_HZ EQU 3500000` /
+        // `dw CPU_HZ/1000` is 3500; `N EQU -3` / `IF N < 0` is true). The exported
+        // symbol and the SLD record keep 16 bits, as addresses do (ADR-0033).
+        symbols.set(line.labelKey, value);
         recordSignedValue(ctx, line.labelKey, line.args);
         if (!definitions.has(line.labelKey)) {
           definitions.set(line.labelKey, {
@@ -631,6 +642,7 @@ function computeLayout(sourceLines: SourceLine[], opts: AssembleOptions): Layout
     symbols,
     negativeSymbols,
     definitions,
+    sourceDefines: new Set(sourceDefineSymbols),
     lines,
     errors: uniqueDiagnostics(errors),
     warnings,
@@ -653,7 +665,7 @@ function hex16(value: number): string {
 }
 
 interface ApiDefine {
-  /** The value as expressions read it (before the 16-bit masking of the symbol table). */
+  /** The value as expressions read it (the symbol table keeps it unmasked). */
   value: number;
   /** The signed view (see readsAsNegativeByte): `-D X=1==1` is -1 here, 0xFFFF above. */
   signed: number;
@@ -666,14 +678,14 @@ function apiDefineValues(defines: Record<string, string | number | boolean>): Ma
   );
 }
 
-/** Stores a define's value: 16-bit in `symbols`, a negative signed view in `negativeSymbols`. */
+/** Stores a define's value in `symbols`, and a negative signed view in `negativeSymbols`. */
 function setDefineValue(
   symbols: Map<string, number>,
   negativeSymbols: Map<string, number>,
   name: string,
   define: ApiDefine
 ): void {
-  symbols.set(name, define.value & 0xffff);
+  symbols.set(name, define.value);
   if (define.signed < 0) negativeSymbols.set(name, define.signed);
   else negativeSymbols.delete(name);
 }
@@ -735,6 +747,15 @@ function parseLines(sourceLines: SourceLine[], errors: Diagnostic[]): ParsedLine
 
     const hasLeadingWhitespace = /^\s/.test(stripComment(loc.text));
     const { label, equ, rest } = splitLineHead(cleaned, hasLeadingWhitespace);
+    if (label !== undefined && !equ && rest && isInstructionMnemonic(label.toUpperCase())) {
+      // `ei : ret` read `ei` as a label and assembled only the `ret`. A colon does not
+      // separate statements in this assembler (ASM-PROD-SCOPE-004: fail, not misassemble).
+      errors.push(
+        diag(loc, `${label} is an instruction, not a label: put one instruction per line (':' does not separate statements here)`)
+      );
+      out.push({ loc, args: '', globalScope: currentGlobal, moduleScope });
+      continue;
+    }
     const labelKey = label === undefined ? undefined : qualifyLabel(label, currentGlobal, moduleScope);
     // A code label (not a constant) opens the scope of the dotted local labels after it.
     if (labelKey !== undefined && !equ && !label!.startsWith('.')) currentGlobal = labelKey;
@@ -798,7 +819,7 @@ function processSourceLines(sourceLines: SourceLine[], ctx: LoadContext): Source
       continue;
     }
     if (!conditionsActive(ctx)) continue;
-    if (parseEndDirective(cleaned, hasLeadingWhitespace)) {
+    if (parseEndDirective(cleaned, hasLeadingWhitespace, (name) => ctx.macros.has(name.toUpperCase()))) {
       ctx.terminated = true;
       out.push(withCurrentModuleScope(line, ctx));
       break;
@@ -934,15 +955,26 @@ function withCurrentModuleScope(line: SourceLine, ctx: LoadContext): SourceLine 
   return moduleScope ? { ...line, moduleScope } : line;
 }
 
-function parseEndDirective(cleaned: string, hasLeadingWhitespace: boolean): boolean {
+function parseEndDirective(
+  cleaned: string,
+  hasLeadingWhitespace: boolean,
+  isMacro: (name: string) => boolean = () => false
+): boolean {
   // An indented `END` (but not an indented label named `end:`).
   if (hasLeadingWhitespace && /^END\b(?!\s*:)/i.test(cleaned)) return true;
   if (/^[A-Za-z_.][A-Za-z0-9_.]*:\s*END\b/i.test(cleaned)) return true;
   // `stop END`: a column-0 label followed by END. Like parseLines, a first word that
   // is an instruction or directive is not a label, so `call end`, `jp end` and
   // `dw end` reference a label named `end` instead of silently ending the source.
+  // Neither is a macro name: `Jump end` at column 0 is a macro call (as `Jump start`
+  // is), and used to end the source there with zero bytes and no diagnostic.
   const labelled = cleaned.match(/^([A-Za-z_.][A-Za-z0-9_.]*)\s+END\b/i);
-  return labelled !== null && !hasLeadingWhitespace && !isKnownOperation(labelled[1]!.toUpperCase());
+  return (
+    labelled !== null &&
+    !hasLeadingWhitespace &&
+    !isKnownOperation(labelled[1]!.toUpperCase()) &&
+    !isMacro(labelled[1]!)
+  );
 }
 
 function parseRepeat(cleaned: string): RepeatDirective | undefined {
@@ -1041,10 +1073,16 @@ function repeatCount(loc: SourceLine, op: string, expr: string, ctx: LoadContext
 const MAX_REPEAT_COUNT = 1 << 20;
 
 function substituteRepeatCounter(line: SourceLine, counter: string, value: number): SourceLine {
-  return { ...line, text: replaceIdentifierOutsideStrings(line.text, counter, String(value)) };
+  return { ...line, text: replaceIdentifiersOutsideStrings(line.text, new Map([[counter, String(value)]])) };
 }
 
-function replaceIdentifierOutsideStrings(text: string, name: string, replacement: string): string {
+/**
+ * Replaces each whole identifier found in `replacements`, outside strings and comments,
+ * in one pass: a replacement is never scanned again, so `Pair right,5` for
+ * `Pair MACRO left,right` gives `right,5`, not `5,5`. A numeric literal is skipped
+ * whole, so a DUP counter `b` does not rewrite the `b` of `1b` or `0x1b`.
+ */
+function replaceIdentifiersOutsideStrings(text: string, replacements: ReadonlyMap<string, string>): string {
   let out = '';
   let quote: string | undefined;
   for (let i = 0; i < text.length; ) {
@@ -1069,11 +1107,18 @@ function replaceIdentifierOutsideStrings(text: string, name: string, replacement
       i++;
       continue;
     }
+    if (/[0-9]/.test(ch)) {
+      let end = i + 1;
+      while (end < text.length && /[A-Za-z0-9_]/.test(text[end]!)) end++;
+      out += text.slice(i, end);
+      i = end;
+      continue;
+    }
     if (isIdentStart(ch)) {
       let end = i + 1;
       while (end < text.length && isIdentPart(text[end]!)) end++;
       const id = text.slice(i, end);
-      out += id === name ? replacement : id;
+      out += replacements.get(id) ?? id;
       i = end;
       continue;
     }
@@ -1162,8 +1207,11 @@ function applySourceDefine(
   }
   ctx.defineNames.add(define.name);
   if (!define.expr) {
-    if (ctx.defineValueNames.delete(define.name)) ctx.symbols.delete(define.name);
+    // `DEFINE FLAG` is true (ASM-PROD-DEFINES-002), the value `-D FLAG` gives: `IF FLAG`
+    // used to fail with "Label not found: FLAG".
+    ctx.symbols.set(define.name, DEFINE_TRUE);
     ctx.layoutSymbols.delete(define.name);
+    ctx.defineValueNames.add(define.name);
     return;
   }
 
@@ -1179,7 +1227,7 @@ function applySourceDefine(
   }
   const value = evalExpr(define.expr, loadEvalContext(loc, ctx, 'DEFINE', ctx.diagnostics, true));
   if (value === undefined) return;
-  ctx.symbols.set(define.name, value & 0xffff);
+  ctx.symbols.set(define.name, value);
   ctx.layoutSymbols.delete(define.name);
   ctx.defineValueNames.add(define.name);
 }
@@ -1222,15 +1270,15 @@ function applyLayoutDefine(
   activeDefineSymbols.add(name);
 
   if (!expr) {
-    sourceDefineSymbols.delete(name);
-    ctx.symbols.delete(name);
+    ctx.symbols.set(name, DEFINE_TRUE);
     ctx.negativeSymbols?.delete(name);
+    sourceDefineSymbols.add(name);
     return;
   }
 
   const value = evalExpr(expr, ctx);
   if (value === undefined) return;
-  ctx.symbols.set(name, value & 0xffff);
+  ctx.symbols.set(name, value);
   // `DEFINE NEG -1` must stay usable in an 8-bit slot, like `NEG EQU -1`.
   recordSignedValue(ctx, name, expr);
   sourceDefineSymbols.add(name);
@@ -1332,10 +1380,8 @@ function expandMacroLine(
   args: Map<string, string>,
   localLabels: Map<string, string>
 ): SourceLine {
-  let text = line.text;
-  for (const [from, to] of localLabels) text = replaceIdentifierOutsideStrings(text, from, to);
-  for (const [from, to] of args) text = replaceIdentifierOutsideStrings(text, from, to);
-  return { ...line, text };
+  // Local labels start with `.` and parameters cannot, so one map holds both.
+  return { ...line, text: replaceIdentifiersOutsideStrings(line.text, new Map([...localLabels, ...args])) };
 }
 
 function identifiersOutsideStrings(text: string): string[] {
@@ -1631,7 +1677,7 @@ function noteLoadTimeSymbol(loc: SourceLine, ctx: LoadContext): void {
     ctx.symbols.delete(key);
     ctx.layoutSymbols.delete(key);
   } else {
-    ctx.symbols.set(key, value & 0xffff);
+    ctx.symbols.set(key, value);
     ctx.layoutSymbols.delete(key);
   }
 }
@@ -1643,7 +1689,7 @@ function seedDefines(
 ): void {
   for (const [name, raw] of Object.entries(defines)) {
     const value = defineValue(raw);
-    symbols.set(name, value & 0xffff);
+    symbols.set(name, value);
     definitions.set(name, {
       name,
       value: value & 0xffff,
@@ -1657,6 +1703,9 @@ function seedDefines(
 /** The `file` of diagnostics and symbols that come from API/CLI defines. */
 const DEFINE_FILE = '<define>';
 
+/** The value of a define given without one: `-D NAME`, `defines: { NAME: '' }`, `DEFINE NAME`. */
+const DEFINE_TRUE = 1;
+
 /**
  * Value of an API/CLI define: a number, a boolean (1/0), an empty string (`-D NAME`,
  * true = 1) or a numeric expression such as `0x44`, `-5` or `1<<8`. Invalid values
@@ -1666,7 +1715,7 @@ function defineValue(raw: string | number | boolean, signedView = false): number
   if (typeof raw === 'number') return raw;
   if (typeof raw === 'boolean') return raw ? 1 : 0;
   const trimmed = raw.trim();
-  if (trimmed === '') return 1;
+  if (trimmed === '') return DEFINE_TRUE;
   // Evaluate the full expression (e.g. -5, 1+1, 1<<8) rather than only the
   // first token, which silently collapsed any compound/negative define to 1.
   const ctx = defineEvalContext(trimmed, [], false);
@@ -1787,6 +1836,11 @@ function isKnownOperation(op: string): boolean {
   );
 }
 
+/** A Z80 instruction mnemonic (not a directive such as `END`, which may name a label). */
+function isInstructionMnemonic(op: string): boolean {
+  return isKnownOperation(op) && !isDirective(op);
+}
+
 function isIndentSensitiveDirective(op: string): boolean {
   return op === 'DEFINE' || op === 'UNDEFINE' || op === 'END';
 }
@@ -1817,7 +1871,16 @@ function layoutDirective(op: string, args: string, ctx: EvalContext): number {
     }
     case 'DEFINE':
     case 'UNDEFINE':
+      return ctx.pc;
     case 'INCLUDE':
+      // Loading expands every `INCLUDE target`; one that reaches layout has no target
+      // and used to be skipped silently.
+      fail(ctx, 'INCLUDE expects a file name');
+      return ctx.pc;
+    case 'EQU':
+    case 'DEFL':
+      // `name EQU value` is handled by the caller; without a name it defined nothing.
+      fail(ctx, `${op} needs a name: write NAME ${op} value`);
       return ctx.pc;
     case 'END':
       if (args) evalExpr(args, ctx);
@@ -2284,6 +2347,7 @@ function encodeLd(args: string[], ctx: EvalContext): number[] | undefined {
   if (upper(dst) === 'A' && upper(src) === 'I') return [0xed, 0x57];
   if (upper(dst) === 'A' && upper(src) === 'R') return [0xed, 0x5f];
   if (d8) {
+    warnParenthesizedImmediate(`LD ${dst},`, src, ctx);
     const out = pref(d8.prefix, 0x06 + d8.code * 8);
     if (d8.disp !== undefined) out.push(evalDisp(d8.disp, ctx));
     out.push(u8(src, ctx));
@@ -2399,7 +2463,23 @@ function encodeAlu(op: string, args: string[], ctx: EvalContext): number[] | und
     if (src.disp !== undefined) out.push(evalDisp(src.disp, ctx));
     return out;
   }
+  warnParenthesizedImmediate(`${op} `, args[0]!, ctx);
   return [spec.imm, u8(args[0]!, ctx)];
+}
+
+/**
+ * `ld b,(5)` and `cp (5)` look like memory reads, but no such instruction exists, so the
+ * parentheses are read as grouping and the value 5 is used (as sjasmplus does by
+ * default). That used to happen silently; it is a warning, since parenthesised
+ * immediates are valid source.
+ */
+function warnParenthesizedImmediate(head: string, operand: string, ctx: EvalContext): void {
+  const mem = memInfo(operand);
+  if (mem?.kind !== 'ABS') return;
+  warn(
+    ctx,
+    `${head}${operand}: the parentheses are read as grouping, so this uses the value ${mem.expr}, not the memory at that address (only LD A,(nn) loads from an address)`
+  );
 }
 
 function encodeJp(args: string[], ctx: EvalContext): number[] | undefined {
@@ -2469,11 +2549,15 @@ function encodeBitResSet(op: string, args: string[], ctx: EvalContext): number[]
   const bit = evalExpr(args[0]!, ctx) ?? 0;
   if (bit < 0 || bit > 7) return fail(ctx, `${op} bit must be 0..7`);
   const target = reg8Info(args[1]!);
-  if (!target) return fail(ctx, `Unsupported ${op} target: ${args[1]}`);
+  // There is no CB-prefixed form for IXH/IXL/IYH/IYL: `bit 0,ixh` used to drop the
+  // index prefix and assemble `bit 0,h`.
+  if (!target || target.indexHalf) return fail(ctx, `Unsupported ${op} target: ${args[1]}`);
   const copy = args[2] !== undefined ? reg8Info(args[2]) : undefined;
   if (args.length === 3) {
     if (target.disp === undefined) return fail(ctx, `${op} copy-register form is only valid for indexed memory`);
-    if (!copy || copy.disp !== undefined) return fail(ctx, `Unsupported ${op} copy-register: ${args[2]}`);
+    if (!copy || copy.disp !== undefined || copy.indexHalf || copy.code === 6) {
+      return fail(ctx, `Unsupported ${op} copy-register: ${args[2]}`);
+    }
   }
   const group = op === 'BIT' ? 0x40 : op === 'RES' ? 0x80 : 0xc0;
   const opcode = group + bit * 8 + (copy?.code ?? target.code);
@@ -2484,11 +2568,19 @@ function encodeBitResSet(op: string, args: string[], ctx: EvalContext): number[]
 function encodeRotate(op: string, args: string[], ctx: EvalContext): number[] | undefined {
   if (args.length < 1 || args.length > 2) return fail(ctx, `Unsupported ${op} form: ${args.join(', ')}`);
   const target = reg8Info(args[0]!);
-  if (!target) return fail(ctx, `Unsupported ${op} target: ${args[0]}`);
+  // `rlc ixh` used to assemble `rlc h` (no CB form takes an index half).
+  if (!target || target.indexHalf) return fail(ctx, `Unsupported ${op} target: ${args[0]}`);
+  if (args[1] !== undefined && target.disp === undefined) {
+    // `srl a,2` used to ignore the 2.
+    return fail(ctx, `${op} copy-register form is only valid for indexed memory`);
+  }
   const copy = args[1] !== undefined ? reg8Info(args[1]) : undefined;
+  if (args[1] !== undefined && (!copy || copy.disp !== undefined || copy.indexHalf || copy.code === 6)) {
+    // `rlc (ix+1),zzz` used to ignore zzz and assemble `rlc (ix+1)`.
+    return fail(ctx, `Unsupported ${op} copy-register: ${args[1]}`);
+  }
   const code = ROT_BASE.get(op)! + (copy?.code ?? target.code);
   if (target.disp !== undefined) return [target.prefix!, 0xcb, evalDisp(target.disp, ctx), code];
-  if (copy) return fail(ctx, `${op} copy-register form is only valid for indexed memory`);
   return [0xcb, code];
 }
 
@@ -2503,7 +2595,8 @@ function encodeIn(args: string[], ctx: EvalContext): number[] | undefined {
   const port = memInfo(args[1]!);
   if (upper(args[0]!) === 'A' && port?.kind === 'ABS' && !port.bracket) return [0xdb, u8(port.expr, ctx)];
   if (upper(args[0]!) === 'F' && port?.kind === 'C') return [0xed, 0x70];
-  if (dst && port?.kind === 'C') return [0xed, 0x40 + dst.code * 8];
+  // `in ixh,(c)` used to drop the prefix (`in h,(c)`), and `in (hl),(c)` became `in f,(c)`.
+  if (dst && !dst.indexHalf && dst.code !== 6 && port?.kind === 'C') return [0xed, 0x40 + dst.code * 8];
   return fail(ctx, `Unsupported IN form: ${args.join(', ')}`);
 }
 
@@ -2512,7 +2605,8 @@ function encodeOut(args: string[], ctx: EvalContext): number[] | undefined {
   const port = memInfo(args[0]!);
   const src = reg8Info(args[1]!);
   if (port?.kind === 'ABS' && !port.bracket && upper(args[1]!) === 'A') return [0xd3, u8(port.expr, ctx)];
-  if (port?.kind === 'C' && src) return [0xed, 0x41 + src.code * 8];
+  // `out (c),iyl` used to drop the prefix, and `out (c),(hl)` became `out (c),0`.
+  if (port?.kind === 'C' && src && !src.indexHalf && src.code !== 6) return [0xed, 0x41 + src.code * 8];
   if (port?.kind === 'C' && normalizeSpaces(args[1]!) === '0') return [0xed, 0x71];
   return fail(ctx, `Unsupported OUT form: ${args.join(', ')}`);
 }
@@ -2619,9 +2713,33 @@ function normalizeOperand(text: string): string {
 
 function memoryOperand(text: string): { inner: string; bracket: boolean } | undefined {
   const t = normalizeSpaces(text);
-  if (t.startsWith('(') && t.endsWith(')')) return { inner: t.slice(1, -1).trim(), bracket: false };
-  if (t.startsWith('[') && t.endsWith(']')) return { inner: t.slice(1, -1).trim(), bracket: true };
+  // The whole operand must be one bracketed group: `(1+2)*(3+4)` starts with `(` and
+  // ends with `)`, but it is an expression, not the memory operand `(1+2)*(3+4)`.
+  if (t.startsWith('(') && t.endsWith(')') && closingBracketIndex(t, '(', ')') === t.length - 1) {
+    return { inner: t.slice(1, -1).trim(), bracket: false };
+  }
+  if (t.startsWith('[') && t.endsWith(']') && closingBracketIndex(t, '[', ']') === t.length - 1) {
+    return { inner: t.slice(1, -1).trim(), bracket: true };
+  }
   return undefined;
+}
+
+/** Index of the bracket that closes `text[0]`, skipping quoted characters; -1 if none. */
+function closingBracketIndex(text: string, open: string, close: string): number {
+  let depth = 0;
+  let quote: string | undefined;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quote) {
+      if (ch === '\\') i++;
+      else if (ch === quote) quote = undefined;
+      continue;
+    }
+    if (ch === '"' || (ch === "'" && opensQuote(text, i))) quote = ch;
+    else if (ch === open) depth++;
+    else if (ch === close && --depth === 0) return i;
+  }
+  return -1;
 }
 
 function cond(text: string, ctx: EvalContext): number {
@@ -2657,8 +2775,8 @@ function u8(expr: string, ctx: EvalContext): number {
 
 /**
  * Whether an out-of-range 8-bit value is really a negative byte stored in 16 bits.
- * Expressions read true (`1==1`, `!0`) as 0xFFFF, and symbols keep 16 bits, so
- * `X EQU -1` reads as 0xFFFF; an 8-bit slot stores those as 0xFF. A literal 0xFFFF
+ * Expressions read true (`1==1`, `!0`) as 0xFFFF, so `X EQU 1==1` reads as 0xFFFF;
+ * an 8-bit slot stores it as 0xFF. (`X EQU -1` keeps -1 and needs no help.) A literal 0xFFFF
  * (`db 0xFFFF`, `ld a,65535`) does not fit and must be an error, so rather than
  * exempting every 0xFFFF the expression is re-read in the signed view (true = -1,
  * symbols keep their negative value) and the value passes only when it is exactly
@@ -3021,6 +3139,11 @@ function isStringLiteral(text: string): boolean {
 }
 
 function decodeString(text: string, ctx?: EvalContext): number[] {
+  return decodeStringWith(text, ctx ? (message) => fail(ctx, message) : undefined);
+}
+
+/** Decodes a quoted literal; `report` receives each unsupported escape (ASM-PROD-ERR-006). */
+function decodeStringWith(text: string, report?: (message: string) => void): number[] {
   const body = text.slice(1, -1);
   const quote = text.charAt(0);
   const out: number[] = [];
@@ -3032,14 +3155,14 @@ function decodeString(text: string, ctx?: EvalContext): number[] {
     }
     const n = body[++i];
     if (n === undefined) {
-      if (ctx?.strict) fail(ctx, 'Unsupported string escape: trailing backslash');
+      report?.('Unsupported string escape: trailing backslash');
     } else if (n === 'n') out.push(10);
     else if (n === 'r') out.push(13);
     else if (n === 't') out.push(9);
     else if (n === '\\') out.push(92);
     else if (n === quote) out.push(n.charCodeAt(0));
     else {
-      if (ctx?.strict) fail(ctx, `Unsupported string escape: \\${n}`);
+      report?.(`Unsupported string escape: \\${n}`);
       out.push(n.charCodeAt(0));
     }
   }
@@ -3095,7 +3218,7 @@ class ExprParser {
     private readonly ctx: EvalContext,
     private readonly signedView = false
   ) {
-    this.tokens = tokenizeExpr(text);
+    this.tokens = tokenizeExpr(text, this.syntaxErrors);
   }
 
   private bool(value: boolean): number {
@@ -3264,33 +3387,29 @@ class ExprParser {
   }
 
   private parseUnary(): number | undefined {
-    if (this.peek().value === '+') {
-      this.take('+');
-      return this.parseUnary();
+    const t = this.peek();
+    const op = t.kind === 'op' && ['+', '-', '~', '!'].includes(t.value) ? t.value : keyword(t, 'LOW') ? 'LOW' : keyword(t, 'HIGH') ? 'HIGH' : undefined;
+    if (op === undefined) return this.parsePrimary();
+    this.take();
+    const before = this.unresolved;
+    const operand = this.parseUnary();
+    if (operand === undefined) {
+      // `db -` / `db ~` used to read the missing operand as 0 and emit 00 / FF. An
+      // operand that is present but unresolved is reported as "Label not found" and
+      // keeps reading as 0 during layout, as before.
+      if (this.unresolved === before) {
+        this.syntaxErrors.push(`Missing operand after '${op}'`);
+        return undefined;
+      }
+      if (op === 'LOW' || op === 'HIGH') return undefined;
     }
-    if (this.peek().value === '-') {
-      this.take('-');
-      return -(this.parseUnary() ?? 0);
-    }
-    if (this.peek().value === '~') {
-      this.take('~');
-      return ~(this.parseUnary() ?? 0);
-    }
-    if (this.peek().value === '!') {
-      this.take('!');
-      return this.bool((this.parseUnary() ?? 0) === 0);
-    }
-    if (keyword(this.peek(), 'LOW')) {
-      this.take();
-      const value = this.parseUnary();
-      return value === undefined ? undefined : value & 0xff;
-    }
-    if (keyword(this.peek(), 'HIGH')) {
-      this.take();
-      const value = this.parseUnary();
-      return value === undefined ? undefined : (value >> 8) & 0xff;
-    }
-    return this.parsePrimary();
+    const value = operand ?? 0;
+    if (op === '+') return value;
+    if (op === '-') return -value;
+    if (op === '~') return ~value;
+    if (op === '!') return this.bool(value === 0);
+    if (op === 'LOW') return value & 0xff;
+    return (value >> 8) & 0xff;
   }
 
   private parsePrimary(): number | undefined {
@@ -3321,7 +3440,9 @@ class ExprParser {
     }
     if (t.value === '(') {
       const value = this.parseLogicalOr();
-      this.take(')');
+      // `db (1+2` and `ld hl,(buf` used to read as if the `)` were there.
+      if (this.peek().value === ')') this.take(')');
+      else this.syntaxErrors.push(`Missing ')' in expression: ${this.text}`);
       return value;
     }
     return undefined;
@@ -3343,7 +3464,16 @@ function endsOperand(out: Token[]): boolean {
   return last.kind === 'num' || last.value === ')' || last.value === '$';
 }
 
-function tokenizeExpr(text: string): Token[] {
+/**
+ * A character literal in an expression (`ld a,'\0'`) goes through decodeString without
+ * a context, so an escape it does not support used to become the escaped letter
+ * silently (`'\0'` read as `'0'`). ASM-PROD-ERR-006 makes it an error, as in data.
+ */
+function noteUnsupportedEscape(literal: string, errors: string[]): void {
+  decodeStringWith(literal, (message) => errors.push(message));
+}
+
+function tokenizeExpr(text: string, errors: string[] = []): Token[] {
   const out: Token[] = [];
   for (let i = 0; i < text.length; ) {
     const ch = text[i]!;
@@ -3401,7 +3531,9 @@ function tokenizeExpr(text: string): Token[] {
     if (ch === "'") {
       const end = text.indexOf("'", i + 1);
       if (end > i + 1) {
-        out.push({ kind: 'num', value: decodeString(text.slice(i, end + 1).replace(/^'/, '"').replace(/'$/, '"'))[0] ?? 0 });
+        const literal = text.slice(i, end + 1).replace(/^'/, '"').replace(/'$/, '"');
+        noteUnsupportedEscape(literal, errors);
+        out.push({ kind: 'num', value: decodeString(literal)[0] ?? 0 });
         i = end + 1;
         continue;
       }
@@ -3409,6 +3541,7 @@ function tokenizeExpr(text: string): Token[] {
     if (ch === '"') {
       const end = text.indexOf('"', i + 1);
       if (end > i + 1) {
+        noteUnsupportedEscape(text.slice(i, end + 1), errors);
         out.push({ kind: 'num', value: decodeString(text.slice(i, end + 1))[0] ?? 0 });
         i = end + 1;
         continue;

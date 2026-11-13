@@ -2077,10 +2077,8 @@ title's border stripes and SAVE's bands.
 
 ### ADR-0032 — Whole-project audit (2026-11-13): silent successes, debugger paths, release tooling
 
-**Status:** proposed, not ratified. Recorded by the audit session on 2026-11-13 and pushed
-for review on the branch `audit/whole-project-2026-11-13` (PR #45); the owner ratifies it
-by merging that pull request, as with ADR-0029 and ADR-0030. Until then it overrides no
-earlier ADR.
+**Status:** accepted (ratified by the owner 2026-11-13 by merging PR #45); recorded by the
+audit session.
 
 **Context.** The owner asked for a whole-project audit: find what is broken, inconsistent,
 inefficient or no longer needed, fix what is certain and list the rest. The full gate was
@@ -2205,4 +2203,85 @@ a regeneration from `dna/` alone would lose them. The largest findings that were
 are assembler misassemblies in the family ADR-0030 item 8 turned into diagnostics (symbols
 masked to 16 bits, `ei : ret` dropping the `ei`, an unclosed parenthesis, `bit 0,ixh`), three
 tape and snapshot core bugs found by running the cores, and conformance checks that can pass
-without running anything. They are in the review list with their reproductions.
+without running anything. They are in the review list with their reproductions. ADR-0033
+takes up the assembler ones.
+
+### ADR-0033 — Assembler: no silent misassembly (review list 1.1)
+
+**Status:** proposed, not ratified. Recorded on 2026-11-13 by the session the owner asked to
+work through section 1.1 of the ADR-0032 review list; the owner ratifies it by merging its
+pull request. Until then it overrides no earlier ADR.
+
+**Context.** The ADR-0032 audit reproduced about twenty sources that `@zx-vibes/asm`
+assembled to wrong bytes with exit 0 and no diagnostic: the family ADR-0030 item 8 began
+turning into diagnostics. The rule that decides each case is ASM-PROD-SCOPE-004:
+unsupported syntax fails clearly instead of being silently ignored or misassembled. So
+syntax the assembler does not support (`ei : ret`, the `\0` escape) became an error, not
+a new feature. A case was fixed when an existing claim already decided it, or when the
+narrowest rule that stops the misassembly could be stated as a new claim. A case was left
+when a test or claim pins the current behaviour against another claim.
+
+**Decisions.**
+- **D1. Existing claims decide these, so they were fixed.** ASM-PROD-ERR-003: an unclosed
+  `(` and a unary operator with no operand are errors (`db (1+2` emitted 03, `db -` 00,
+  `db ~` FF, `ld hl,(buf` an immediate load). ASM-PROD-ERR-006: an unsupported escape in a
+  character literal inside an expression is an error (`ld a,'\0'` read `'0'`).
+  ASM-PROD-ERR-011 and the INST-006 rule: `bit 0,ixh`, `rlc ixh`, `in ixh,(c)` and
+  `out (c),iyl` dropped the index prefix, `in (hl),(c)` and `out (c),(hl)` became the
+  `F`/`0` forms, and `srl a,2` and `rlc (ix+1),zzz` ignored the extra operand; all are
+  errors. ASM-PROD-MACRO-002 and REPEAT-001: macro arguments were substituted one after
+  another (`Pair right,5` with `right EQU 9` gave `05 05`), and a DUP counter `b` was
+  substituted inside `1b`. ASM-PROD-DEFINES-001 and -002: a source DEFINE was visible
+  above its line in the emit pass (`ld a,FOO` before `DEFINE FOO 1` assembled `3E 01`),
+  and `DEFINE FLAG` followed by `IF FLAG` was "Label not found" instead of true; it now
+  reads as 1, the value `-D FLAG` gives. ASM-PROD-EXPR-001: `ld a,(1+2)*(3+4)` was read as
+  a memory operand and failed; an operand is a memory operand only when it is one
+  bracketed group. `INCLUDE` without a target and `EQU 5` without a name were skipped;
+  they are errors, recorded as ASM-PROD-ERR-013 next to ERR-009. A column-0 macro call whose argument is `end` (`Jump end`) took the
+  `label END` form of ASM-PROD-END-001 and ended the source with zero bytes; a macro name
+  now wins, as it does for every other column-0 call.
+- **D2. Constants keep their full value (ASM-PROD-EXPR-007).** The symbol table stored every
+  value masked to 16 bits: `dw CPU_HZ/1000` with `CPU_HZ EQU 3500000` was 26, `N EQU -3`
+  made `IF N < 0` false, and `ld hl,buf+N` with `N EQU -1` was a false range error. EQU,
+  DEFL, `=`, source DEFINE and API/CLI define values now keep their value at load time,
+  in layout and in the emit pass, and the value is range-checked where it is used. The
+  exported `symbols[].value` and the SLD keep 16 bits, since the toolkit reads them.
+  ASM-PROD-EXPR-004 is unchanged and pinned: `X EQU -2` / `db X` is FE, `X EQU 1==1` /
+  `db X` is FF, `db 0xFFFF` is an error. *Consequence:* a constant used whole in a slot it
+  does not fit (`dw CPU_HZ`) is now a range error instead of its low 16 bits.
+- **D3. `ei : ret` is an error (ASM-PROD-LABELS-003).** The colon made `ei` a label and only
+  `RET` was assembled. sjasmplus reads a colon as a statement separator; this assembler
+  does not, so per ASM-PROD-SCOPE-004 a line whose label position holds an instruction
+  mnemonic followed by more text is an error. A label named like a directive (`end:`,
+  `org:`) is unchanged. *Rejected for now:* supporting `:` as a separator, a language
+  extension the owner can choose later.
+- **D4. `ld b,(5)` and `cp (5)` warn (ASM-PROD-INST-012).** No instruction loads B from an
+  address, so the parentheses are grouping and the value 5 is used, as sjasmplus does by
+  default. Turning it into an error would reject source sjasmplus accepts; a warning names
+  the misreading. *Rejected:* an error (the stricter `--syntax=b` sjasmplus mode).
+
+**Left for the owner** (pinned by a test against a claim, so a choice rather than a fix):
+ASM-14, `BLOCK 2,0x100` and `ALIGN 4,0x1FF` truncating the fill byte, pinned by the test
+"supports sjasmplus fill operands" against ASM-PROD-ERR-005; ASM-6, code past `0xFFFF`
+wrapping in the SLD and `DS 1000000000` exhausting memory, with `DS 200000` pinned by a
+test.
+
+**Consequences.** Source that assembled before now fails where it was misassembled: the
+D1 cases, `ei : ret`, and a constant wider than its slot. `ld b,(5)`-style operands add a
+warning. A source that assembled correctly before gives the same bytes: the 150 assembly
+sources in this repository (every `.asm` file, the fenced `asm` blocks in Markdown, the
+assembler conformance fixtures) and 177 in other local zx-vibes projects, a full game
+among them, gave identical results, diagnostics and warnings with the old and the new
+build.
+
+**Items.** `packages/asm/src/assembler.ts`; tests in `packages/asm/tests/assembler.test.ts`
+("no silent misassembly (ADR-0033)"); 21 cases in
+`dna/conformance/assembler/syntax-surface.json`; claims LABELS-003, EXPR-006, EXPR-007,
+DEFINES-003, MACRO-005, MACRO-006, INST-011, INST-012 and ERR-013 in
+`dna/product/assembler.md`. Every new fixture case and test fails against the old build.
+
+**Verification.** On Windows 11 with Node 24.22.1, 2026-11-13: `pnpm run verify` passed as
+one command (asm 87 tests with the 19 sjasmplus parity tests skipped, since sjasmplus is not
+installed; 164 assembler API fixture cases; toolkit 573 tests; coverage 180/181; provenance
+1060 items), plus the before/after differential above. Not run locally: the sjasmplus
+parity tests, Linux, macOS and Node 20/22; the pull request's CI covers the last three.

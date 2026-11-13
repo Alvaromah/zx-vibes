@@ -42,6 +42,7 @@
 - [id: ASM-PROD-SRC-SKELETON-004] `DEVICE` accepts only `ZXSPECTRUM48`, case-insensitively; a missing or different device name is an error. [provenance: contract]
 - [id: ASM-PROD-LABELS-001] Labels support `label:`, column-0 `label`, and local dotted labels scoped to the previous global label. [provenance: contract]
 - [id: ASM-PROD-LABELS-002] `MODULE name` and `ENDMODULE` scope labels; nested modules qualify labels with dotted module paths. [provenance: contract]
+- [id: ASM-PROD-LABELS-003] A colon does not separate statements: a line whose label position holds an instruction mnemonic followed by more text (`ei : ret`) is an error, not a label named like the instruction followed by the rest. [provenance: decision:ADR-0033]
 - [id: ASM-PROD-CONSTANTS-001] Constants support `EQU`, `DEFL`, and `name = expression`, with equals assignment parsed as a `DEFL`-style assignment. [provenance: contract]
 - [id: ASM-PROD-CONSTANTS-002] `EQU` defines a constant: redefining an `EQU` symbol with a different value is an error while repeating the same value is accepted, `DEFL` and `name = expression` symbols stay reassignable, and a code label may not share its name with an `EQU`, `DEFL` or `=` symbol. [provenance: contract]
 - [id: ASM-PROD-EXPR-001] Expressions support labels, `$` for current PC, numeric literals, first-character string or character literals, unary operators, arithmetic, bitwise operators, comparisons, and boolean operators. [provenance: contract]
@@ -49,10 +50,13 @@
 - [id: ASM-PROD-EXPR-003] Expression helpers and operators include `LOW`, `HIGH`, `low(...)`, `high(...)`, `/`, `%`, `MOD`, `<<`, `>>`, `SHL`, `SHR`, `&`, `|`, `^`, `~`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, and `!`. [provenance: contract]
 - [id: ASM-PROD-EXPR-004] Comparison and logical operators yield 0 for false and 0xFFFF for true; an 8-bit slot stores true as 0xFF and a symbol defined as a negative byte (`X EQU -2`) as its two's complement, while a literal 0xFFFF or 65535 in an 8-bit slot is an out-of-range error. [provenance: contract]
 - [id: ASM-PROD-EXPR-005] `%` after an operand is the modulo operator (`7%10` is 7) and starts a binary literal only where an operand is expected (`%1010`, `1+%1010`); a hexadecimal literal with an `h` suffix takes precedence over the `0b` binary prefix (`0B0h` is 0xB0). [provenance: contract]
+- [id: ASM-PROD-EXPR-006] A parenthesised group must be closed and a unary operator (`-`, `+`, `~`, `!`, `LOW`, `HIGH`) needs an operand; an operand is a memory operand only when the whole operand is one bracketed group, so `(1+2)*(3+4)` is an expression and `ld hl,(buf` is an error, not an immediate load. [provenance: decision:ADR-0033]
+- [id: ASM-PROD-EXPR-007] `EQU`, `DEFL`, `=` and define values keep their full value in expressions (`CPU_HZ EQU 3500000` / `dw CPU_HZ/1000` is 3500, and `N EQU -3` / `IF N < 0` is true); a value is range-checked where it is used, and the exported symbol value and SLD record keep 16 bits. [provenance: decision:ADR-0033]
 - [id: ASM-PROD-INCLUDE-001] Quoted includes and binary inputs resolve relative to the including file first, then include paths. [provenance: contract]
 - [id: ASM-PROD-INCLUDE-002] Angle-bracket includes and binary inputs search include paths only. [provenance: contract]
 - [id: ASM-PROD-DEFINES-001] Source directives `DEFINE NAME expression`, `DEFINE NAME`, and `UNDEFINE NAME` are order-sensitive. [provenance: contract]
 - [id: ASM-PROD-DEFINES-002] `DEFINE NAME` defaults the define value to true; `DEFINE NAME=1` is invalid source syntax. [provenance: contract]
+- [id: ASM-PROD-DEFINES-003] A source `DEFINE NAME` without a value reads as 1, the value `-D NAME` gives, in `IF` conditions and expressions, and a source define is not visible on lines above its `DEFINE`. [provenance: decision:ADR-0033]
 - [id: ASM-PROD-COND-001] Conditional assembly supports `IF`, `IFDEF`, `IFNDEF`, `ELSEIF`, `ELIF`, `ELSE`, and `ENDIF`. [provenance: contract]
 - [id: ASM-PROD-COND-002] `IFDEF` and `IFNDEF` check source or API defines, not `EQU` labels. [provenance: contract]
 - [id: ASM-PROD-COND-003] `IF`/`ELSEIF` conditions and `DUP`/`REPT` counts are evaluated while the source is read, before addresses exist: they may use `EQU`/`DEFL` constants already known above them, source `DEFINE` values and API or CLI defines, and using `$`, a code label, or a constant computed from them or from a later definition is an error instead of a silently wrong branch or count. [provenance: contract]
@@ -60,6 +64,8 @@
 - [id: ASM-PROD-MACRO-002] Macro parameters are textual replacements, and dotted local labels inside macro bodies are renamed per expansion. [provenance: contract]
 - [id: ASM-PROD-MACRO-003] A macro call must pass exactly as many arguments as the macro has parameters, and a label may precede a macro call or an `INCLUDE` (`here: Name args`), taking the address where the expansion or the included source begins. [provenance: contract]
 - [id: ASM-PROD-MACRO-004] A diagnostic raised inside a macro expansion keeps the macro body's file and line and names the macro and its call site in the message. [provenance: contract]
+- [id: ASM-PROD-MACRO-005] Macro arguments replace their parameters in one pass, so an argument's text is not replaced again by another parameter (`Pair right,5` for `Pair MACRO left,right` gives `right,5`), and neither a macro parameter nor a repeat counter is replaced inside a numeric literal (`1b`, `0x1b`). [provenance: decision:ADR-0033]
+- [id: ASM-PROD-MACRO-006] A column-0 line whose first word names a macro is a macro call even when its argument is `end`; it is not the `label END` form of ASM-PROD-END-001. [provenance: decision:ADR-0033]
 - [id: ASM-PROD-REPEAT-001] `DUP` and `REPT` repeat source blocks and may bind an optional zero-based counter symbol. [provenance: contract]
 - [id: ASM-PROD-REPEAT-002] `EDUP`, `ENDR`, and `ENDW` terminate repeat blocks; repeat counts may be zero but not negative. [provenance: contract]
 - [id: ASM-PROD-DATA-001] Byte data directives include `DB`, `DEFB`, `BYTE`, `DEFM`, and `DM`. [provenance: contract]
@@ -100,6 +106,8 @@
 - [id: ASM-PROD-INST-008] Square brackets are accepted as memory operand aliases in legal memory forms such as `LD A,[HL]`, `LD [0x4000],A`, and `SET 3,[IX+4],A`. [provenance: contract]
 - [id: ASM-PROD-INST-009] Square-bracket I/O port forms such as `IN A,[0xFE]` and `OUT [0xFE],A` are rejected. [provenance: contract]
 - [id: ASM-PROD-INST-010] Whitespace just inside memory-operand brackets is insignificant: `LD A,( HL )` assembles like `LD A,(HL)`. [provenance: contract]
+- [id: ASM-PROD-INST-011] Forms with no index-half or `(HL)` encoding reject those operands instead of dropping a prefix: `BIT`, `RES`, `SET` and the CB rotates and shifts reject `IXH`, `IXL`, `IYH` and `IYL`, `IN r,(C)` and `OUT (C),r` reject them and `(HL)`, a CB rotate or shift on a register takes one operand, and the copy register of an indexed CB form must be a plain 8-bit register. [provenance: decision:ADR-0033]
+- [id: ASM-PROD-INST-012] An 8-bit immediate written in parentheses where the instruction has no memory form (`LD B,(5)`, `CP (5)`) assembles as the value, as sjasmplus does by default, and produces a warning. [provenance: decision:ADR-0033]
 
 ## Error Behavior
 
@@ -115,6 +123,7 @@
 - [id: ASM-PROD-ERR-010] `zxasm disasm` exits 1 and writes a validation error for invalid `--org` or non-positive `--count` values. [provenance: contract]
 - [id: ASM-PROD-ERR-011] An instruction with a missing or extra operand reports one arity diagnostic and no internal error; a bare `RST` is an error, not `RST 0`. [provenance: contract]
 - [id: ASM-PROD-ERR-012] An unresolved operand is reported once: an unresolved relative-branch target reports `Label not found` without a second out-of-range error, and an unresolved operand of a binary operator (`1+missing`) does not add a missing-operand error. [provenance: contract]
+- [id: ASM-PROD-ERR-013] `INCLUDE` without a file name and `EQU` or `DEFL` without a symbol name are errors instead of being skipped, and an unsupported escape in a character literal inside an expression (`ld a,'\0'`) is an error, as ASM-PROD-ERR-006 says for strings. [provenance: decision:ADR-0033]
 
 ## Fixture Candidate Matrix
 
