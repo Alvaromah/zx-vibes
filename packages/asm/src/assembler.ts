@@ -435,7 +435,7 @@ function assembleLines(sourceLines: SourceLine[], opts: AssembleOptions): Assemb
       if (line.labelKey) {
         const value = evalExpr(line.args, ctx);
         if (value !== undefined) {
-          emitSymbols.set(line.labelKey, value & 0xffff);
+          emitSymbols.set(line.labelKey, value);
           recordSignedValue(ctx, line.labelKey, line.args);
         }
       }
@@ -580,17 +580,20 @@ function computeLayout(sourceLines: SourceLine[], opts: AssembleOptions): Layout
         if (finalPass && raw !== undefined && definedAs.get(line.labelKey) === 'EQU') {
           const first = equValues.get(line.labelKey);
           if (first === undefined) {
-            equValues.set(line.labelKey, value & 0xffff);
-          } else if (first !== (value & 0xffff)) {
+            equValues.set(line.labelKey, value);
+          } else if (first !== value) {
             errors.push(
               diag(
                 line.loc,
-                `EQU ${line.labelKey} redefined with a different value (${hex16(first)}, then ${hex16(value & 0xffff)}); use DEFL or = for a symbol that changes`
+                `EQU ${line.labelKey} redefined with a different value (${hex16(first)}, then ${hex16(value)}); use DEFL or = for a symbol that changes`
               )
             );
           }
         }
-        symbols.set(line.labelKey, value & 0xffff);
+        // A constant keeps its full value for expressions (`CPU_HZ EQU 3500000` /
+        // `dw CPU_HZ/1000` is 3500; `N EQU -3` / `IF N < 0` is true). The exported
+        // symbol and the SLD record keep 16 bits, as addresses do (ADR-0033).
+        symbols.set(line.labelKey, value);
         recordSignedValue(ctx, line.labelKey, line.args);
         if (!definitions.has(line.labelKey)) {
           definitions.set(line.labelKey, {
@@ -662,7 +665,7 @@ function hex16(value: number): string {
 }
 
 interface ApiDefine {
-  /** The value as expressions read it (before the 16-bit masking of the symbol table). */
+  /** The value as expressions read it (the symbol table keeps it unmasked). */
   value: number;
   /** The signed view (see readsAsNegativeByte): `-D X=1==1` is -1 here, 0xFFFF above. */
   signed: number;
@@ -675,14 +678,14 @@ function apiDefineValues(defines: Record<string, string | number | boolean>): Ma
   );
 }
 
-/** Stores a define's value: 16-bit in `symbols`, a negative signed view in `negativeSymbols`. */
+/** Stores a define's value in `symbols`, and a negative signed view in `negativeSymbols`. */
 function setDefineValue(
   symbols: Map<string, number>,
   negativeSymbols: Map<string, number>,
   name: string,
   define: ApiDefine
 ): void {
-  symbols.set(name, define.value & 0xffff);
+  symbols.set(name, define.value);
   if (define.signed < 0) negativeSymbols.set(name, define.signed);
   else negativeSymbols.delete(name);
 }
@@ -1224,7 +1227,7 @@ function applySourceDefine(
   }
   const value = evalExpr(define.expr, loadEvalContext(loc, ctx, 'DEFINE', ctx.diagnostics, true));
   if (value === undefined) return;
-  ctx.symbols.set(define.name, value & 0xffff);
+  ctx.symbols.set(define.name, value);
   ctx.layoutSymbols.delete(define.name);
   ctx.defineValueNames.add(define.name);
 }
@@ -1275,7 +1278,7 @@ function applyLayoutDefine(
 
   const value = evalExpr(expr, ctx);
   if (value === undefined) return;
-  ctx.symbols.set(name, value & 0xffff);
+  ctx.symbols.set(name, value);
   // `DEFINE NEG -1` must stay usable in an 8-bit slot, like `NEG EQU -1`.
   recordSignedValue(ctx, name, expr);
   sourceDefineSymbols.add(name);
@@ -1674,7 +1677,7 @@ function noteLoadTimeSymbol(loc: SourceLine, ctx: LoadContext): void {
     ctx.symbols.delete(key);
     ctx.layoutSymbols.delete(key);
   } else {
-    ctx.symbols.set(key, value & 0xffff);
+    ctx.symbols.set(key, value);
     ctx.layoutSymbols.delete(key);
   }
 }
@@ -1686,7 +1689,7 @@ function seedDefines(
 ): void {
   for (const [name, raw] of Object.entries(defines)) {
     const value = defineValue(raw);
-    symbols.set(name, value & 0xffff);
+    symbols.set(name, value);
     definitions.set(name, {
       name,
       value: value & 0xffff,
@@ -2772,8 +2775,8 @@ function u8(expr: string, ctx: EvalContext): number {
 
 /**
  * Whether an out-of-range 8-bit value is really a negative byte stored in 16 bits.
- * Expressions read true (`1==1`, `!0`) as 0xFFFF, and symbols keep 16 bits, so
- * `X EQU -1` reads as 0xFFFF; an 8-bit slot stores those as 0xFF. A literal 0xFFFF
+ * Expressions read true (`1==1`, `!0`) as 0xFFFF, so `X EQU 1==1` reads as 0xFFFF;
+ * an 8-bit slot stores it as 0xFF. (`X EQU -1` keeps -1 and needs no help.) A literal 0xFFFF
  * (`db 0xFFFF`, `ld a,65535`) does not fit and must be an error, so rather than
  * exempting every 0xFFFF the expression is re-read in the signed view (true = -1,
  * symbols keep their negative value) and the value passes only when it is exactly

@@ -2112,6 +2112,34 @@ describe('no silent misassembly (ADR-0033)', () => {
     expect(hex(r.bytes)).toBe('01021B1C');
   });
 
+  it('keeps constants at full width in expressions and 16 bits in exported symbols', () => {
+    const r = at(
+      'HZ EQU 3500000',
+      'N EQU -3',
+      'NEG2 EQU -2',
+      'T EQU 1==1',
+      '    dw HZ/1000, HZ >> 8 & 0xFFFF',
+      '    IF N < 0',
+      '    db 1',
+      '    ENDIF',
+      '    db NEG2, T, N/2 & 0xFF',
+      '    ld (ix+NEG2),a',
+      '    DEFINE BIG 0x12345',
+      '    dw BIG - 0x10000'
+    );
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    expect(hex(r.bytes)).toBe('AC0D' + '6735' + '01' + 'FEFFFF' + 'DD77FE' + '4523');
+    // ASM-PROD-EXPR-004 still holds: a literal 0xFFFF does not fit a byte.
+    oneError(['    db 0xFFFF'], '8-bit value out of range: 0xFFFF');
+    oneError(['HZ EQU 3500000', '    dw HZ'], '16-bit value out of range: HZ');
+    // The exported symbol and the SLD keep 16 bits, as before.
+    expect(r.symbols.find((s) => s.name === 'HZ')?.value).toBe(3500000 & 0xffff);
+    expect(r.symbols.find((s) => s.name === 'N')?.value).toBe(0xfffd);
+    const api = assemble('    ORG 0x8000\n    dw BIG/16\n', { defines: { BIG: '0x10000' } });
+    expect(api.ok, JSON.stringify(api.errors)).toBe(true);
+    expect(hex(api.bytes)).toBe('0010');
+  });
+
   it('warns when parentheses around an immediate look like a memory read', () => {
     const r = at('    cp (5)', '    ld (ix+1),(7)', '    ld b,5', '    ld a,(5)');
     expect(r.ok, JSON.stringify(r.errors)).toBe(true);

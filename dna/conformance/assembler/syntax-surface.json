@@ -576,6 +576,34 @@
         "options": {
           "entryPath": "equ-without-name.asm"
         }
+      },
+      {
+        "name": "constants-keep-full-width",
+        "sourceLines": ["    ORG 0x8000", "CPU_HZ EQU 3500000", "    dw CPU_HZ/1000", ""],
+        "options": {
+          "entryPath": "constants-keep-full-width.asm"
+        }
+      },
+      {
+        "name": "negative-constant-compares-as-negative",
+        "sourceLines": ["    ORG 0x8000", "N EQU -3", "    IF N < 0", "    db 1", "    ELSE", "    db 2", "    ENDIF", ""],
+        "options": {
+          "entryPath": "negative-constant-compares-as-negative.asm"
+        }
+      },
+      {
+        "name": "negative-constant-in-address-expression",
+        "sourceLines": ["    ORG 0x8000", "N EQU -1", "buf: ld hl,buf+N", ""],
+        "options": {
+          "entryPath": "negative-constant-in-address-expression.asm"
+        }
+      },
+      {
+        "name": "wide-constant-in-16-bit-slot-is-an-error",
+        "sourceLines": ["    ORG 0x8000", "CPU_HZ EQU 3500000", "    dw CPU_HZ", ""],
+        "options": {
+          "entryPath": "wide-constant-in-16-bit-slot-is-an-error.asm"
+        }
       }
     ]
   },
@@ -980,6 +1008,31 @@
         "errors": [
           {
             "message": "EQU needs a name: write NAME EQU value"
+          }
+        ]
+      },
+      {
+        "name": "constants-keep-full-width",
+        "ok": true,
+        "bytesHex": "AC0D"
+      },
+      {
+        "name": "negative-constant-compares-as-negative",
+        "ok": true,
+        "bytesHex": "01"
+      },
+      {
+        "name": "negative-constant-in-address-expression",
+        "ok": true,
+        "bytesHex": "21FF7F"
+      },
+      {
+        "name": "wide-constant-in-16-bit-slot-is-an-error",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "16-bit value out of range: CPU_HZ"
           }
         ]
       }
