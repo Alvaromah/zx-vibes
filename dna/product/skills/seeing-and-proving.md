@@ -54,6 +54,12 @@ a breakpoint mid-draw. Check `frameBudget.overrunFrames` and
 `worstFrame.busyTStates` before chasing a render bug; `haltSynced: true` alone is
 only a majority cadence signal and can coexist with intermittent missed frames.
 
+Screenshots show the 256×192 screen only. To see the border too (raster stripes,
+the bands a tape `SAVE` paints), add `--border` to `run --screenshot` or `verify`:
+the PNG becomes the 320×240 frame, each row in the border colour its raster line
+started with during the last frame, as the preview player draws it. Keep baselines
+for `--diff`/`screenDiff` without it.
+
 ## Visual regression
 
 ```
@@ -75,6 +81,12 @@ most proof-per-line:
   your own `EQU` map; `zxs symbols get <label>` resolves them).
 - `frameBudget` — require no missed frame deadlines; put
   `{ "type": "frameBudget", "maxOverrunFrames": 0 }` in every real-time smoke test.
+  Measurement starts at the first `HALT` that an interrupt resumes. Every later
+  frame boundary counts, including one-off work such as drawing a title or
+  building a level. Do slow set-up before your first `HALT`, split it across
+  frames, or anchor the spec with `waitFor`: after readiness the measured run
+  starts afresh, and so does its budget. A failing `frameBudget` names the late
+  frames, and `run --json` lists the first 32 in `frameBudget.overruns`.
 - `at` — temporal checkpoints: assert mid-run state at a named frame, e.g. the
   apex of a jump.
 - `beeperEdges` — sound actually reached port `0xFE` bit 4

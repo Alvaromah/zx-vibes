@@ -114,10 +114,12 @@ describe('printEnvelope (CLI-PROD-CONV-JSON-001 — one printer)', () => {
       }),
       { json: false, streams },
     );
-    const line = out.join('').trim();
-    expect(line).toBe('setup: agent=codex global=false installed=27 skipped=1 next=2');
+    const [line, ...rest] = out.join('').trim().split('\n');
+    expect(line).toBe('setup: agent=codex global=false installed=27 skipped=1');
     expect(line).not.toContain('.codex/zx-vibes/f0.md');
-    expect(line.length).toBeLessThan(120);
+    expect(line!.length).toBeLessThan(120);
+    // The next steps are the line a newcomer needs: printed, not counted.
+    expect(rest).toEqual(['next:', '  zxs verify --json', '  restart Codex']);
   });
 
   it('reports the verdict, not just a count, for ok-bearing lists', () => {
@@ -159,7 +161,7 @@ describe('printEnvelope (CLI-PROD-CONV-JSON-001 — one printer)', () => {
       { json: false, streams },
     );
     expect(out.join('').trim()).toBe(
-      'new: name=pong dir=pong template=game files=3 next=1',
+      'new: name=pong dir=pong template=game files=3\nnext:\n  cd pong',
     );
   });
 

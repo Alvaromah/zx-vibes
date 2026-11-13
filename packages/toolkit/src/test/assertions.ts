@@ -153,6 +153,20 @@ function parseHexBytes(hex: string): number[] {
   return bytes;
 }
 
+/** How many late frames a failing `frameBudget` names. */
+const OVERRUN_FRAMES_NAMED = 8;
+
+/**
+ * ` (frames 10, 20, …)`: which frames missed their deadline, so a failing spec says
+ * where to look (numbered like `worstFrame.frame`, from the measured run's start).
+ */
+function overrunFramesNote(overruns: RunFrameBudget['overruns'], total: number): string {
+  if (overruns.length === 0) return '';
+  const named = overruns.slice(0, OVERRUN_FRAMES_NAMED).map((overrun) => String(overrun.frame));
+  const more = total > named.length ? ', …' : '';
+  return ` (frame${total === 1 ? '' : 's'} ${named.join(', ')}${more})`;
+}
+
 /** `[min,max]` bound check (an omitted bound is unbounded) → failure string or null. */
 function rangeFail(label: string, value: number, min?: number, max?: number): string | null {
   if (min !== undefined && value < min) return `${label}: ${value} is below min ${min}`;
@@ -219,7 +233,8 @@ export function evaluateAssertion(a: RawAssertion, target: Snapshot, ctx: RunCon
       }
       return ctx.frameBudget.overrunFrames <= maxOverrunFrames
         ? null
-        : `frameBudget: ${ctx.frameBudget.overrunFrames} overrun frame(s) exceeds max ${maxOverrunFrames}`;
+        : `frameBudget: ${ctx.frameBudget.overrunFrames} overrun frame(s) exceeds max ${maxOverrunFrames}` +
+            overrunFramesNote(ctx.frameBudget.overruns, ctx.frameBudget.overrunFrames);
     }
     case 'screenIncludes': {
       const text = strField(a, 'text');

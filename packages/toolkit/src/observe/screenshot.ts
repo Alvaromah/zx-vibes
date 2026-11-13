@@ -13,7 +13,16 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { PNG } from 'pngjs';
 import type { Machine } from '@zx-vibes/machine';
-import { readScreenImage, renderRgbaImage, type RgbaImage } from './screen.js';
+import {
+  BORDER_X,
+  BORDER_Y,
+  OUT_HEIGHT,
+  OUT_WIDTH,
+  borderRowsFromLog,
+  fillBorderRows,
+} from '../preview/border-frame.js';
+import type { FrameBorder } from '../runtime/io-device.js';
+import { PALETTE_RGB, readScreenImage, renderRgbaImage, type RgbaImage } from './screen.js';
 
 /**
  * Encode an RGBA framebuffer to PNG bytes (the one encoder, CLI-PROD-RULE-SCREENSHOT-001).
@@ -79,13 +88,38 @@ export function writePng(absPath: string, image: RgbaImage): void {
 }
 
 /**
+ * The 320×240 bordered frame (raster-border.md RASTER-GEOMETRY-001): the 256×192 screen
+ * inside a border whose 240 rows each take the colour in force where their raster line
+ * begins during `border`'s frame — the preview player's renderer (border-frame.ts), so a
+ * `SAVE` paints its bands here as it does in the browser (RASTER-SAVE-PP-001).
+ */
+export function withBorder(screen: RgbaImage, border: FrameBorder): RgbaImage {
+  const data = new Uint8ClampedArray(OUT_WIDTH * OUT_HEIGHT * 4);
+  fillBorderRows(data, borderRowsFromLog(border.log, border.carryIn), PALETTE_RGB);
+  const rowBytes = screen.width * 4;
+  for (let y = 0; y < screen.height; y += 1) {
+    const src = y * rowBytes;
+    data.set(screen.data.subarray(src, src + rowBytes), ((y + BORDER_Y) * OUT_WIDTH + BORDER_X) * 4);
+  }
+  return { width: OUT_WIDTH, height: OUT_HEIGHT, data: new Uint8Array(data.buffer) };
+}
+
+/**
  * Capture a machine's current screen to a PNG file at `absPath` (RT-PROD-VERIFY-001
  * screenshot stage). Reads the 6912-byte screen image and renders it through the single
  * shared renderer at FLASH phase 0 (deterministic, FLASH-stable). `scale` is the same
  * presentation-only integer zoom `screen --scale` applies (1..4, default 1) — one
- * scaler behind every PNG artifact (CLI-PROD-RULE-SCREENSHOT-001). Returns `absPath`.
+ * scaler behind every PNG artifact (CLI-PROD-RULE-SCREENSHOT-001). With `border` (the
+ * run's last frame, `run`/`verify --border`, CLI-PROD-RUN-008) the image is the 320×240
+ * bordered frame instead of the bare 256×192 screen. Returns `absPath`.
  */
-export function captureScreenshot(machine: Machine, absPath: string, scale = 1): string {
-  writePng(absPath, scaleRgba(renderRgbaImage(readScreenImage(machine), 0), scale));
+export function captureScreenshot(
+  machine: Machine,
+  absPath: string,
+  scale = 1,
+  border?: FrameBorder,
+): string {
+  const screen = renderRgbaImage(readScreenImage(machine), 0);
+  writePng(absPath, scaleRgba(border === undefined ? screen : withBorder(screen, border), scale));
   return absPath;
 }

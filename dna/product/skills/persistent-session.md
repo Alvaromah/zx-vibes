@@ -45,6 +45,10 @@ test "door opens when the last gem is taken" without scripting the whole route.
 4. **Input frames restart on every run.** In
    `zxs run --frames 140 --keys "60:SPACE*4" --state ...`, frame `60` means 60
    frames after this invocation resumed, not frame 60 of the session's lifetime.
+   An explicit `--frames` is a hard stop: `--frames 100 --keys "0:SPACE*500"`
+   stops at frame 100 with `input.truncated: true`, so you can pause a keyed
+   scenario anywhere, inspect it, and `trace --keys ... --state` from there.
+   Without `--frames`, the run lasts until the plan ends.
 
 Once an injected scenario should become part of the acceptance gate, move it
 into a declarative spec: `setup` writes the RAM values and `waitFor` anchors

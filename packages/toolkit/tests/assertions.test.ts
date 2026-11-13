@@ -73,6 +73,8 @@ function ctx(over: Partial<RunContext> = {}): RunContext {
       measuredFrames: 120,
       interruptFrames: 120,
       overrunFrames: 0,
+      overruns: [],
+      overrunsTruncated: false,
       idleTStates: { min: 100, average: 1000 },
       worstFrame: { frame: 1, busyTStates: 69788, idleTStates: 100, overrun: false },
     },
@@ -129,6 +131,24 @@ describe('frameBudget (ASSERT-PROD-FRAME-BUDGET-001) — source: interrupt/HALT 
       snap(),
       ctx({ frameBudget: { ...ctx().frameBudget, overrunFrames: 2 } }),
     )).toMatch(/2 overrun frame/);
+    // A failing budget names the late frames (the first 8, then an ellipsis).
+    const late = (frames: number[], total = frames.length) => ctx({
+      frameBudget: {
+        ...ctx().frameBudget,
+        overrunFrames: total,
+        overruns: frames.map((frame) => ({ frame, busyTStates: 70000 })),
+        overrunsTruncated: total > frames.length,
+      },
+    });
+    expect(ev({ type: 'frameBudget' }, snap(), late([10, 21]))).toBe(
+      'frameBudget: 2 overrun frame(s) exceeds max 0 (frames 10, 21)',
+    );
+    expect(ev({ type: 'frameBudget' }, snap(), late([312]))).toBe(
+      'frameBudget: 1 overrun frame(s) exceeds max 0 (frame 312)',
+    );
+    expect(ev({ type: 'frameBudget' }, snap(), late(Array.from({ length: 32 }, (_, i) => 100 + i), 225))).toBe(
+      'frameBudget: 225 overrun frame(s) exceeds max 0 (frames 100, 101, 102, 103, 104, 105, 106, 107, …)',
+    );
     expect(ev(
       { type: 'frameBudget' },
       snap(),

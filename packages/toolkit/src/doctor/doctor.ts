@@ -12,21 +12,18 @@
 // Checks (ERR-PROD-ENV-001): Node >= 20; the embedded `@zx-vibes/asm` importable
 // (while it is the configured backend, i.e. the default `builtin`); the bundled
 // 48K ROM present and exactly 16384 bytes; unambiguous/complete `zxs` resolution
-// on PATH; and `sjasmplus` on PATH — but ONLY when it is the configured escape-
+// on PATH; the project's `zx-vibes` MCP registration starting without npx's PATH
+// (`mcp-command`, CLI-PROD-DOCTOR-003); and `sjasmplus` on PATH — but ONLY when it is the configured escape-
 // hatch backend (CLI-PROD-DOCTOR-001 / ADR-0027 D3), never by default. No failure
 // is swallowed (ERR-PROD-NOSILENT-001).
 
 import { execFileSync } from 'node:child_process';
 import {
-  accessSync,
-  constants as fsConstants,
   existsSync,
   readFileSync,
-  realpathSync,
   statSync,
 } from 'node:fs';
 import {
-  delimiter,
   dirname,
   join,
   resolve,
@@ -41,6 +38,14 @@ import {
 import { ExitCode, type Envelope } from '../output/envelope.js';
 import type { CommandContext } from '../registry.js';
 import { ROM_SIZE, findRomPath } from '../runtime/rom.js';
+import { checkMcpRegistration } from '../setup/mcp-launch.js';
+import {
+  TOOLKIT_PACKAGE,
+  UMBRELLA_PACKAGE,
+  findCommandOnPath,
+  findToolkitRoot,
+  safeRealpath,
+} from '../util/install-paths.js';
 
 /** The minimum supported Node.js major version (cli.md CLI-PROD-PKG-001 / DOCTOR-001). */
 export const MIN_NODE_MAJOR = 20;
@@ -88,6 +93,8 @@ export interface DoctorOptions {
   checkSjasmplus?: (() => boolean) | undefined;
   /** Override the discovered `zxs` PATH shims/executables (tests avoid host PATH coupling). */
   zxsPathCandidates?: string[] | undefined;
+  /** Override the PATH the `mcp-command` check resolves against (tests avoid host PATH coupling). */
+  pathValue?: string | undefined;
 }
 
 /** Parse the major version out of a `"20.11.0"`-style string (NaN-safe → 0). */
@@ -131,88 +138,19 @@ function defaultSjasmplusAvailable(): boolean {
   }
 }
 
-const TOOLKIT_PACKAGE = '@zx-vibes/toolkit';
-/** The user-facing umbrella package whose bins `npm install -g zx-vibes` installs. */
-const UMBRELLA_PACKAGE = 'zx-vibes';
-
 /** Locate every command file named `zxs` that the current PATH can resolve. */
 export function findZxsPathCandidates(
   pathValue = process.env.PATH ?? '',
   pathExtValue = process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD',
   platform = process.platform,
 ): string[] {
-  const windows = platform === 'win32';
-  const extensions = windows
-    ? [
-        '',
-        ...pathExtValue
-          .split(';')
-          .map((extension) => extension.trim().toLowerCase())
-          .filter(Boolean),
-        '.ps1',
-      ]
-    : [''];
-  const seen = new Set<string>();
-  const candidates: string[] = [];
-
-  for (const rawEntry of pathValue.split(delimiter)) {
-    const entry = rawEntry.trim().replace(/^"(.*)"$/, '$1');
-    if (entry.length === 0) continue;
-    for (const extension of extensions) {
-      const candidate = join(entry, `zxs${extension}`);
-      const key = windows ? candidate.toLowerCase() : candidate;
-      if (seen.has(key) || !existsSync(candidate)) continue;
-      try {
-        if (!statSync(candidate).isFile()) continue;
-        if (!windows) accessSync(candidate, fsConstants.X_OK);
-      } catch {
-        continue;
-      }
-      seen.add(key);
-      candidates.push(resolve(candidate));
-    }
-  }
-  return candidates;
+  return findCommandOnPath('zxs', pathValue, pathExtValue, platform);
 }
 
 interface ZxsPathInstallation {
   root: string;
   commands: string[];
   cliPresent: boolean | null;
-}
-
-function safeRealpath(path: string): string {
-  try {
-    return realpathSync.native(path);
-  } catch {
-    return resolve(path);
-  }
-}
-
-/** Walk upward to the owning `@zx-vibes/toolkit` package, if any. */
-function findToolkitRoot(start: string): string | undefined {
-  let current = start;
-  try {
-    if (statSync(current).isFile()) current = dirname(current);
-  } catch {
-    return undefined;
-  }
-  for (;;) {
-    const packageJson = join(current, 'package.json');
-    if (existsSync(packageJson)) {
-      try {
-        const parsed = JSON.parse(readFileSync(packageJson, 'utf8')) as {
-          name?: unknown;
-        };
-        if (parsed.name === TOOLKIT_PACKAGE) return safeRealpath(current);
-      } catch {
-        // Keep walking: an unrelated malformed package must not hide the real owner.
-      }
-    }
-    const parent = dirname(current);
-    if (parent === current) return undefined;
-    current = parent;
-  }
 }
 
 /**
@@ -418,7 +356,11 @@ export function runDoctor(options: DoctorOptions = {}): DoctorEnvelope {
     ),
   );
 
-  // 5) `sjasmplus` on PATH — ONLY when it is the configured escape-hatch backend
+  // 5) The project's zx-vibes MCP registration starts without npx's PATH additions
+  //    (CLI-PROD-DOCTOR-003); a project with no registration passes.
+  checks.push(checkMcpRegistration(cwd, options.pathValue ?? process.env.PATH ?? ''));
+
+  // 6) `sjasmplus` on PATH — ONLY when it is the configured escape-hatch backend
   //    (CLI-PROD-DOCTOR-001: not checked by default).
   if (assembler === 'sjasmplus') {
     const sjasmOk = (options.checkSjasmplus ?? defaultSjasmplusAvailable)();
@@ -454,7 +396,7 @@ export function doctorCommand(_context: CommandContext): DoctorEnvelope {
 /** Declare the `doctor` command's flags (CLI-PROD-DOCTOR-001). */
 export function configureDoctorCommand(command: Command): void {
   command
-    .description('Check Node, runtime assets, and zxs PATH resolution; exit 3 on failure')
+    .description('Check Node, runtime assets, zxs PATH resolution and the MCP registration; exit 3 on failure')
     .option('--json', 'emit a single machine-readable JSON envelope');
 }
 

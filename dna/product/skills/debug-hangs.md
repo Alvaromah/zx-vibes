@@ -14,7 +14,7 @@ Three are **probable** (decided from per-frame statistics at budget exhaustion):
 | --- | --- | --- |
 | `tight-loop` | machine state frozen for ~a second | `zxs disasm PC --count 12` — which loop is it? |
 | `sp-corrupt` | SP points into ROM/low memory | find the unbalanced push/pop or the `LD SP` you forgot |
-| `pc-in-rom` | execution left the program into ROM and never came back | a wild `JP`/`RET` into ROM — check the stack |
+| `pc-in-rom` | execution left the program into ROM and never came back | a wild `JP`/`RET` into ROM — check the stack; or a ROM routine that needs the system variables (such as `rst 0x10` printing), which are zero because `zxs` starts your program without the ROM's start-up |
 
 The liveness fingerprint counts RAM changes, register changes, border/beeper
 output, HALT-resume cadence, and whether any instruction ran in RAM each frame.

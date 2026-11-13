@@ -137,6 +137,16 @@ new code; without the reset, \`run --state\` continues the old session.
 \`run\` must report \`status:"ok"\`, \`haltSynced:true\`, and
 \`frameBudget.overrunFrames:0\`; an occasional missed frame can hide behind a healthy
 majority-based HALT signal, so keep a \`frameBudget\` assertion in real-time specs.
+Measurement starts at the first HALT that an interrupt resumes, and every later frame
+boundary counts, one-off work such as drawing a title or building a level included.
+Do slow set-up before your first HALT, split it across frames, or anchor the spec
+with \`waitFor\` (the measured run, and its budget, start at readiness).
+
+Your program starts at its \`ORG\` from the power-on state, without the ROM's start-up.
+The system variables are zero, so the ROM's keyboard scan is unusable (no key for the
+first 256 frames, then wrong codes), and ROM routines that need the system variables
+(\`rst 0x10\` printing) crash. Read the keyboard ports yourself and print with your own
+routine (knowledge-pack skill \`interrupts-im1-im2\`).
 
 \`zxs verify\` exits \`0\` only when the build succeeds, the run does **not** hang, and
 every spec under \`tests/\` passes. Treat any non-zero exit as "not done yet".

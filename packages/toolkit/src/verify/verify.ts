@@ -82,6 +82,8 @@ export interface VerifyOptions {
   screenshot?: string | undefined;
   /** `--scale` integer upscale 1..4 for the screenshot artifact (default 1). */
   scale?: number | undefined;
+  /** `--border`: the screenshot is the 320×240 bordered frame (CLI-PROD-RUN-008). */
+  border?: boolean | undefined;
 }
 
 /**
@@ -126,7 +128,12 @@ export function runVerify(options: VerifyOptions = {}): VerifyEnvelope {
   // `.zxs/verify-screen.png`, CLI-PROD-VERIFY-002). The artifact is written even on a hang
   // (it documents the final screen); its path is reported in the envelope.
   const screenshot = options.screenshot ?? DEFAULT_VERIFY_SCREENSHOT;
-  captureScreenshot(result.machine, resolve(cwd, screenshot), normalizeScale(options.scale));
+  captureScreenshot(
+    result.machine,
+    resolve(cwd, screenshot),
+    normalizeScale(options.scale),
+    options.border === true ? result.io.frameBorder() : undefined,
+  );
 
   // Stage 5 — run the test suite iff its directory exists (CLI-PROD-VERIFY-001). The
   // directory is the config's `tests` (default `tests/`, CFG-PROD-FIELD-TESTS-001).
@@ -192,6 +199,7 @@ function normalizeScale(scale: number | undefined): number {
 interface VerifyCliOptions {
   screenshot?: string;
   scale?: string;
+  border?: boolean;
 }
 
 /** The `verify` command handler: maps the CLI context onto the verify pipeline. */
@@ -201,6 +209,7 @@ export function verifyCommand(context: CommandContext): VerifyEnvelope {
     cwd: process.cwd(),
     screenshot: options.screenshot,
     scale: options.scale !== undefined ? Number(options.scale) : undefined,
+    border: options.border === true,
   });
 }
 
@@ -210,6 +219,7 @@ export function configureVerifyCommand(command: Command): void {
     .description('Project acceptance gate: build -> run -> screenshot -> tests')
     .option('--screenshot <file>', 'screenshot output path (default .zxs/verify-screen.png)')
     .option('--scale <n>', 'integer upscale 1..4 for the screenshot (default 1)')
+    .option('--border', 'make the screenshot the 320x240 frame with the border (from the last frame)')
     .option('--json', 'emit a single machine-readable JSON envelope');
 }
 

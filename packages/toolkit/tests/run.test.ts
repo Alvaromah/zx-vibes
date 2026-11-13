@@ -9,7 +9,7 @@ import { runCli } from '../src/cli.js';
 import { CliError, ExitCode, type OutputStreams } from '../src/output/envelope.js';
 import { loadBinMachine } from '../src/runtime/session.js';
 import { tapImageBytes } from '../src/build/formats.js';
-import { runProgram, DEFAULT_FRAMES } from '../src/runtime/run.js';
+import { runProgram, DEFAULT_FRAMES, MAX_REPORTED_OVERRUNS } from '../src/runtime/run.js';
 import { newHangStats, probableHang, updateHangStats } from '../src/runtime/hang.js';
 import { samplesForDuration, renderBeeperPcm } from '../src/runtime/wav.js';
 import { runFrameObserved } from '../src/runtime/run-loop.js';
@@ -182,11 +182,13 @@ describe('runProgram — envelope shape (CLI-PROD-OUT-RUN-001 / RT-PROD-RUN-001/
     expect(typeof result.registers.pc).toBe('number');
     expect(typeof result.screen.border).toBe('number');
     expect(typeof result.screen.hash).toBe('string');
-    expect(result.input).toEqual({ keys: [], joy: [] });
+    expect(result.input).toEqual({ keys: [], joy: [], planFrames: 0, truncated: false });
     expect(result.frameBudget.frameTStates).toBe(69888);
     expect(result.frameBudget.measuredFrames).toBe(0);
     expect(result.frameBudget.overrunFrames).toBe(0);
     expect(result.frameBudget.worstFrame).toBeNull();
+    expect(result.frameBudget.overruns).toEqual([]);
+    expect(result.frameBudget.overrunsTruncated).toBe(false);
   });
 
   it('honors a smaller --frames budget', () => {
@@ -241,6 +243,46 @@ describe('runProgram — frame-budget telemetry (RT-PROD-RUN-FRAME-BUDGET-001)',
     expect(result.frameBudget.interruptFrames).toBe(1);
     expect(result.frameBudget.overrunFrames).toBe(1);
     expect(result.frameBudget.worstFrame?.overrun).toBe(true);
+    expect(result.frameBudget.overruns).toEqual([
+      { frame: result.frameBudget.worstFrame!.frame, busyTStates: result.frameBudget.worstFrame!.busyTStates },
+    ]);
+
+    // Busy for good after its first HALT: every later boundary is late. The report lists
+    // the first 32, in order and consecutive, and says there were more.
+    const long = runProgram(loadBinMachine(file, org), org, { frames: 60, detectHangs: false });
+    const budget = long.frameBudget;
+    expect(budget.overrunFrames).toBe(budget.measuredFrames);
+    expect(budget.overrunFrames).toBeGreaterThan(MAX_REPORTED_OVERRUNS);
+    expect(budget.overruns).toHaveLength(MAX_REPORTED_OVERRUNS);
+    expect(budget.overrunsTruncated).toBe(true);
+    const first = budget.overruns[0]!.frame;
+    expect(budget.overruns.map((o) => o.frame)).toEqual(
+      Array.from({ length: MAX_REPORTED_OVERRUNS }, (_, i) => first + i),
+    );
+    expect(budget.overruns.every((o) => o.busyTStates > 0)).toBe(true);
+  });
+});
+
+describe('runProgram — input plan vs frame budget (RT-PROD-RUN-004 / RT-PROD-RUN-007)', () => {
+  it('extends the budget to a longer plan by default and reports the plan', () => {
+    const { file, org } = asmBin('progress', PROGRESS);
+    const result = runProgram(loadBinMachine(file, org), org, { frames: 10, keys: '0:SPACE*50' });
+    expect(result.framesRun).toBe(50);
+    expect(result.input.planFrames).toBe(50);
+    expect(result.input.truncated).toBe(false);
+  });
+
+  it('with extendToInputPlan false, stops at the budget and says the plan was cut', () => {
+    const { file, org } = asmBin('progress', PROGRESS);
+    const result = runProgram(loadBinMachine(file, org), org, {
+      frames: 10,
+      keys: '0:SPACE*50',
+      joy: '5:R*60',
+      extendToInputPlan: false,
+    });
+    expect(result.framesRun).toBe(10);
+    expect(result.input.planFrames).toBe(65);
+    expect(result.input.truncated).toBe(true);
   });
 });
 
@@ -608,7 +650,9 @@ describe('zxs run — --z80 snapshot boot (D1, CLI-PROD-RUN-001)', () => {
     const env = JSON.parse(cap.out().trim());
     expect(env.ok).toBe(true);
     expect(env.status).toBe('ok');
-    expect(env.boot).toMatchObject({ source: 'z80', org: 0x8000, version: 3 });
+    // A snapshot has no origin: boot reports the PC it resumes at (CLI-PROD-CONV-BOOT-001).
+    expect(env.boot).toMatchObject({ source: 'z80', pc: 0x8000, version: 3 });
+    expect(env.boot.org).toBeUndefined();
     expect(env.audio.beeperEdges).toBeGreaterThan(0);
   });
 });

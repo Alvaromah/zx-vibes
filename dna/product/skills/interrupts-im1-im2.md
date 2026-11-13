@@ -15,10 +15,25 @@ main:
     jr main
 ```
 
-The ROM handler at `0x0038` bumps FRAMES and scans the keyboard into KSTATE.
-Costs: ~1k T-states a frame in ROM, and it indexes sysvars off `IY` — if your
-code repurposes `IY`, the handler scribbles wherever `IY` points. Keep
-`IY = 0x5C3A` or don't use IM 1.
+The ROM handler at `0x0038` bumps FRAMES (`0x5C78`) and runs the ROM keyboard
+scan. Costs: ~1k T-states a frame in ROM.
+
+**Under `zxs` the ROM's start-up never runs.** `run`, `test`, `verify` and
+`preview` start a built program at its `ORG` from the power-on state
+([machine-execution.md](../reference/machine-execution.md): `IY = 0xFFFF`, RAM
+zeroed), so every system variable is zero. The handler (and a plain `ei` in IM 0,
+which takes the same `rst 0x38` here) still ticks FRAMES, but the ROM keyboard is
+unusable: with KSTATE zero it registers no key for the first 256 frames (~5 s),
+and after that it decodes keys in keyword mode, so a held `A` reaches `LAST_K`
+as `0xE6` (`NEW`), not `a`. Read the keyboard ports yourself (`in a,(c)`, as the
+starters' `lib/keys.asm` does; [keyboard-input.md](../reference/keyboard-input.md)).
+ROM routines that need the system variables, such as `rst 0x10` printing, crash
+(the run ends in a `pc-in-rom` hang); print with your own routine.
+
+A program loaded from BASIC (a real machine, or a tape with a BASIC loader) gets
+the ROM's set-up: `IY = 0x5C3A` and a working keyboard. The handler indexes the
+system variables off `IY`, so if your code repurposes `IY` it scribbles wherever
+`IY` points. There, keep `IY = 0x5C3A` or don't use IM 1.
 
 ## IM 2 — you own the frame (the game-shaped choice)
 

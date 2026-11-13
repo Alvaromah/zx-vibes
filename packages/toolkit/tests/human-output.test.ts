@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCli } from '../src/cli.js';
+import { ASSERTION_REFERENCE } from '../src/test/assertions.js';
 
 let dir: string;
 beforeEach(() => {
@@ -108,5 +109,78 @@ describe('the observe payloads print whole', () => {
     expect(out).toMatch(/top:\n {2}8003 +x\d+ {2}HALT/);
     expect(out).toContain('last:');
     expect(out).toMatch(/profile: active [\d.]+% {2}HALT idle [\d.]+%/);
+  });
+});
+
+describe('lists a human reads item by item print one per line', () => {
+  it('test --list-assertions: the whole reference, one line per type', async () => {
+    const { code, out } = await human(['test', '--list-assertions']);
+    expect(code).toBe(0);
+    const [line, header, ...rows] = out.trimEnd().split('\n');
+    expect(line).toBe(`test: assertions=${ASSERTION_REFERENCE.length}`);
+    expect(header).toBe('assertions:');
+    expect(rows).toHaveLength(ASSERTION_REFERENCE.length);
+    ASSERTION_REFERENCE.forEach((doc, i) => {
+      expect(rows[i]!.startsWith(`  ${doc.type} `)).toBe(true);
+      expect(rows[i]).toContain(`{ ${doc.fields.join(', ')} }`);
+      expect(rows[i]).toContain(doc.description);
+    });
+    expect(out).toContain('frameBudget');
+    expect(out).toContain('{ maxOverrunFrames?, requireMeasured? }');
+  });
+
+  it('new: the next steps, not their count', async () => {
+    const { code, out } = await human(['new', 'pong']);
+    expect(code).toBe(0);
+    const lines = out.trimEnd().split('\n');
+    expect(lines[0]).toMatch(/^new: name=pong dir=pong template=game files=\d+$/);
+    expect(lines[0]).not.toContain('next=');
+    expect(lines.slice(1)).toEqual(['next:', '  cd pong', '  zxs verify', '  zxs preview --watch']);
+  });
+});
+
+describe('run: the frame budget names the late frames', () => {
+  it('prints a compact frameBudget with the overrun frames', async () => {
+    // Late on exactly two frames (the CLI-RUN-OVERRUNS-001 fixture program).
+    project([
+      '    ORG 0x8000',
+      '    ld sp, 0xFF00',
+      '    ei',
+      'main:',
+      '    halt',
+      '    ld hl, count',
+      '    inc (hl)',
+      '    ld a, (hl)',
+      '    cp 10',
+      '    jr z, slow',
+      '    cp 20',
+      '    jr nz, main',
+      'slow:',
+      '    ld bc, 3000',
+      'delay:',
+      '    dec bc',
+      '    ld a, b',
+      '    or c',
+      '    jr nz, delay',
+      '    jr main',
+      'count:',
+      '    defb 0',
+      '',
+    ].join('\n'));
+    const { code, out } = await human(['run', '--frames', '40']);
+    expect(code).toBe(0);
+    expect(out).toMatch(/frameBudget=\{measured=40 overruns=2 frames=10,21 worst=\d+T@21\}/);
+  });
+});
+
+describe('doctor: a failing check explains itself', () => {
+  it('prints each failing check with its detail (the fix)', async () => {
+    // A registration only npx's PATH could start (CLI-PROD-DOCTOR-003).
+    writeFileSync(join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { 'zx-vibes': { command: 'zxs-mcp-missing' } } }));
+    const { code, err } = await human(['doctor']);
+    expect(code).toBe(3);
+    expect(err).toMatch(/^error: Environment check failed: mcp-command/);
+    expect(err).toContain('FAIL mcp-command: .mcp.json starts zx-vibes with `zxs-mcp-missing`');
+    expect(err).toContain('zxs setup --agent claude --force');
   });
 });

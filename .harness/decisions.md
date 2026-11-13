@@ -1857,3 +1857,165 @@ its fixture and self-test, the DNA table and the demo bundle; the TZX runner and
 self-test, the fixture-schema check, provenance, coverage, the knowledge-pack drift check,
 the preview tests and the demo tests were re-run green, and a `.tzx` (archive info, text,
 custom info, two data blocks) loaded end to end in `zxs preview` and in `full.html`.
+
+### ADR-0031 — Clean-room consumer feedback (2026-11-12): docs, human output, frame-budget diagnostics, local installs, entry state
+
+**Status:** applied on the branch `feedback/clean-room-consumer` at the owner's request
+("run all the steps in the recommended order"), taking the default answer to each of the
+five questions below; ratified on merge. Each work package lands as its own commit and
+adds its item here.
+
+**Context.** A clean-room consumer test of `main` at 325992e cloned the repo, ran
+`pnpm install`, `build` and `pack`, installed the six tarballs into a fresh project with
+one `npm install`, scaffolded with `zxs new`, ran `zxs setup --agent claude`, and built an
+original 48K game until `zxs verify` passed. It logged 13 findings: documentation gaps (no
+root `AGENTS.md` in a clone, the all-local install route, `zxs new` writing no
+`package.json`, what `frameBudget` measures, how a program is entered, the SAVE border
+colours), human output printing counts instead of lists, overruns reported only as a
+count plus the worst frame, `run --frames` silently extended by a longer key plan, no
+input for `trace`, an MCP registration that a project-local install cannot start, a
+`pc-in-rom` verdict that misses the usual cause at entry, `boot.org` meaning different
+things in `run` and `regs`, and screenshots without the border.
+
+**Decisions** (the owner's five questions, default answers):
+- **D1. No tracked root `AGENTS.md`.** The root file and `.harness/` (except this log)
+  stay local and gitignored; `CONTRIBUTING.md` says so and points to itself and
+  `dna/README.md`. *Rejected:* a public `AGENTS.md`, which would collide with the
+  maintainer's local one.
+- **D2. A project-local install is first-class.** The README documents the six-tarball
+  install, and `setup`/`doctor` handle the MCP registration it needs. `zxs new` still
+  writes no `package.json`.
+- **D3. An explicit `zxs run --frames N` is a hard stop.** A key/joy plan that runs past
+  N is cut there, and the report says so. Every other caller keeps extending the budget
+  to the end of its plan.
+- **D4. Border screenshots are built last,** after the other work packages, as an opt-in
+  scoped to `run` and `verify`; default screenshots stay 256×192.
+- **D5. The toolkit does not run the ROM's start-up.** The entry state is documented
+  instead. *Rejected:* running it before every program, which would change every
+  program's starting memory and timing.
+
+**Items.**
+1. **Docs and doc claims** (FEEDBACK 1, 2, 6, 7, 11 doc half, 12). New contract claim
+   RT-PROD-ENTRY-001 (a built program starts at its load origin from the power-on
+   state; the ROM's start-up never runs, so the system variables are zero), pinned by
+   `packages/toolkit/tests/entry-state.test.ts` (`regs` after `state reset`, FRAMES = 50
+   but ERR_NR and FLAGS zero after 50 frames, the preview's `.bin` boot). Wording added
+   to RT-PROD-RUN-FRAME-BUDGET-001 and ASSERT-PROD-FRAME-BUDGET-001 (one-off work after
+   the first interrupt-resumed `HALT` counts; a `waitFor` warm-up is not measured), and
+   RASTER-SAVE-PP-001 now separates the pilot tone (red/cyan) from the data (blue/
+   yellow); its fixture still pins a pilot-tone frame. Skills `seeing-and-proving` and
+   `interrupts-im1-im2`, the `PLAYBOOK` that `zxs new`/`setup` write and both starter
+   playbooks say the same; README covers the six-tarball install and why `zxs new`
+   writes no `package.json`; CONTRIBUTING covers D1. *Gotcha:* the ROM keyboard at entry
+   is not simply dead. KSTATE starts at zero, so both key slots count down from 0 and
+   free themselves after 256 frames; from then on a held key registers, decoded in
+   keyword mode (`A` arrives in `LAST_K` as `0xE6`, `NEW`). Probes of 40 frames had
+   suggested it never registers; 300- and 600-frame runs showed otherwise.
+2. **Human output prints the lists people read** (FEEDBACK 3, 4). `next` and `deferred`
+   string lists print one item per line under the summary line, and the
+   `test --list-assertions` reference prints as an aligned table (type, fields,
+   description), in `output/envelope.ts`. Wording stays incidental (CLI-PROD-FREE-001),
+   so no claim changed; ASSERT-PROD-LIST-001 already promised the reference. Pinned by
+   `tests/envelope.test.ts` (the two cases that pinned `next=2`/`next=1`) and
+   `tests/human-output.test.ts` (all 17 types on their own lines; `new` prints its
+   three steps).
+3. **Frame-budget diagnostics and keyed runs** (FEEDBACK 8, 9; D3). `runtime/run.ts`
+   lists the first 32 overrun boundaries in `frameBudget.overruns` (`{ frame,
+   busyTStates }`, numbered like `worstFrame.frame`) with `overrunsTruncated`; the
+   `frameBudget` assertion names the first eight late frames, and the human `run` line
+   prints a compact `frameBudget={measured=… overruns=… frames=… worst=…}`. `runProgram`
+   gained `extendToInputPlan` (default true); only the `run` CLI handler turns it off,
+   and only when `--frames` was typed, because the test runner always passes `frames`.
+   The report's `input` gained `planFrames` and `truncated` (the run ended before the
+   plan did). `trace` takes `--keys`/`--joy` (it already extended to the plan through
+   `runProgram`). Claims: new RT-PROD-RUN-007 and CLI-PROD-TRACE-002; amended
+   CLI-PROD-OUT-RUN-001, CLI-PROD-RUN-004, RT-PROD-RUN-004,
+   RT-PROD-RUN-FRAME-BUDGET-001 and ASSERT-PROD-FRAME-BUDGET-001. Fixture file
+   `dna/conformance/cli/run-frames-and-input.json` (coverage rows CLI-RUN-OVERRUNS-001,
+   CLI-RUN-FRAMES-PLAN-001, CLI-TRACE-KEYS-001; five cases), all five run red against
+   the pre-change build first; the 32-entry cap, the plan switch and the assertion text
+   are pinned by `tests/run.test.ts`, `tests/assertions.test.ts` and
+   `tests/human-output.test.ts`. *Known divergence:* the MCP `zx_run` tool keeps
+   extending a `frames` budget to the end of its `keys` plan, as before; only the CLI
+   flag changed meaning. No document or test used `--frames N` with a plan past N.
+4. **MCP registration for project-local installs** (FEEDBACK 5; D2). `setup` registers
+   the install that runs it (`setup/mcp-launch.ts`): a toolkit inside, or linked from,
+   the `node_modules` of the project or of a parent that `npx` would search gets
+   `node <relative path to zxs-mcp.js>` (the `@zx-vibes/toolkit` bin, else the
+   umbrella's, else the running toolkit's own path), in `.mcp.json` and the Codex
+   TOML (`command` + `args`; Codex's global config gets the path absolute). Anything
+   else keeps the bare `zxs-mcp`. The envelope reports `mcpCommand`; a kept entry that
+   starts something else puts the `--force` command first in `next`. `doctor` gained
+   `mcp-command`: each registration must resolve on the PATH a client sees (without
+   npx's `node_modules/.bin`), and a `node` script must exist; no registration passes.
+   PATH lookup and the toolkit-root walk moved to `util/install-paths.ts`, shared by
+   both. Claims: new CLI-PROD-SETUP-002 and CLI-PROD-DOCTOR-003; CLI-PROD-DOCTOR-001
+   amended. Pinned by `tests/mcp-launch.test.ts` (npm, pnpm store, umbrella-only,
+   workspace parent, linked and global layouts; setup for both agents; the doctor
+   check; a spawn of the registered command with PATH stripped of `node_modules/.bin`,
+   which lists the seven tools). *Rejected:* `npx --no-install zxs-mcp` — spawned
+   without a shell, as clients do, it fails with ENOENT on Windows (`npx` is a `.cmd`),
+   exactly like the bare `zxs-mcp`; an absolute path in `.mcp.json`, which is usually
+   committed. *Verified on Windows 11, 2026-11-12,* in a project installed from the
+   six tarballs with one `npm install` (lockfile: six `file:` entries, none from the
+   registry): `npx zxs setup` for both agents wrote the `node` launch, `npx zxs doctor`
+   passed 5/5, Claude Code 2.1.322 (`claude -p --mcp-config .mcp.json
+   --strict-mcp-config`) reported `zx-vibes` connected with the seven tools, and
+   codex-cli 0.167.2 (`codex exec` with the same command/args as `-c` overrides) listed
+   the seven tools. *Not run:* the clients' own project-config paths — `claude mcp
+   list` shows a project server as pending until it is approved in an interactive
+   session, and `codex mcp list` did not show the project's `.codex/config.toml` (an
+   untrusted project); both are approvals for the user to give.
+   *Follow-up found by the consumer check:* human-mode `doctor` printed only
+   "Environment check failed: mcp-command", hiding the fix in `checks[].detail`; the
+   error output now prints each failing check with its detail (`output/envelope.ts`,
+   `tests/human-output.test.ts`).
+5. **One meaning for `boot`, and the entry hint in `pc-in-rom`** (FEEDBACK 11 code half,
+   13). New claim CLI-PROD-CONV-BOOT-001: `boot.org` is a program's load origin and
+   appears only for `build`, `bin` and a CODE `tap`; a `--state` session, a `.z80`
+   snapshot, a fresh boot and the MCP hot session report `boot.pc` (the PC the command
+   starts at) instead; CLI-PROD-OUT-RUN-001 points at that shape. `run --state` used to
+   report the hang watchdog's RAM floor (`RAM_BASE`) as `org`; the floor stays internal.
+   Both `pc-in-rom` verdicts in `runtime/hang.ts` now also name a ROM routine that needs
+   the system variables (`rst 0x10`), with the skill `debug-hangs` and
+   `docs/recipes.md`. Fixture `dna/conformance/cli/boot-descriptor.json` (coverage row
+   CLI-BOOT-STATE-001; `run`, `regs` and `mem` on one session, red on the previous
+   build: `org` 16384 vs 0) and `tests/boot-descriptor.test.ts` (the absence of `org`,
+   the fresh boot, the `rst 0x10` hint); the `.z80` case in `tests/run.test.ts` now
+   expects `pc`. *Changed output:* a script that read `boot.org` for those sources must
+   read `boot.pc`.
+6. **Border in screenshots** (FEEDBACK 10; D4). `HostIo` keeps the current frame's
+   border-changing writes (`[t, colour, …]` from the frame's raster T-state 0, stamped
+   with the clock it already kept for beeper edges) and its carry-in colour; the run
+   loop opens each frame with `beginFrame(tStatesTotal - clock)`. `run --screenshot
+   <file> --border` and `verify --border` compose the 320×240 frame through the one
+   encoder with the preview's own `border-frame.ts` (`borderRowsFromLog`,
+   `fillBorderRows`, `PALETTE_RGB`). New claim CLI-PROD-RUN-008. Pinned by
+   `tests/border-screenshot.test.ts`, which reproduces RASTER-SAVE-PP-001 headlessly with
+   the real ROM: a program that calls SA-BYTES (0x04C2) shows exactly red and cyan in the
+   border after 20 frames (pilot tone) and exactly blue and yellow after 150 (data);
+   plus the screen's placement at (32, 24), the default 256×192 size and the
+   `--border`-without-`--screenshot` error. Scope as decided: `run` and `verify` only.
+   `screen --state` has no frame log (a `.zxstate` keeps only the final border colour),
+   so it gets no `--border`; no assertion type or MCP tool changed (17 and 7 stay
+   pinned).
+
+**Consequences.** Every FEEDBACK item but one has a fix or a documented answer; the
+exception (Codex not loading an untrusted project's `.codex/config.toml`) is the
+client's rule and is reported, not changed. Output that scripts may read changed in two
+places: an explicit `run --frames` now stops a longer key plan (D3), and `boot` reports
+`pc` instead of `org` for sessions, snapshots and fresh boots. The MCP surface keeps its
+seven tools and input schemas, and the assertion vocabulary stays at 17. Verified on
+Windows 11 (Node 24.22.1, npm 12.0.2) on 2026-11-12: each commit passed the full
+`pnpm run verify` gate and `pnpm run pack` (final: toolkit 517 tests, asm 78, coverage
+180/181 with the open row unchanged, provenance 1048 items); then the six tarballs went
+into the consumer project from the original test with one `npm install` (lockfile: six
+`file:` entries, none from the registry). There `doctor` failed on the old `.mcp.json`
+and named the fix, `setup --force` wrote the `node` launch and `doctor` passed 5/5,
+the registered command started the server with the seven tools, `zxs verify` passed
+9/9 with no overruns, and each FEEDBACK repro gave the new result: `new` prints its
+steps, `--list-assertions` prints 17 rows, a failing `frameBudget` names frames 10 and
+21, `run --frames 100 --keys "0:SPACE*500"` stops at 100 with `input.truncated`,
+`trace --keys` runs, `rst 0x10` gets the start-up hint, `run --state` and
+`regs --state` report the same `boot`, and `run --screenshot --border` shows the
+title's border stripes and SAVE's bands.

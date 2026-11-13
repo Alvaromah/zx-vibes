@@ -46,7 +46,14 @@ import { deserializeZxState } from '../state/zxstate.js';
 /** How an observe command's machine was sourced (the `boot` descriptor it reports). */
 export interface ObserveBoot {
   source: 'bin' | 'z80' | 'tap' | 'build' | 'fresh' | 'state';
-  org: number;
+  /**
+   * The program's load origin, for a source that has one (`build`, `bin`, `tap`;
+   * cli.md CLI-PROD-CONV-BOOT-001). A snapshot, a session or a fresh boot has no known
+   * origin and reports `pc` instead.
+   */
+  org?: number;
+  /** `z80`/`state`/`fresh`: the PC the machine starts this command at. */
+  pc?: number;
   file?: string;
   /**
    * The configured entry: the program that was assembled and loaded (`build`), or — for a
@@ -158,7 +165,7 @@ export function resolveObserveMachine(options: ObserveSourceOptions = {}): Obser
       org: pc,
       boot: {
         source: 'state',
-        org: pc,
+        pc,
         file: options.state,
         ...(debug !== undefined && entry ? { entry } : {}),
       },
@@ -223,10 +230,12 @@ export function resolveObserveMachine(options: ObserveSourceOptions = {}): Obser
   }
 
   // 3. No source configured — a clean ROM boot (read-only inspection of the boot machine).
+  // Nothing is loaded, so there is no origin to report: the machine sits at its reset PC.
+  const fresh = bootFreshMachine();
   return {
-    machine: bootFreshMachine(),
+    machine: fresh,
     org,
-    boot: { source: 'fresh', org },
+    boot: { source: 'fresh', pc: fresh.registers.pc & 0xffff },
     border: DEFAULT_BORDER,
     length: 0,
     extent: EMPTY_EXTENT,

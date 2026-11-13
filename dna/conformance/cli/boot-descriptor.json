@@ -1,0 +1,89 @@
+[
+  {
+    "id": "CLI-BOOT-STATE-001",
+    "tier": "contract",
+    "provenance": "decision:ADR-0031",
+    "input": {
+      "kind": "cli-exit",
+      "note": "cli.md CLI-PROD-CONV-BOOT-001: boot.org is a program origin, so a --state session (whose origin is unknown) reports the PC it starts at as boot.pc, the same in run and in the observe commands. Before, run reported org 16384 (its internal hang floor) and regs org = the session PC for the same file. The session is the blank power-on boot of CLI-HANG-IDLE-001 (PC 0).",
+      "cases": [
+        {
+          "name": "regs-state",
+          "files": [
+            {
+              "path": "s.zxstate",
+              "data": "{\n  \"emulatorId\": \"zx-vibes\",\n  \"format\": \"zxstate\",\n  \"version\": 1,\n  \"machine\": {\n    \"z80\": \"////////AAD//wAADv//////////////////AAAANgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAQjt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e1AAAQBBO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7UAABAEF7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3tQAA=\",\n    \"halted\": false,\n    \"memptr\": 0,\n    \"clock\": 0,\n    \"eiDelay\": 0\n  },\n  \"debug\": {\n    \"breakpoints\": [],\n    \"watchpoints\": [],\n    \"nextBreakId\": 1,\n    \"nextWatchId\": 1\n  }\n}\n"
+            }
+          ],
+          "command": "zxs regs --state s.zxstate --json"
+        },
+        {
+          "name": "run-state",
+          "files": [
+            {
+              "path": "s.zxstate",
+              "data": "{\n  \"emulatorId\": \"zx-vibes\",\n  \"format\": \"zxstate\",\n  \"version\": 1,\n  \"machine\": {\n    \"z80\": \"////////AAD//wAADv//////////////////AAAANgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAQjt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e1AAAQBBO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7UAABAEF7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3tQAA=\",\n    \"halted\": false,\n    \"memptr\": 0,\n    \"clock\": 0,\n    \"eiDelay\": 0\n  },\n  \"debug\": {\n    \"breakpoints\": [],\n    \"watchpoints\": [],\n    \"nextBreakId\": 1,\n    \"nextWatchId\": 1\n  }\n}\n"
+            }
+          ],
+          "command": "zxs run --state s.zxstate --no-save --frames 1 --json"
+        },
+        {
+          "name": "mem-state",
+          "files": [
+            {
+              "path": "s.zxstate",
+              "data": "{\n  \"emulatorId\": \"zx-vibes\",\n  \"format\": \"zxstate\",\n  \"version\": 1,\n  \"machine\": {\n    \"z80\": \"////////AAD//wAADv//////////////////AAAANgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAQjt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e1AAAQBBO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7UAABAEF7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3t/wDt7f8A7e3/AO3tQAA=\",\n    \"halted\": false,\n    \"memptr\": 0,\n    \"clock\": 0,\n    \"eiDelay\": 0\n  },\n  \"debug\": {\n    \"breakpoints\": [],\n    \"watchpoints\": [],\n    \"nextBreakId\": 1,\n    \"nextWatchId\": 1\n  }\n}\n"
+            }
+          ],
+          "command": "zxs mem read 0x5C3A --len 1 --state s.zxstate --json"
+        }
+      ]
+    },
+    "expected": {
+      "cases": [
+        {
+          "name": "regs-state",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "regs",
+            "boot": {
+              "source": "state",
+              "pc": 0,
+              "file": "s.zxstate"
+            }
+          }
+        },
+        {
+          "name": "run-state",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "run",
+            "boot": {
+              "source": "state",
+              "pc": 0,
+              "file": "s.zxstate"
+            }
+          }
+        },
+        {
+          "name": "mem-state",
+          "exitCode": 0,
+          "json": {
+            "ok": true,
+            "stage": "mem",
+            "boot": {
+              "source": "state",
+              "pc": 0,
+              "file": "s.zxstate"
+            }
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "profile": "cli-snapshot"
+    }
+  }
+]
