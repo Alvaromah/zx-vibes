@@ -457,6 +457,125 @@
         "options": {
           "cwd": "<tmp>"
         }
+      },
+      {
+        "name": "expression-unclosed-parenthesis",
+        "sourceLines": ["    ORG 0x8000", "    db (1+2", ""],
+        "options": {
+          "entryPath": "expression-unclosed-parenthesis.asm"
+        }
+      },
+      {
+        "name": "expression-unary-operator-needs-operand",
+        "sourceLines": ["    ORG 0x8000", "    db -", ""],
+        "options": {
+          "entryPath": "expression-unary-operator-needs-operand.asm"
+        }
+      },
+      {
+        "name": "memory-operand-without-closing-parenthesis",
+        "sourceLines": ["    ORG 0x8000", "buf:", "    ld hl,(buf", ""],
+        "options": {
+          "entryPath": "memory-operand-without-closing-parenthesis.asm"
+        }
+      },
+      {
+        "name": "character-literal-unsupported-escape",
+        "sourceLines": ["    ORG 0x8000", "    ld a,'\\0'", ""],
+        "options": {
+          "entryPath": "character-literal-unsupported-escape.asm"
+        }
+      },
+      {
+        "name": "cb-forms-reject-index-halves",
+        "sourceLines": ["    ORG 0x8000", "    bit 0,ixh", ""],
+        "options": {
+          "entryPath": "cb-forms-reject-index-halves.asm"
+        }
+      },
+      {
+        "name": "rotate-on-register-takes-one-operand",
+        "sourceLines": ["    ORG 0x8000", "    srl a,2", ""],
+        "options": {
+          "entryPath": "rotate-on-register-takes-one-operand.asm"
+        }
+      },
+      {
+        "name": "in-c-rejects-index-half",
+        "sourceLines": ["    ORG 0x8000", "    in ixh,(c)", ""],
+        "options": {
+          "entryPath": "in-c-rejects-index-half.asm"
+        }
+      },
+      {
+        "name": "colon-does-not-separate-statements",
+        "sourceLines": ["    ORG 0x8000", "    ei : ret", ""],
+        "options": {
+          "entryPath": "colon-does-not-separate-statements.asm"
+        }
+      },
+      {
+        "name": "macro-arguments-substituted-once",
+        "sourceLines": ["    ORG 0x8000", "right EQU 9", "Pair MACRO left,right", "    db left,right", "ENDM", "    Pair right,5", ""],
+        "options": {
+          "entryPath": "macro-arguments-substituted-once.asm"
+        }
+      },
+      {
+        "name": "repeat-counter-not-substituted-in-number",
+        "sourceLines": ["    ORG 0x8000", "    DUP 2, b", "    db 1b", "    EDUP", ""],
+        "options": {
+          "entryPath": "repeat-counter-not-substituted-in-number.asm"
+        }
+      },
+      {
+        "name": "column-zero-macro-call-with-end-argument",
+        "sourceLines": ["    ORG 0x8000", "Jump MACRO target", "    jp target", "ENDM", "Jump end", "end: nop", ""],
+        "options": {
+          "entryPath": "column-zero-macro-call-with-end-argument.asm"
+        }
+      },
+      {
+        "name": "define-used-before-it-is-defined",
+        "sourceLines": ["    ORG 0x8000", "    ld a,FOO", "    DEFINE FOO 1", ""],
+        "options": {
+          "entryPath": "define-used-before-it-is-defined.asm"
+        }
+      },
+      {
+        "name": "define-without-value-is-true-in-if",
+        "sourceLines": ["    ORG 0x8000", "    DEFINE FLAG", "    IF FLAG", "    db 1", "    ENDIF", ""],
+        "options": {
+          "entryPath": "define-without-value-is-true-in-if.asm"
+        }
+      },
+      {
+        "name": "parenthesised-product-is-an-immediate",
+        "sourceLines": ["    ORG 0x8000", "    ld a,(1+2)*(3+4)", ""],
+        "options": {
+          "entryPath": "parenthesised-product-is-an-immediate.asm"
+        }
+      },
+      {
+        "name": "parenthesised-immediate-warns",
+        "sourceLines": ["    ORG 0x8000", "    ld b,(5)", ""],
+        "options": {
+          "entryPath": "parenthesised-immediate-warns.asm"
+        }
+      },
+      {
+        "name": "include-without-file-name",
+        "sourceLines": ["    ORG 0x8000", "    INCLUDE", "    nop", ""],
+        "options": {
+          "entryPath": "include-without-file-name.asm"
+        }
+      },
+      {
+        "name": "equ-without-name",
+        "sourceLines": ["    ORG 0x8000", "    EQU 5", "    nop", ""],
+        "options": {
+          "entryPath": "equ-without-name.asm"
+        }
       }
     ]
   },
@@ -715,6 +834,152 @@
         "errors": [
           {
             "message": "INCBIN length out of range: 10 (4 byte(s) available from offset 1)"
+          }
+        ]
+      },
+      {
+        "name": "expression-unclosed-parenthesis",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Missing ')' in expression: (1+2"
+          }
+        ]
+      },
+      {
+        "name": "expression-unary-operator-needs-operand",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Missing operand after '-'"
+          }
+        ]
+      },
+      {
+        "name": "memory-operand-without-closing-parenthesis",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Missing ')' in expression: (buf"
+          }
+        ]
+      },
+      {
+        "name": "character-literal-unsupported-escape",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Unsupported string escape: \\0"
+          }
+        ]
+      },
+      {
+        "name": "cb-forms-reject-index-halves",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Unsupported BIT target: ixh"
+          }
+        ]
+      },
+      {
+        "name": "rotate-on-register-takes-one-operand",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "SRL copy-register form is only valid for indexed memory"
+          }
+        ]
+      },
+      {
+        "name": "in-c-rejects-index-half",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Unsupported IN form: ixh, (c)"
+          }
+        ]
+      },
+      {
+        "name": "colon-does-not-separate-statements",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "ei is an instruction, not a label: put one instruction per line (':' does not separate statements here)"
+          }
+        ]
+      },
+      {
+        "name": "macro-arguments-substituted-once",
+        "ok": true,
+        "bytesHex": "0905"
+      },
+      {
+        "name": "repeat-counter-not-substituted-in-number",
+        "ok": true,
+        "bytesHex": "0101"
+      },
+      {
+        "name": "column-zero-macro-call-with-end-argument",
+        "ok": true,
+        "bytesHex": "C3038000"
+      },
+      {
+        "name": "define-used-before-it-is-defined",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "Label not found: FOO"
+          }
+        ]
+      },
+      {
+        "name": "define-without-value-is-true-in-if",
+        "ok": true,
+        "bytesHex": "01"
+      },
+      {
+        "name": "parenthesised-product-is-an-immediate",
+        "ok": true,
+        "bytesHex": "3E15"
+      },
+      {
+        "name": "parenthesised-immediate-warns",
+        "ok": true,
+        "bytesHex": "0605",
+        "warningCount": 1,
+        "warnings": [
+          {
+            "message": "LD b,(5): the parentheses are read as grouping, so this uses the value 5, not the memory at that address (only LD A,(nn) loads from an address)"
+          }
+        ]
+      },
+      {
+        "name": "include-without-file-name",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "INCLUDE expects a file name"
+          }
+        ]
+      },
+      {
+        "name": "equ-without-name",
+        "ok": false,
+        "errorCount": 1,
+        "errors": [
+          {
+            "message": "EQU needs a name: write NAME EQU value"
           }
         ]
       }
