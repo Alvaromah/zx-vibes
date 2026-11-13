@@ -26,7 +26,7 @@
     "typecheck": "pnpm -r --sort run typecheck",
     "test": "pnpm -r --sort run test",
     "lint": "pnpm -r --sort run lint",
-    "pack": "pnpm -r --filter \"./packages/*\" --workspace-concurrency=1 pack --pack-destination .packs",
+    "pack": "node scripts/pack.mjs",
     "conformance": "node dna/conformance/runner.mjs",
     "conformance:self-test": "node dna/conformance/self-test.mjs",
     "conformance:normalization-self-test": "node dna/conformance/normalization-self-test.mjs",

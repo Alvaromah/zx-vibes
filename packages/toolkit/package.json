@@ -48,7 +48,7 @@
   ],
   "scripts": {
     "build": "tsup && tsup --config tsup.player.config.ts",
-    "prepack": "pnpm run build",
+    "prepack": "pnpm run build && node scripts/build-stamp.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests bin player",
     "test": "vitest run",

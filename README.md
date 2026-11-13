@@ -257,14 +257,16 @@ Tips for testing a local clone:
   ```bash
   npm install ../zx-vibes/.packs/*.tgz                           # bash
   npm install (Get-ChildItem ..\zx-vibes\.packs\*.tgz).FullName  # PowerShell
-  npx zxs --version
+  npx zxs --version    # e.g. 0.8.0+325992e
   ```
 
   Then check `package-lock.json`: `zx-vibes` and every `@zx-vibes/*`
   package must resolve to a `file:` tarball, with no `registry.npmjs.org`
   entry. An unreleased checkout can carry the same version number as the
-  npm release, so `zxs --version` can't tell them apart, but the lockfile
-  can. The bins live in `node_modules/.bin`, so run the CLI as `npx zxs`.
+  npm release, so `pnpm run pack` stamps the toolkit with the commit it was
+  built from: `zxs --version` prints `0.8.0+325992e` (`.dirty` when tracked
+  files had uncommitted changes), while a published package prints the bare
+  version. The bins live in `node_modules/.bin`, so run the CLI as `npx zxs`.
   For the same reason `npx zxs setup` registers the MCP server as
   `node node_modules/@zx-vibes/toolkit/bin/zxs-mcp.js`, which an agent can
   start without your PATH, and `npx zxs doctor` checks that the registration
@@ -291,7 +293,8 @@ change is explicitly about optional `sjasmplus` support.
 | `@zx-vibes/machine` | `0.1.0` | 48K machine integration (CPU + ULA + tape/IO). |
 
 `zxs --version` reports the toolkit version (the CLI is implemented by
-`@zx-vibes/toolkit`); `zxasm --version` reports the assembler version. The
+`@zx-vibes/toolkit`), with the commit appended for a toolkit built by the
+repository's `pnpm run pack`; `zxasm --version` reports the assembler version. The
 earlier `create-zx-vibes` and `@zx-vibes/emulator` packages are deprecated
 on npm — `zxs new` and the emulator core packages replace them.
 

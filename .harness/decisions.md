@@ -1893,6 +1893,12 @@ things in `run` and `regs`, and screenshots without the border.
 - **D5. The toolkit does not run the ROM's start-up.** The entry state is documented
   instead. *Rejected:* running it before every program, which would change every
   program's starting memory and timing.
+- **D6. A build stamp, opt-in from `pnpm run pack`** (a follow-up the plan had left out
+  of scope; taken with the owner's "continue with your recommendations"). A toolkit
+  packed by the repository's `pack` script prints `<version>+<commit>[.dirty]`;
+  published packages print the bare version. *Rejected:* stamping every build made in
+  a git checkout, since the release workflow builds and publishes from one; a tracked
+  generated file, which CI's `git diff --exit-code` after the build would flag.
 
 **Items.**
 1. **Docs and doc claims** (FEEDBACK 1, 2, 6, 7, 11 doc half, 12). New contract claim
@@ -1999,6 +2005,22 @@ things in `run` and `regs`, and screenshots without the border.
    `screen --state` has no frame log (a `.zxstate` keeps only the final border colour),
    so it gets no `--border`; no assertion type or MCP tool changed (17 and 7 stay
    pinned).
+7. **Build stamp in `--version`** (the FEEDBACK 2 aside: a checkout's tarballs and the
+   npm release both said 0.8.0; D6). The root `pack` script is now `scripts/pack.mjs`,
+   the same `pnpm -r … pack` with `ZXS_BUILD_STAMP=1`. After the build, the toolkit's
+   prepack runs `scripts/build-stamp.mjs`, which deletes `dist/build-stamp.json` and,
+   only with that variable, writes `{ commit, dirty }` from git. `src/version.ts`
+   (`toolkitVersion()`) appends it as semver build metadata for `zxs --version`,
+   `zxs version` and the MCP server's version; the library's `readVersion()` is
+   unchanged. New claim CLI-PROD-VERSION-001, pinned by `tests/version.test.ts`
+   (with and without a stamp, malformed stamps, `--version` and `version` agree, the
+   script writes the checkout's HEAD with the variable and removes the stamp without
+   it, the prepack/pack wiring, no `ZXS_BUILD_STAMP` in `release.yml`). *Verified on
+   Windows:* `pnpm run pack` put `{"commit":"6575db7","dirty":true}` in the toolkit
+   tarball (uncommitted work at the time), and the checkout CLI printed
+   `0.8.0+6575db7.dirty`; `pnpm --filter @zx-vibes/toolkit pack` without the variable,
+   the prepack `pnpm publish` runs, produced a tarball with no stamp, and the CLI
+   printed `0.8.0` again.
 
 **Consequences.** Every FEEDBACK item but one has a fix or a documented answer; the
 exception (Codex not loading an untrusted project's `.codex/config.toml`) is the
