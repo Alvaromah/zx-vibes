@@ -21,7 +21,7 @@
 // with the CLI, so an agent can hand a machine between the two surfaces. Breakpoints,
 // watchpoints, and loaded symbols accumulate across tool calls.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -72,6 +72,7 @@ import {
   type DebugStore,
 } from './state/debug-store.js';
 import { exportZ80Bytes } from './state/state-command.js';
+import { toolkitVersion } from './version.js';
 
 /** The MCP server identity (MCP-PROD-SERVER-001). */
 export const SERVER_NAME = 'zx-vibes';
@@ -760,17 +761,6 @@ export function buildCatalog(session: McpSession): McpTool[] {
   ];
 }
 
-/** Read the toolkit package version (MCP-PROD-SERVER-001 — the server reports it). */
-function packageVersion(): string {
-  try {
-    const url = new URL('../package.json', import.meta.url);
-    const pkg = JSON.parse(readFileSync(url, 'utf8')) as { version?: string };
-    return pkg.version ?? '0.0.0';
-  } catch {
-    return '0.0.0';
-  }
-}
-
 /**
  * Create the `zx-vibes` MCP server with its hot session and the seven registered
  * tools. Returns the server plus the session/catalog for in-process testing.
@@ -782,7 +772,9 @@ export function createMcpServer(options: { cwd?: string | undefined } = {}): {
 } {
   const session = new McpSession(options.cwd ?? process.cwd());
   const catalog = buildCatalog(session);
-  const server = new McpServer({ name: SERVER_NAME, version: packageVersion() });
+  // The package version, with the same build stamp `zxs --version` prints
+  // (MCP-PROD-SERVER-001, CLI-PROD-VERSION-001).
+  const server = new McpServer({ name: SERVER_NAME, version: toolkitVersion() });
   for (const tool of catalog) {
     server.registerTool(
       tool.name,

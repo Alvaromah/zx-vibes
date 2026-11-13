@@ -216,10 +216,21 @@ export function runSetup(options: SetupOptions): SetupEnvelope {
   installed.sort();
   skipped.sort();
 
+  // Both clients gate a project-level registration: Claude Code asks to approve a server
+  // from .mcp.json, and Codex reads .codex/config.toml only for a trusted project.
   const next =
     agent === 'claude'
-      ? ['zxs verify --json', 'restart your agent to load the zx-vibes MCP server + skill']
-      : ['zxs verify --json', 'restart Codex to load the zx-vibes MCP server'];
+      ? [
+          'zxs verify --json',
+          'restart your agent to load the zx-vibes MCP server + skill (Claude Code asks you to approve a project MCP server)',
+        ]
+      : writeGlobal
+        ? ['zxs verify --json', 'restart Codex to load the zx-vibes MCP server']
+        : [
+            'zxs verify --json',
+            'trust this project in Codex: it reads .codex/config.toml only for a trusted project (or rerun with --write-global)',
+            'restart Codex to load the zx-vibes MCP server',
+          ];
   // A kept registration that starts something else (e.g. the bare `zxs-mcp` an older
   // setup wrote for what is now a local install) is not replaced without --force: say so.
   const stale = readMcpRegistrations(cwd).find(

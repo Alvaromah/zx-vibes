@@ -21,6 +21,7 @@ import {
 } from './output/envelope.js';
 import { createRegistry, type CommandContext } from './registry.js';
 import { registerRevengAddon } from './reveng/index.js';
+import { toolkitVersion } from './version.js';
 
 /**
  * Whether the optional reverse-engineering add-on is mounted (cli.md CLI-PROD-REVENG-001,
@@ -58,7 +59,8 @@ export interface RunCliOptions {
  */
 export async function runCli(argv: string[], options: RunCliOptions = {}): Promise<number> {
   const streams = options.streams ?? defaultStreams;
-  const version = readVersion();
+  // The manifest version plus the `pnpm run pack` build stamp, if any (CLI-PROD-VERSION-001).
+  const version = toolkitVersion();
   const registry = createRegistry(version);
   // Mount the OPTIONAL reverse-engineering add-on on top of the pristine core registry
   // (CLI-PROD-REVENG-001, ADR-0027 D5). Core never references it; this single gated call is

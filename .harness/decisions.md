@@ -1860,10 +1860,14 @@ custom info, two data blocks) loaded end to end in `zxs preview` and in `full.ht
 
 ### ADR-0031 — Clean-room consumer feedback (2026-11-12): docs, human output, frame-budget diagnostics, local installs, entry state
 
-**Status:** applied on the branch `feedback/clean-room-consumer` at the owner's request
-("run all the steps in the recommended order"), taking the default answer to each of the
-five questions below; ratified on merge. Each work package lands as its own commit and
-adds its item here.
+**Status:** accepted; D1–D7 are the default answers recorded below.
+- **Items 1–6** were applied at the owner's request ("run all the steps in the
+  recommended order"), one commit per work package. They reached `main` on 2026-11-13
+  as PR #43, as a merge commit (db274ee) that keeps those commits.
+- **Items 7–9** (D6, D7) came after, when the owner asked to continue with the
+  recommendations. They arrive as PR #44, squashed.
+- **Merged by Claude**, at the owner's request ("¿puedes hacerlo tú?"), after green CI on
+  Ubuntu, macOS and Windows with Node 20 and 22. No separate human code review took place.
 
 **Context.** A clean-room consumer test of `main` at 325992e cloned the repo, ran
 `pnpm install`, `build` and `pack`, installed the six tarballs into a fresh project with
@@ -1893,6 +1897,17 @@ things in `run` and `regs`, and screenshots without the border.
 - **D5. The toolkit does not run the ROM's start-up.** The entry state is documented
   instead. *Rejected:* running it before every program, which would change every
   program's starting memory and timing.
+- **D6. A build stamp, opt-in from `pnpm run pack`** (a follow-up the plan had left out
+  of scope; taken with the owner's "continue with your recommendations"). A toolkit
+  packed by the repository's `pack` script prints `<version>+<commit>[.dirty]`;
+  published packages print the bare version. *Rejected:* stamping every build made in
+  a git checkout, since the release workflow builds and publishes from one; a tracked
+  generated file, which CI's `git diff --exit-code` after the build would flag.
+- **D7. The two playbooks get a drift check, not one merged text** (also a follow-up the
+  plan had left out of scope). The `PLAYBOOK` and the starter playbook serve different
+  projects (a starter has a `package.json`, a `Makefile` and `lib/`), and merging them
+  would rewrite the agent instructions. *Rejected:* a generated shared block, which
+  would first need the shared paragraphs reworded to fit both texts.
 
 **Items.**
 1. **Docs and doc claims** (FEEDBACK 1, 2, 6, 7, 11 doc half, 12). New contract claim
@@ -1999,10 +2014,50 @@ things in `run` and `regs`, and screenshots without the border.
    `screen --state` has no frame log (a `.zxstate` keeps only the final border colour),
    so it gets no `--border`; no assertion type or MCP tool changed (17 and 7 stay
    pinned).
+7. **Build stamp in `--version`** (the FEEDBACK 2 aside: a checkout's tarballs and the
+   npm release both said 0.8.0; D6). The root `pack` script is now `scripts/pack.mjs`,
+   the same `pnpm -r … pack` with `ZXS_BUILD_STAMP=1`. After the build, the toolkit's
+   prepack runs `scripts/build-stamp.mjs`, which deletes `dist/build-stamp.json` and,
+   only with that variable, writes `{ commit, dirty }` from git. `src/version.ts`
+   (`toolkitVersion()`) appends it as semver build metadata for `zxs --version`,
+   `zxs version` and the MCP server's version; the library's `readVersion()` is
+   unchanged. New claim CLI-PROD-VERSION-001, pinned by `tests/version.test.ts`
+   (with and without a stamp, malformed stamps, `--version` and `version` agree, the
+   script writes the checkout's HEAD with the variable and removes the stamp without
+   it, the prepack/pack wiring, no `ZXS_BUILD_STAMP` in `release.yml`). *Verified on
+   Windows:* `pnpm run pack` put `{"commit":"6575db7","dirty":true}` in the toolkit
+   tarball (uncommitted work at the time), and the checkout CLI printed
+   `0.8.0+6575db7.dirty`; `pnpm --filter @zx-vibes/toolkit pack` without the variable,
+   the prepack `pnpm publish` runs, produced a tarball with no stamp, and the CLI
+   printed `0.8.0` again. *Consumer check* (after 52c960f, a pre-merge commit of
+   PR #44, clean tree): the six tarballs
+   went into a fresh project with one `npm install` (lockfile: six `file:` entries, none
+   from the registry). There `npx zxs --version` printed `0.8.0+52c960f`, and the
+   registered MCP server reported the same version and listed its seven tools.
+8. **Client gates in `setup`'s next steps** (FEEDBACK 14). Codex reads a project's
+   `.codex/config.toml` only for a trusted project (`projects.<path>.trust_level`;
+   OpenAI's Codex configuration docs, read 2026-11-13). That rule explains the
+   codex-cli 0.167.2 probe that listed no `zx-vibes`. `setup --agent codex` without
+   `--write-global` now says so in `next` (trust the project, or rerun with
+   `--write-global`), and `--agent claude` says Claude Code asks to approve a project MCP
+   server. The README's setup section says both. The wording is incidental
+   (CLI-PROD-FREE-001), so no claim changed. Pinned by `tests/setup.test.ts`. In the
+   item 7 consumer project, `npx zxs setup --agent codex` printed the trust step and
+   `npx zxs doctor` passed 5/5.
+9. **Playbook drift check** (D7). `scripts/check-playbooks-drift.mjs`, run by
+   `check:drift` as `check:playbooks`, reads the `PLAYBOOK` literal out of
+   `scaffold.ts` and both starter playbooks. It fails when the two starter copies
+   differ, or when any playbook no longer states one of 16 shared facts: the loop rule,
+   the run-report fields, how the frame budget is measured and what to do about set-up,
+   the entry state, the `--state` loop and `zxs verify`. The facts are matched
+   on normalised text, so wrapping and markdown may differ. Its self-test
+   (`check-playbooks-drift-self-test.mjs`, 6 cases) shows it passes the committed texts
+   and fails on a dropped fact or a starter that differs. CONTRIBUTING says how to add
+   a fact. Tooling only: no published package changed.
 
-**Consequences.** Every FEEDBACK item but one has a fix or a documented answer; the
-exception (Codex not loading an untrusted project's `.codex/config.toml`) is the
-client's rule and is reported, not changed. Output that scripts may read changed in two
+**Consequences.** Every FEEDBACK item has a fix or a documented answer. Codex not
+loading an untrusted project's `.codex/config.toml` is the client's rule, and `setup`
+and the README now state it (item 8). Output that scripts may read changed in two
 places: an explicit `run --frames` now stops a longer key plan (D3), and `boot` reports
 `pc` instead of `org` for sessions, snapshots and fresh boots. The MCP surface keeps its
 seven tools and input schemas, and the assertion vocabulary stays at 17. Verified on

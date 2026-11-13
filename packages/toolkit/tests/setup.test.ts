@@ -57,6 +57,8 @@ describe('runSetup --agent claude (CLI-PROD-SETUP-001 / KP-PROD-PKG-001)', () =>
     // Only the examples remain deferred — loud, not silently absent (C5).
     expect(env.deferred).toHaveLength(1);
     expect(env.deferred[0]).toMatch(/examples\//);
+    // Claude Code asks before it starts a server from a project .mcp.json (ADR-0031 item 8).
+    expect(env.next.some((step) => step.includes('approve a project MCP server'))).toBe(true);
 
     // The MCP registration is the thin `zxs-mcp` stdio server under name `zx-vibes`.
     const mcp = JSON.parse(readFileSync(join(dir, '.mcp.json'), 'utf8'));
@@ -127,6 +129,10 @@ describe('runSetup --agent codex (CLI-PROD-SETUP-001)', () => {
     expect(env.ok).toBe(true);
     expect(env.agent).toBe('codex');
     expect(env.global).toBe(false);
+    // Codex reads a project's .codex/config.toml only for a trusted project (ADR-0031 item 8).
+    expect(env.next).toContain(
+      'trust this project in Codex: it reads .codex/config.toml only for a trusted project (or rerun with --write-global)',
+    );
     expect(env.installed).toContain('.codex/config.toml');
     expect(env.installed).toContain('AGENTS.md');
     expect(env.installed).toContain('.codex/zx-vibes/skills/INDEX.md');
@@ -151,6 +157,8 @@ describe('runSetup --agent codex (CLI-PROD-SETUP-001)', () => {
       expect(readFileSync(globalConfig, 'utf8')).toMatch(/\[mcp_servers\.zx-vibes\]/);
       // The project config was NOT written when targeting the global config.
       expect(existsSync(join(dir, '.codex', 'config.toml'))).toBe(false);
+      // The global config needs no project trust, so the hint is left out.
+      expect(env.next.some((step) => step.includes('trusted project'))).toBe(false);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
