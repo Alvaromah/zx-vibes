@@ -1860,12 +1860,14 @@ custom info, two data blocks) loaded end to end in `zxs preview` and in `full.ht
 
 ### ADR-0031 — Clean-room consumer feedback (2026-11-12): docs, human output, frame-budget diagnostics, local installs, entry state
 
-**Status:** applied on the branch `feedback/clean-room-consumer` at the owner's request
-("run all the steps in the recommended order"), taking the default answer to each of the
-five questions below; ratified on merge. Each work package lands as its own commit and
-adds its item here. Items 1–6 are PR #43. Items 7–9 (D6, D7) came after it, when the
-owner asked to continue with the recommendations; they are on
-`feedback/clean-room-followups`, in a PR stacked on #43.
+**Status:** accepted; D1–D7 are the default answers recorded below.
+- **Items 1–6** were applied at the owner's request ("run all the steps in the
+  recommended order"), one commit per work package. They reached `main` on 2026-11-13
+  as PR #43, as a merge commit (db274ee) that keeps those commits.
+- **Items 7–9** (D6, D7) came after, when the owner asked to continue with the
+  recommendations. They arrive as PR #44, squashed.
+- **Merged by Claude**, at the owner's request ("¿puedes hacerlo tú?"), after green CI on
+  Ubuntu, macOS and Windows with Node 20 and 22. No separate human code review took place.
 
 **Context.** A clean-room consumer test of `main` at 325992e cloned the repo, ran
 `pnpm install`, `build` and `pack`, installed the six tarballs into a fresh project with
@@ -2027,7 +2029,8 @@ things in `run` and `regs`, and screenshots without the border.
    tarball (uncommitted work at the time), and the checkout CLI printed
    `0.8.0+6575db7.dirty`; `pnpm --filter @zx-vibes/toolkit pack` without the variable,
    the prepack `pnpm publish` runs, produced a tarball with no stamp, and the CLI
-   printed `0.8.0` again. *Consumer check* (after 52c960f, clean tree): the six tarballs
+   printed `0.8.0` again. *Consumer check* (after 52c960f, a pre-merge commit of
+   PR #44, clean tree): the six tarballs
    went into a fresh project with one `npm install` (lockfile: six `file:` entries, none
    from the registry). There `npx zxs --version` printed `0.8.0+52c960f`, and the
    registered MCP server reported the same version and listed its seven tools.
